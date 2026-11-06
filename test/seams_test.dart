@@ -1,4 +1,4 @@
-// End-to-end checks of the scoring fixes (SPEC.md decisions 65–67) through
+// End-to-end checks of the scoring fixes (SPEC.md decisions 65–67 and 70) through
 // the real controller: bridge snapshot maps → PresageSample → SignalLog →
 // calibration baseline → question score, and the same stream → #tag.
 import 'package:fake_async/fake_async.dart';
@@ -52,6 +52,41 @@ void main() {
       expect(b.zExpr, lessThan(0.1), reason: 'a smile is not scored');
       expect(b.zBlink, 0, reason: 'blinking like in the warm-ups');
       expect(b.verdict, Verdict.legit, reason: 'score ${b.score}');
+      w.dispose();
+    });
+  });
+
+  test('happy beside a stress expression neither cancels it in the score '
+      'nor wins the #tag', () {
+    fakeAsync((async) {
+      final w = World(async);
+      w.startGame(['Sam', 'Alex']);
+      w.calibrate();
+      expect(w.game.phase, GamePhase.ask);
+      w.elapse(300);
+      w.say('Have you ever read someone else\'s messages?');
+      w.elapse(1500);
+      w.game.doneAsking();
+      w.elapse(1300);
+      w.talk(true);
+      // Contempt and happy nearly tied (inside the tag's 0.05 margin).
+      w.expr = const {'contempt': 0.45, 'happy': 0.42, 'neutral': 0.1};
+      w.say('No, never.');
+      w.elapse(2500);
+      expect(w.game.live.expression.tag, isNull, reason: 'a close call');
+      w.talk(false);
+      w.expr = const {'neutral': 0.8, 'surprise': 0.05};
+      w.elapse(800);
+      w.game.finalAnswer();
+      w.until(() => w.game.phase != GamePhase.settle, what: 'settle');
+      if (w.game.phase == GamePhase.callIt) w.game.reveal();
+      w.until(() => w.game.phase == GamePhase.verdict, what: 'verdict');
+
+      final r = w.game.currentResult!;
+      expect(r.features!.exprPeakCategory, 'contempt');
+      // The warm-ups had no contempt, so all 0.45 counts (÷ 0.3, capped).
+      expect(r.features!.exprPeakDelta, closeTo(0.45, 1e-9));
+      expect(r.breakdown!.zExpr, 1.0);
       w.dispose();
     });
   });
