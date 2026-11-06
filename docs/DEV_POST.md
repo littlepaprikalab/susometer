@@ -63,8 +63,8 @@ status (face position, lighting, motion).
   isn't OK, are ignored. If less than 60% of the window is clean, the show says **No clean read**
   and explains why with the actual validation hints ("The camera lost Sam's face for about
   5 seconds").
-- **Live feedback:** validation issues show up as game-show banners ("Too dark in here: face a
-  lamp or window"), and the reading resumes when they clear.
+- **Live feedback:** validation issues are stamped right on the camera ("Too dark", with "Face a
+  lamp or window." underneath), and the reading resumes when they clear.
 
 **Integration:** Flutter draws the UI, and a thin Swift bridge wraps the SDK. `SmartSpectraSDK` is
 `@Observable` and `@MainActor`, so the bridge observes it with `withObservationTracking`

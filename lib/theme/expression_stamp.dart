@@ -10,6 +10,10 @@ import 'tokens.dart';
 /// of running under the stamp.
 const stampRowFlex = 42;
 
+/// The same for a camera problem's stamp on Ask and Answer. Its words are
+/// longer than a #tag, and the chip beside it ("Reading paused") is short.
+const issueStampRowFlex = 54;
+
 /// The player's strongest expression as a rubber-stamped #tag on the camera
 /// (mock: docs/design/mocks/ExpressionStamp.png): a solid block of ink with
 /// a cream frame and the tag knocked out in cream, worn in spots so the
@@ -25,7 +29,7 @@ class ExpressionStamp extends StatelessWidget {
   /// True for an expression the score counts (ScoringConfig.exprCategories).
   final bool stress;
 
-  static const fontSize = 18.0;
+  static const fontSize = _RubberStamp.fontSize;
 
   /// Each tag lands at its own angle, like a fresh stamp (degrees).
   static double tiltDegrees(String label) => switch (label) {
@@ -45,13 +49,77 @@ class ExpressionStamp extends StatelessWidget {
       label.codeUnits.fold(7, (h, c) => (h * 31 + c) & 0x7fffffff);
 
   @override
+  Widget build(BuildContext context) => _RubberStamp(
+    text: '#$label',
+    ink: stress ? SusColors.tomatoDeep : SusColors.teal,
+    paper: SusColors.cream,
+    tiltDegrees: tiltDegrees(label),
+    seed: seedFor(label),
+    semanticsLabel: 'Expression: $label',
+  );
+}
+
+/// A camera problem ("Hold still", "Too dark") stamped where the expression
+/// tag goes, in mustard ink with ink letters, so it reads as a warning from
+/// the show rather than a reading of the player. VoiceOver announces
+/// [semanticsLabel] when it appears, as it did the banner it replaced.
+class IssueStamp extends StatelessWidget {
+  const IssueStamp({super.key, required this.text, this.semanticsLabel});
+
+  /// The stamp's words, short enough to read at a glance.
+  final String text;
+
+  /// What VoiceOver reads (the full problem and its fix); [text] if null.
+  final String? semanticsLabel;
+
+  static const _tilts = <double>[-5, 4, -7, 3, -4, 6, -6];
+
+  /// Each problem lands at its own angle (degrees), never flat.
+  static double tiltDegrees(String text) =>
+      _tilts[ExpressionStamp.seedFor(text) % _tilts.length];
+
+  @override
+  Widget build(BuildContext context) => Semantics(
+    liveRegion: true,
+    child: _RubberStamp(
+      text: text,
+      ink: SusColors.mustard,
+      paper: SusColors.ink,
+      tiltDegrees: tiltDegrees(text),
+      seed: ExpressionStamp.seedFor(text),
+      semanticsLabel: semanticsLabel ?? text,
+    ),
+  );
+}
+
+/// The stamp itself: a block of [ink] with a frame and the words in
+/// [paper], worn in a pattern fixed by [seed] and tilted.
+class _RubberStamp extends StatelessWidget {
+  const _RubberStamp({
+    required this.text,
+    required this.ink,
+    required this.paper,
+    required this.tiltDegrees,
+    required this.seed,
+    required this.semanticsLabel,
+  });
+
+  static const fontSize = 18.0;
+
+  final String text;
+  final Color ink;
+  final Color paper;
+  final double tiltDegrees;
+  final int seed;
+  final String semanticsLabel;
+
+  @override
   Widget build(BuildContext context) {
-    final ink = stress ? SusColors.tomatoDeep : SusColors.teal;
     return RepaintBoundary(
       child: _Tilt(
-        angle: tiltDegrees(label) * math.pi / 180,
+        angle: tiltDegrees * math.pi / 180,
         child: _Worn(
-          seed: seedFor(label),
+          seed: seed,
           child: Container(
             padding: const EdgeInsets.all(3.5),
             decoration: BoxDecoration(
@@ -61,15 +129,15 @@ class ExpressionStamp extends StatelessWidget {
             child: Container(
               padding: const EdgeInsets.fromLTRB(10, 3, 10, 2),
               decoration: BoxDecoration(
-                border: Border.all(color: SusColors.cream, width: 1.6),
+                border: Border.all(color: paper, width: 1.6),
                 borderRadius: BorderRadius.circular(4),
               ),
               child: Text(
-                '#$label',
+                text,
                 maxLines: 1,
                 softWrap: false,
-                semanticsLabel: 'Expression: $label',
-                style: SusText.display(fontSize, color: SusColors.cream),
+                semanticsLabel: semanticsLabel,
+                style: SusText.display(fontSize, color: paper),
               ),
             ),
           ),
@@ -79,14 +147,18 @@ class ExpressionStamp extends StatelessWidget {
   }
 }
 
-/// Where the stamp sits: its top-right corner, with the tag stamped in when
-/// it appears or changes and faded out when it goes. Takes whatever width
-/// it's given and shrinks the stamp to fit.
-class ExpressionStampSlot extends StatelessWidget {
-  const ExpressionStampSlot({
+/// Where the stamp sits: its top-right corner, with the stamp pressed in
+/// when it appears or changes and faded out when it goes. Takes whatever
+/// width it's given and shrinks the stamp to fit.
+///
+/// Shows the expression [tag], or the [issue] in its place while the camera
+/// can't get a clean read.
+class CameraStampSlot extends StatelessWidget {
+  const CameraStampSlot({
     super.key,
     required this.tag,
     required this.stressTags,
+    this.issue,
   });
 
   /// The expression to show, or null for none.
@@ -95,11 +167,24 @@ class ExpressionStampSlot extends StatelessWidget {
   /// Expressions shown in red (they move the score).
   final List<String> stressTags;
 
+  /// A camera problem to stamp instead of the tag, or null for none.
+  final IssueStamp? issue;
+
   @override
   Widget build(BuildContext context) {
     final still = MediaQuery.disableAnimationsOf(context);
-    final current = ValueKey<String?>(tag);
+    final issue = this.issue;
     final label = tag;
+    // An issue and a tag with the same words are still different stamps.
+    final current = ValueKey<String?>(issue != null ? '!${issue.text}' : label);
+    final Widget? stamp =
+        issue ??
+        (label == null
+            ? null
+            : ExpressionStamp(
+                label: label,
+                stress: stressTags.contains(label),
+              ));
     return Align(
       alignment: Alignment.topRight,
       child: AnimatedSwitcher(
@@ -113,7 +198,7 @@ class ExpressionStampSlot extends StatelessWidget {
           children: [...previous, ?top],
         ),
         transitionBuilder: (child, animation) {
-          // The old tag just fades; the new one drops in from above the
+          // The old stamp just fades; the new one drops in from above the
           // canvas and lands.
           if (child.key != current) {
             return FadeTransition(opacity: animation, child: child);
@@ -131,16 +216,9 @@ class ExpressionStampSlot extends StatelessWidget {
             ),
           );
         },
-        child: label == null
+        child: stamp == null
             ? SizedBox.shrink(key: current)
-            : FittedBox(
-                key: current,
-                fit: BoxFit.scaleDown,
-                child: ExpressionStamp(
-                  label: label,
-                  stress: stressTags.contains(label),
-                ),
-              ),
+            : FittedBox(key: current, fit: BoxFit.scaleDown, child: stamp),
       ),
     );
   }

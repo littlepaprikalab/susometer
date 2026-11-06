@@ -185,7 +185,8 @@ void main() {
     await rig.tap('Done asking');
     rig.presage.code = 'EXCESSIVE_MOTION';
     await rig.wait(2500);
-    expect(find.text('Hold still'), findsOneWidget, reason: 'E3 banner');
+    expect(find.text('Hold still'), findsOneWidget, reason: 'E3 stamp');
+    expect(find.text('Rest your elbows or prop the phone up.'), findsOneWidget);
     await rig.tap('Final answer');
     await rig.until(() => rig.game.phase == GamePhase.redo);
     expect(find.text('No clean read'), findsOneWidget);

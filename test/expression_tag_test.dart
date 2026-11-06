@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:susometer/game/expression_tag.dart';
+import 'package:susometer/game/scoring.dart';
 import 'package:susometer/theme/expression_stamp.dart';
 import 'package:susometer/theme/tokens.dart';
 
@@ -236,7 +237,7 @@ void main() {
     });
   });
 
-  group('ExpressionStampSlot', () {
+  group('CameraStampSlot', () {
     Future<void> pump(WidgetTester tester, String? tag, {bool still = false}) =>
         tester.pumpWidget(
           MediaQuery(
@@ -247,7 +248,7 @@ void main() {
                 child: SizedBox(
                   width: 146,
                   height: 80,
-                  child: ExpressionStampSlot(
+                  child: CameraStampSlot(
                     tag: tag,
                     stressTags: const [
                       'surprise',
@@ -333,7 +334,7 @@ void main() {
               child: SizedBox(
                 width: 120,
                 height: 80,
-                child: ExpressionStampSlot(
+                child: CameraStampSlot(
                   tag: 'contempt',
                   stressTags: const ['contempt'],
                 ),
@@ -343,12 +344,75 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
-      final slot = tester.getRect(find.byType(ExpressionStampSlot));
+      final slot = tester.getRect(find.byType(CameraStampSlot));
       final stamp = tester.getRect(find.byType(ExpressionStamp));
       expect(stamp.width, lessThanOrEqualTo(slot.width + 0.01));
       expect(stamp.right, closeTo(slot.right, 0.01), reason: 'right-aligned');
       expect(stamp.top, closeTo(slot.top, 0.01), reason: 'top-aligned');
       expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('a camera problem takes the tag\'s place, in mustard', (
+      tester,
+    ) async {
+      Future<void> show(String? tag, String? issue) => tester.pumpWidget(
+        Directionality(
+          textDirection: TextDirection.ltr,
+          child: Center(
+            child: SizedBox(
+              width: 170,
+              height: 80,
+              child: CameraStampSlot(
+                tag: tag,
+                stressTags: const ['fear'],
+                issue: issue == null ? null : IssueStamp(text: issue),
+              ),
+            ),
+          ),
+        ),
+      );
+      await show('fear', null);
+      await tester.pumpAndSettle();
+      await show('fear', 'Hold still');
+      expect(tester.hasRunningAnimations, isTrue, reason: 'stamped in');
+      await tester.pumpAndSettle();
+      expect(find.text('Hold still'), findsOneWidget);
+      expect(find.byType(ExpressionStamp), findsNothing);
+      final block = tester
+          .widgetList<Container>(
+            find.descendant(
+              of: find.byType(IssueStamp),
+              matching: find.byType(Container),
+            ),
+          )
+          .first;
+      expect((block.decoration! as BoxDecoration).color, SusColors.mustard);
+      await show('fear', null);
+      await tester.pumpAndSettle();
+      expect(find.byType(IssueStamp), findsNothing);
+      expect(find.text('#fear'), findsOneWidget);
+    });
+
+    test('every camera problem has a stamp that fits and lands tilted', () {
+      const codes = [
+        'TOO_DARK',
+        'TOO_BRIGHT',
+        'NO_FACE_FOUND',
+        'MULTIPLE_FACES_FOUND',
+        'FACE_TOO_FAR',
+        'FACE_TOO_CLOSE',
+        'FACE_NOT_CENTERED',
+        'FACE_NOT_FORWARD',
+        'EXCESSIVE_MOTION',
+        'FRAME_RATE_TOO_LOW',
+        'SOMETHING_NEW',
+      ];
+      for (final code in codes) {
+        final issue = SignalIssue.fromCode(code)!;
+        // The longest, "Too many faces", is 14 characters.
+        expect(issue.stamp.length, lessThanOrEqualTo(14), reason: code);
+        expect(IssueStamp.tiltDegrees(issue.stamp), isNot(0), reason: code);
+      }
     });
 
     test('each tag keeps its own tilt and worn pattern', () {

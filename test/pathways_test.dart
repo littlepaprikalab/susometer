@@ -71,11 +71,17 @@ void expectOvalClear(WidgetTester tester, List<Finder> overlays, String when) {
   }
 }
 
-/// The expression stamp shows inside the camera, clear of its chips and
-/// cards. (It may run over the oval: it's stamped on the picture.)
-void expectStampPlaced(WidgetTester tester, List<Finder> others, String when) {
-  final stamp = find.byType(ExpressionStamp);
-  expect(stamp, findsOneWidget, reason: '$when: no expression stamp');
+/// The expression stamp (or a camera problem's, with [type] IssueStamp)
+/// shows inside the camera, clear of its chips and cards. (It may run over
+/// the oval: it's stamped on the picture.)
+void expectStampPlaced(
+  WidgetTester tester,
+  List<Finder> others,
+  String when, {
+  Type type = ExpressionStamp,
+}) {
+  final stamp = find.byType(type);
+  expect(stamp, findsOneWidget, reason: '$when: no $type');
   final r = tester.getRect(stamp);
   final window = tester
       .getRect(find.byType(CameraWindow))
@@ -361,7 +367,8 @@ void main() {
     rig.game.doneAsking();
     rig.presage.code = 'NO_FACE_FOUND';
     await rig.wait(2000);
-    expect(find.text("Picks up again when it's clear"), findsOneWidget);
+    expect(find.text('No face'), findsOneWidget, reason: 'E3 stamp');
+    expect(find.text('Get your face inside the oval.'), findsOneWidget);
     expect(
       find.byType(ExpressionStamp),
       findsNothing,
@@ -369,8 +376,29 @@ void main() {
     );
     expectOvalClear(tester, [
       chip('Reading paused'),
-      chip('Picks up again'),
+      chip('Get your face'),
     ], 'bad signal');
+    expectStampPlaced(
+      tester,
+      [chip('Reading paused'), chip('Get your face')],
+      'bad signal',
+      type: IssueStamp,
+    );
+    // VoiceOver hears the problem and its fix once, when the stamp lands.
+    final handle = tester.ensureSemantics();
+    expect(
+      tester.getSemantics(find.byType(IssueStamp)),
+      matchesSemantics(
+        label: "Can't see a face. Get your face inside the oval.",
+        isLiveRegion: true,
+      ),
+    );
+    expect(
+      find.bySemanticsLabel('Get your face inside the oval.'),
+      findsNothing,
+    );
+    handle.dispose();
+    await checkScreen(tester, 'bad signal');
     await rig.tap('Final answer');
     await rig.until(() => rig.game.phase == GamePhase.redo);
     await checkScreen(tester, 'redo');
@@ -592,6 +620,48 @@ void main() {
             await rig.wait(1500);
             expect(find.text('#surprise'), findsOneWidget);
             same('the expression changes');
+            // A camera problem (E3) is stamped where the tag was, with its
+            // fix in the live cards' row. Nothing on screen moves: a jump
+            // is what makes people move.
+            final transcript = tester.getRect(
+              find.textContaining('to start answering'),
+            );
+            rig.presage.code = 'MULTIPLE_FACES_FOUND'; // the longest stamp
+            await rig.wait(2000);
+            expect(find.text('Too many faces'), findsOneWidget);
+            expect(find.byType(ExpressionStamp), findsNothing);
+            same('a camera problem');
+            expect(
+              tester.getRect(find.textContaining('to start answering')),
+              transcript,
+              reason: 'the transcript card moved',
+            );
+            final fix = chip('Only the hot seat');
+            expectOvalClear(tester, [
+              chip('Reading paused'),
+              fix,
+            ], 'bad signal');
+            expectStampPlaced(
+              tester,
+              [chip('Reading paused'), fix],
+              'bad signal',
+              type: IssueStamp,
+            );
+            // Readable at a glance: at normal text sizes even the longest
+            // stamp stays near full size (15 pt or more on an SE).
+            final issueStamp = find.byType(IssueStamp);
+            final drawn = tester.getRect(issueStamp).width;
+            final natural = tester.getSize(issueStamp).width;
+            expect(
+              drawn / natural,
+              greaterThan(scale == 1 ? 0.8 : 0.6),
+              reason: 'the stamp shrank to ${drawn / natural}',
+            );
+            rig.presage.code = 'OK';
+            await rig.wait(1500);
+            expect(find.byType(IssueStamp), findsNothing);
+            expect(find.text('Pulse'), findsOneWidget);
+            same('the camera problem clears');
             rig.presage.talk(false);
             await rig.wait(400);
             await rig.tap('Final answer');

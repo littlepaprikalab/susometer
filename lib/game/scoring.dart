@@ -421,12 +421,21 @@ class Scoring {
   }
 }
 
-/// Friendly title and fix for a live validation issue (E3 banner, SPEC.md §2).
+/// A live validation issue (E3, SPEC.md §2 and decision 69): a word or two
+/// stamped on the camera, a friendly title and a fix.
 class SignalIssue {
-  const SignalIssue(this.code, this.title, this.fix);
+  const SignalIssue(this.code, this.stamp, this.title, this.fix);
 
   final String code;
+
+  /// Stamped on the camera where the expression tag goes, so short enough
+  /// to read at a glance at full size.
+  final String stamp;
+
+  /// The problem in a few more words, for VoiceOver and calibration hints.
   final String title;
+
+  /// What to do about it, under the stamp.
   final String fix;
 
   /// Light-related issues get a "Light too low" style chip.
@@ -437,31 +446,37 @@ class SignalIssue {
     null || 'OK' || 'CAMERA_TUNING' => null,
     'TOO_DARK' => const SignalIssue(
       'TOO_DARK',
+      'Too dark',
       'Too dark in here',
-      'Face a lamp or window. Reading paused.',
+      'Face a lamp or window.',
     ),
     'TOO_BRIGHT' => const SignalIssue(
       'TOO_BRIGHT',
+      'Too bright',
       'Too bright behind you',
       'Turn away from the window or lamp.',
     ),
     'NO_FACE_FOUND' => const SignalIssue(
       'NO_FACE_FOUND',
+      'No face',
       "Can't see a face",
       'Get your face inside the oval.',
     ),
     'MULTIPLE_FACES_FOUND' => const SignalIssue(
       'MULTIPLE_FACES_FOUND',
       'Too many faces',
+      'Too many faces',
       'Only the hot seat in frame, please.',
     ),
     'FACE_TOO_FAR' => const SignalIssue(
       'FACE_TOO_FAR',
       'Move closer',
+      'Move closer',
       'Bring the phone a little nearer.',
     ),
     'FACE_TOO_CLOSE' || 'FACE_SIZE_OUT_OF_RANGE' => const SignalIssue(
       'FACE_TOO_CLOSE',
+      'Move back',
       'Move back a bit',
       'Hold the phone a little further away.',
     ),
@@ -469,25 +484,34 @@ class SignalIssue {
     'FACE_TOO_HIGH' ||
     'FACE_TOO_LOW' => const SignalIssue(
       'FACE_NOT_CENTERED',
+      'Off center',
       'Center your face',
       'Line your face up with the oval.',
     ),
     'FACE_NOT_FORWARD' => const SignalIssue(
       'FACE_NOT_FORWARD',
+      'Look here',
       'Look at the phone',
       'Face the camera straight on.',
     ),
     'EXCESSIVE_MOTION' => const SignalIssue(
       'EXCESSIVE_MOTION',
       'Hold still',
+      'Hold still',
       'Rest your elbows or prop the phone up.',
     ),
     'FRAME_RATE_TOO_LOW' => const SignalIssue(
       'FRAME_RATE_TOO_LOW',
+      'Lagging',
       'Phone is lagging',
       'Close other apps or let it cool down.',
     ),
     'CHEST_NOT_VISIBLE' => null,
-    _ => SignalIssue(code, 'Adjusting the camera', 'Hold still for a moment.'),
+    _ => SignalIssue(
+      code,
+      'Adjusting',
+      'Adjusting the camera',
+      'Hold still for a moment.',
+    ),
   };
 }

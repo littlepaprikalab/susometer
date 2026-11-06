@@ -551,7 +551,7 @@ class _CalibCamera extends StatelessWidget {
                     const SizedBox(width: 8),
                     Expanded(
                       flex: stampRowFlex,
-                      child: ExpressionStampSlot(
+                      child: CameraStampSlot(
                         tag: game.live.expression.tag,
                         stressTags: game.config.exprCategories,
                       ),
@@ -596,7 +596,9 @@ class _CalibCamera extends StatelessWidget {
   }
 }
 
-/// E3 · bad-signal banner (mock: Edge-SignalIssue.dc.html).
+/// A hint card over the camera (mock: Edge-SignalIssue.dc.html), now only
+/// for calibration's "Still calibrating". E3 on Ask and Answer is a stamp on
+/// the camera (SPEC.md decision 69).
 class SignalBannerCard extends StatelessWidget {
   const SignalBannerCard({super.key, required this.title, required this.body});
 
