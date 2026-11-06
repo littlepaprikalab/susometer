@@ -1,0 +1,6 @@
+#include "Generated.xcconfig"
+
+// Optional, debug builds only: a gitignored Secrets.xcconfig can define
+// PRESAGE_API_KEY. It is copied into the Keychain once on first debug launch
+// if the Keychain is empty. See Secrets.example.xcconfig and SPEC.md §9.
+#include? "Secrets.xcconfig"
