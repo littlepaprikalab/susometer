@@ -979,6 +979,8 @@ class _ReplayCard extends StatelessWidget {
                 if (result.pulseTrace.length > 1) ...[
                   const SizedBox(height: 4),
                   SizedBox(height: 24, child: PulseTrace(result: result)),
+                  const SizedBox(height: 3),
+                  _TraceNumbers(result: result),
                 ],
               ],
             ),
@@ -1005,6 +1007,53 @@ class _ReplayCard extends StatelessWidget {
               ],
             ),
           ),
+        ],
+      ),
+    );
+  }
+}
+
+/// The two numbers that make a Replay row's pulse line readable: the player's
+/// normal (the dashed line) and the highest reading (the top of the red line).
+/// Not the first and last readings: the window runs on ~12 s past the
+/// answer, so the pulse has often settled again by its end, and a spike in
+/// the middle would go unnumbered.
+class _TraceNumbers extends StatelessWidget {
+  const _TraceNumbers({required this.result});
+
+  final QuestionResult result;
+
+  @override
+  Widget build(BuildContext context) {
+    final peak = result.pulseTrace.map((p) => p.$2).reduce(math.max).round();
+    final base = result.basePulse?.round();
+    final style = SusText.body(12, weight: FontWeight.w600);
+    return Semantics(
+      label: base == null
+          ? 'Pulse peaked at $peak BPM.'
+          : 'Pulse: your normal $base BPM, peak $peak BPM.',
+      excludeSemantics: true,
+      child: Row(
+        children: [
+          Expanded(
+            child: Row(
+              children: [
+                if (base != null) ...[
+                  const SizedBox(width: 16, child: _DashSwatch()),
+                  const SizedBox(width: 5),
+                  Flexible(
+                    child: Text(
+                      'normal $base',
+                      overflow: TextOverflow.ellipsis,
+                      style: style,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          Text('peak $peak BPM', style: style),
         ],
       ),
     );
