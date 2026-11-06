@@ -25,6 +25,8 @@ void main() {
           {'e': 'bogus', 't': 1},
         ],
         'trace': [0.1, 0.2, 0.3],
+        'traceTs': [1730851200010000, 1730851200043000, 1730851200076000],
+        'traceConf': [0.9, 0.8, 0.85],
         'insightSeen': false,
       });
 
@@ -43,9 +45,49 @@ void main() {
       expect(s.events.first.sdkTsUs, 1730851200050000);
       expect(s.events.last.type, PresageEdgeType.talkStart);
       expect(s.trace, [0.1, 0.2, 0.3]);
+      expect(s.traceSamples.map((p) => p.tsUs), [
+        1730851200010000,
+        1730851200043000,
+        1730851200076000,
+      ]);
+      expect(s.traceSamples.map((p) => p.value), [0.1, 0.2, 0.3]);
+      expect(s.traceSamples.map((p) => p.conf), [0.9, 0.8, 0.85]);
       expect(s.topExpression!.key, 'neutral');
       expect(s.exprAtMs, 1730851200090);
       expect(s.error, isNull);
+    });
+
+    test('waveform timestamps only count when they line up', () {
+      PresageSample parse(Map<String, Object?> extra) =>
+          PresageSample.fromMap({'t': 5, 'status': 'running', ...extra});
+      expect(
+        parse({
+          'trace': [0.1, 0.2],
+        }).traceSamples,
+        isEmpty,
+        reason: 'an older bridge sends no timestamps',
+      );
+      expect(
+        parse({
+          'trace': [0.1, 0.2],
+          'traceTs': [1000],
+        }).traceSamples,
+        isEmpty,
+        reason: 'lists of different lengths can\'t be paired',
+      );
+      final s = parse({
+        'trace': [0.1, double.nan, 0.3, 0.4],
+        'traceTs': [1000, 2000, double.infinity, 4000],
+        'traceConf': [0.9],
+      });
+      expect(s.traceSamples.map((p) => (p.tsUs, p.value)), [
+        (1000, 0.1),
+        (4000, 0.4),
+      ], reason: 'a bad value or time drops that pair only');
+      expect(s.traceSamples.map((p) => p.conf), [
+        null,
+        null,
+      ], reason: 'confidence of the wrong length is ignored');
     });
 
     test('tolerates missing optional fields and ints for doubles', () {

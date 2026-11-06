@@ -332,14 +332,23 @@ final class PresageBridge {
       state.dirty = true
     }
 
+    // The pulse waveform, with each sample's SDK timestamp (microseconds) and
+    // confidence (0..1), so Dart can find individual heartbeats (SPEC.md
+    // decision 63). The three arrays always have the same length.
     for sample in metrics.cardio.arterialPressureTrace.sorted(by: { $0.timestamp < $1.timestamp })
     where sample.timestamp > state.lastTraceTs {
       state.lastTraceTs = sample.timestamp
+      guard sample.value.isFinite else { continue }
       state.trace.append(Double(sample.value))
+      state.traceTs.append(sample.timestamp)
+      state.traceConf.append(Double(sample.confidence) / 100.0)
       state.dirty = true
     }
     if state.trace.count > 300 {
-      state.trace.removeFirst(state.trace.count - 300)
+      let extra = state.trace.count - 300
+      state.trace.removeFirst(extra)
+      state.traceTs.removeFirst(extra)
+      state.traceConf.removeFirst(extra)
     }
 
     for sample in metrics.face.blinking.sorted(by: { $0.timestamp < $1.timestamp })
@@ -402,6 +411,8 @@ final class PresageBridge {
     stream.send(state.snapshot(now: nowMs()))
     state.events.removeAll(keepingCapacity: true)
     state.trace.removeAll(keepingCapacity: true)
+    state.traceTs.removeAll(keepingCapacity: true)
+    state.traceConf.removeAll(keepingCapacity: true)
     state.dirty = false
   }
 
@@ -569,6 +580,9 @@ struct StreamState {
 
   var events: [[String: Any]] = []
   var trace: [Double] = []
+  /// SDK timestamp (microseconds) and confidence (0..1) of each [trace] value.
+  var traceTs: [Int64] = []
+  var traceConf: [Double] = []
 
   var lastPulseTs: Int64 = 0
   var lastHrvTs: Int64 = 0
@@ -592,6 +606,8 @@ struct StreamState {
     faceSamples = 0
     events.removeAll()
     trace.removeAll()
+    traceTs.removeAll()
+    traceConf.removeAll()
     lastPulseTs = 0
     lastHrvTs = 0
     lastTraceTs = 0
@@ -611,6 +627,8 @@ struct StreamState {
       "expr": expr,
       "events": events,
       "trace": trace,
+      "traceTs": traceTs,
+      "traceConf": traceConf,
       "insightSeen": insightSeen,
     ]
     // Missing keys arrive in Dart as null.

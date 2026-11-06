@@ -33,6 +33,34 @@ class ScoringConfig {
     this.calibMinConfidentPulseMs = 12000,
     this.calibMinFaceFraction = 0.8,
     this.calibHintAfterMs = 45000,
+    this.traceClockJumpMs = 2000,
+    this.traceResampleHz = 30,
+    this.traceMaxGapMs = 300,
+    this.beatMinSegmentMs = 4000,
+    this.beatBandLowHz = 0.7,
+    this.beatBandHighHz = 3.5,
+    this.beatMinIbiMs = 333,
+    this.beatMaxIbiMs = 1500,
+    this.beatMinPeakFraction = 0.35,
+    this.beatIbiMaxDeviation = 0.3,
+    this.beatLookbackMs = 20000,
+    this.beatMinCoverage = 0.6,
+    this.beatSdkWindowMs = 12000,
+    this.beatMaxSdkDiffBpm = 8,
+    this.shapePreMs = 5000,
+    this.shapePreFallbackMs = 15000,
+    this.shapePreMinCoverage = 0.5,
+    this.shapeGridMs = 250,
+    this.shapeSmoothMs = 3000,
+    this.shapeDipMs = 6000,
+    this.shapeMinRefs = 2,
+    this.shapeZFull = 2.5,
+    this.shapeRiseFloorBpm = 4,
+    this.shapeSustainedFloorBpm = 3,
+    this.shapeDipFloorBpm = 3,
+    this.wShapeRise = 0.4,
+    this.wShapeSustained = 0.4,
+    this.wShapeDip = 0.2,
   });
 
   // --- Score weights (raw = Σ w·z, score = round(100 · raw^exponent)) ---
@@ -43,7 +71,8 @@ class ScoringConfig {
   final double scoreExponent;
 
   // --- Feature normalization ---
-  /// zPulse = (mean window pulse − basePulse) / this.
+  /// zPulse = (mean window pulse − basePulse) / this, when the heartbeat
+  /// shape can't be used (SPEC.md decision 63).
   final double pulseScaleBpm;
 
   /// zBlink = ((rate − base) / max(base, blinkMinBaselinePerMin)) / this.
@@ -108,4 +137,80 @@ class ScoringConfig {
 
   /// After this long without a valid baseline, show the E3-style hints.
   final int calibHintAfterMs;
+
+  // --- Heartbeats from the pulse waveform (SPEC.md decision 63) ---
+  /// A waveform batch whose SDK clock runs ahead of the wall clock by more
+  /// than this starts a new clock mapping.
+  final int traceClockJumpMs;
+
+  /// The waveform is resampled to this rate before filtering.
+  final double traceResampleHz;
+
+  /// A gap longer than this between waveform samples splits the waveform.
+  final int traceMaxGapMs;
+
+  /// Waveform pieces shorter than this are too short to filter.
+  final int beatMinSegmentMs;
+
+  /// Band-pass filter edges (Hz): about 42 to 210 BPM.
+  final double beatBandLowHz;
+  final double beatBandHighHz;
+
+  /// Allowed time between beats: 180 down to 40 BPM.
+  final double beatMinIbiMs;
+  final double beatMaxIbiMs;
+
+  /// A peak lower than this fraction of the nearby peaks' median isn't a beat.
+  final double beatMinPeakFraction;
+
+  /// An interval further than this fraction from its neighbours' median is
+  /// an artifact (a missed or extra beat) and isn't used.
+  final double beatIbiMaxDeviation;
+
+  /// Waveform before the question's start that goes into beat finding, for
+  /// the pre-question level and so the filter has settled by then.
+  final int beatLookbackMs;
+
+  /// Beats must cover at least this fraction of a window to be scored.
+  final double beatMinCoverage;
+
+  /// Beat heart rate is checked against each SDK pulse reading over this
+  /// span (the SDK's pulse is a 12 s average).
+  final int beatSdkWindowMs;
+
+  /// The beats are trusted only if their median difference from the SDK's
+  /// pulse is at most this.
+  final double beatMaxSdkDiffBpm;
+
+  // --- Pulse shape and the question-vs-question comparison ---
+  /// The pre-question level is the mean beat heart rate over this span before
+  /// the question starts, or over the fallback span if that's too gappy.
+  final int shapePreMs;
+  final int shapePreFallbackMs;
+  final double shapePreMinCoverage;
+
+  /// Beat heart rate is sampled on this grid and smoothed over this span
+  /// (about one breath, so breathing's own pulse swing mostly averages out).
+  final int shapeGridMs;
+  final int shapeSmoothMs;
+
+  /// The early slowdown is looked for in this span after the question ends.
+  final int shapeDipMs;
+
+  /// Fewest earlier answers (warm-ups and questions) to compare against.
+  final int shapeMinRefs;
+
+  /// A feature this many spreads above the player's usual counts in full.
+  final double shapeZFull;
+
+  /// Smallest spread (BPM) used for each feature, so a player whose earlier
+  /// answers were all alike doesn't turn a 1 BPM wobble into a spike.
+  final double shapeRiseFloorBpm;
+  final double shapeSustainedFloorBpm;
+  final double shapeDipFloorBpm;
+
+  /// How the three shape features make up zPulse (normalized to sum to 1).
+  final double wShapeRise;
+  final double wShapeSustained;
+  final double wShapeDip;
 }

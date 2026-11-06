@@ -45,15 +45,37 @@ enum CalibStage { starting, quiet, chat, done }
 
 /// One warm-up during calibration.
 class Warmup {
-  Warmup(this.question, this.askedAtMs);
+  Warmup(this.question, this.askedAtMs) : startedAtMs = askedAtMs;
 
   final String question;
+
+  /// When the host started reading it.
+  final int startedAtMs;
 
   /// When the host finished reading it (latency counts from here).
   int askedAtMs;
   double? latencyS;
+
+  /// When the answer ended (or the warm-up was skipped or timed out).
+  int? doneAtMs;
   bool done = false;
   bool skipped = false;
+
+  /// Its timing as a question, for comparing pulse shapes (SPEC.md decision
+  /// 63). Null unless it was answered.
+  QuestionTiming? get timing {
+    final latency = latencyS;
+    final end = doneAtMs;
+    if (!done || skipped || latency == null || end == null) return null;
+    final tA0 = askedAtMs + (latency * 1000).round();
+    return QuestionTiming(
+      tQ0: startedAtMs,
+      tQ1: askedAtMs,
+      tA0: tA0,
+      tA1: max(end, tA0),
+      hesitationFromMs: askedAtMs,
+    );
+  }
 }
 
 /// Live values the measuring screens redraw at ~10 Hz, kept apart from
@@ -80,6 +102,26 @@ class LiveState extends ChangeNotifier {
 
   /// The #tag stamped on the camera: the player's strongest expression.
   final ExpressionTagger expression = ExpressionTagger();
+
+  /// Proof Panel only (SPEC.md decision 63), updated about once a second
+  /// while it's on: waveform samples per second and their latest confidence,
+  /// and heart rate, beat-to-beat variation and coverage from the beats found
+  /// over the last 12 s.
+  double? waveHz;
+  double? waveConf;
+  double? beatBpm;
+  double? beatRmssdMs;
+  double? beatCoverage;
+  int beatsAtMs = 0;
+
+  void resetBeats() {
+    waveHz = null;
+    waveConf = null;
+    beatBpm = null;
+    beatRmssdMs = null;
+    beatCoverage = null;
+    beatsAtMs = 0;
+  }
 
   void notify() => notifyListeners();
 
@@ -430,6 +472,7 @@ class GameController extends ChangeNotifier {
     _calibrationStarting = true;
     log.clear();
     live.trace.clear();
+    live.resetBeats();
     _calibTalk.reset();
     warmups.clear();
     calibHint = null;
@@ -528,7 +571,8 @@ class GameController extends ChangeNotifier {
     if (w == null) return;
     w
       ..done = true
-      ..skipped = true;
+      ..skipped = true
+      ..doneAtMs = nowMs;
     _afterWarmup();
   }
 
@@ -568,7 +612,9 @@ class GameController extends ChangeNotifier {
           lastEnd != null &&
           now - lastEnd >= 1500;
       if (answered || now - w.askedAtMs >= 12000) {
-        w.done = true;
+        w
+          ..done = true
+          ..doneAtMs = answered ? lastEnd : now;
         _afterWarmup();
         // Finishing the last warm-up may have ended calibration already.
         if (phase != GamePhase.calibrate) return;
@@ -640,6 +686,7 @@ class GameController extends ChangeNotifier {
     if (phase != GamePhase.calibrate || calibStage == CalibStage.done) return;
     calibStage = CalibStage.done;
     currentTurn.baseline = _calibBaseline;
+    currentTurn.warmupTimings = [for (final w in warmups) ?w.timing];
     calibHint = null;
     // Normally 0; after a mid-turn recalibration, carry on where we were.
     questionIndex = currentTurn.results.length;
@@ -823,8 +870,21 @@ class GameController extends ChangeNotifier {
     final base = currentTurn.baseline;
     if (d == null || base == null) return;
     final timing = d.timing();
-    final features = scoring.features(log, timing, base);
     final t1 = timing.windowEnd(config.minWindowAfterQuestionMs);
+    // One beat search over the warm-ups and this question, so every answer
+    // is measured the same way (SPEC.md decision 63).
+    final warmups = currentTurn.warmupTimings;
+    var from = timing.tQ0;
+    for (final w in warmups) {
+      from = min(from, w.tQ0);
+    }
+    final beats = scoring.beats(log, from - config.beatLookbackMs, t1);
+    final features = scoring.features(log, timing, base, beats: beats);
+    final refs = [
+      for (final w in warmups) ?scoring.pulseShape(log, beats, w),
+      for (final r in currentTurn.results)
+        if (r.scored) ?r.features?.pulseShape,
+    ];
     final trace = [
       for (final p in log.confidentPulse(timing.tQ0, t1)) (p.tMs, p.bpm),
     ];
@@ -860,7 +920,7 @@ class GameController extends ChangeNotifier {
       answer: _answerTranscript.text,
       timing: timing,
       features: features,
-      breakdown: scoring.score(features, base),
+      breakdown: scoring.score(features, base, refs: refs),
       pulseTrace: trace,
       traceEndMs: t1,
       basePulse: base.pulse,
@@ -1103,6 +1163,7 @@ class GameController extends ChangeNotifier {
     log.clear();
     live
       ..resetQuestion()
+      ..resetBeats()
       ..trace.clear()
       ..sample = null;
     paused = false;
@@ -1256,6 +1317,12 @@ class GameController extends ChangeNotifier {
       return;
     }
     log.add(s);
+    if (s.traceSamples.isNotEmpty) live.waveConf = s.traceSamples.last.conf;
+    if (settings.proofPanel &&
+        isMeasuring &&
+        (s.tMs - live.beatsAtMs).abs() >= 1000) {
+      _updateLiveBeats(s.tMs);
+    }
     live.expression.add(
       s.tMs,
       s.expr,
@@ -1302,6 +1369,19 @@ class GameController extends ChangeNotifier {
           : pulses.map((p) => p.bpm).reduce((a, b) => a + b) / pulses.length;
     }
     live.notify();
+  }
+
+  /// Beat readout for the Proof Panel, so a device run shows whether the
+  /// waveform holds real beats: the beat rate should track the SDK's pulse,
+  /// and the beat-to-beat variation its RMSSD.
+  void _updateLiveBeats(int now) {
+    live.beatsAtMs = now;
+    live.waveHz = log.traceIn(now - 5000, now).length / 5;
+    final beats = scoring.beats(log, now - 35000, now);
+    final coverage = beats.coverage(now - 12000, now);
+    live.beatCoverage = coverage;
+    live.beatBpm = coverage >= 0.5 ? beats.meanBpm(now - 12000, now) : null;
+    live.beatRmssdMs = beats.rmssdMs(now - 30000, now);
   }
 
   /// Shows E3 only once an issue has lasted 1.5 s.

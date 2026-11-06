@@ -425,18 +425,19 @@ void main() {
   });
 
   test('signal log stays bounded', () {
-    final log = SignalLog(config: cfg, maxFrames: 500);
+    final log = SignalLog(config: cfg, maxFrames: 500, maxTracePoints: 600);
     for (final s in synth(
       start: 0,
       end: 200000,
       pulse: (_) => 70,
       blinks: every(0, 200000, 20),
+      wave: pulseWave(start: 0, end: 200000, bpm: (_) => 70),
     )) {
       log.add(s);
     }
     expect(log.frames.length, 500);
     expect(log.pulse.length, lessThanOrEqualTo(500));
-    expect(log.trace.length, lessThanOrEqualTo(600));
+    expect(log.trace.length, 600);
   });
 
   group('bad values from native code', () {

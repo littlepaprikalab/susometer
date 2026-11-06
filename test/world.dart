@@ -12,6 +12,7 @@ import 'package:susometer/voice/speech_service.dart';
 import 'package:susometer/voice/turn_detector.dart';
 
 import 'fakes.dart';
+import 'synthetic.dart';
 
 /// Records which phase each haptic fired in.
 class PhaseHaptics implements HapticsApi {
@@ -76,6 +77,18 @@ class World {
   /// publishing a new expression sample every frame).
   Map<String, double> expr = const {'neutral': 0.8, 'surprise': 0.05};
   bool autoAnswerWarmups = true;
+
+  /// Pulse waveform (SPEC.md decision 63). When [heart] is set, each
+  /// snapshot carries the waveform since the last one, beating at
+  /// `heart(t)` BPM, and the SDK pulse becomes the mean heart rate over the
+  /// last 12 s, as the real SDK reports it, instead of [pulse].
+  double Function(int t)? heart;
+
+  /// Waveform samples reach the bridge this late.
+  int waveLatencyMs = 150;
+  final PulseWaveGen _wave = PulseWaveGen();
+  double? _waveAt;
+  final List<(double, double)> _heartLog = [];
   final List<Map<String, Object?>> _pendingEvents = [];
   int? _pulseAt;
   int _nextBlink = 0;
@@ -96,8 +109,32 @@ class World {
   );
 
   void _emit() {
-    if (!running || !emitting) return;
+    if (!running || !emitting) {
+      _waveAt = null;
+      return;
+    }
     final t = now;
+    final trace = <double>[];
+    final traceTs = <int>[];
+    final h = heart;
+    if (h != null) {
+      const dt = 1000 / 30;
+      var at = _waveAt ?? (t - waveLatencyMs).toDouble();
+      while (at <= t - waveLatencyMs) {
+        final bpm = h(at.round());
+        trace.add(_wave.next(at, bpm, dt));
+        traceTs.add((at * 1000).round());
+        _heartLog.add((at, bpm));
+        at += dt;
+      }
+      _waveAt = at;
+      _heartLog.removeWhere((e) => e.$1 < t - 12000);
+      if (_heartLog.isNotEmpty) {
+        pulse =
+            _heartLog.map((e) => e.$2).reduce((a, b) => a + b) /
+            _heartLog.length;
+      }
+    }
     if (_pulseAt == null || t - _pulseAt! >= 1000) _pulseAt = t;
     if (t >= _nextBlink) {
       _pendingEvents.add({'e': 'blinkEvent', 't': t});
@@ -125,6 +162,11 @@ class World {
         'validation': {'code': code, 'hint': code == 'OK' ? '' : 'hint'},
         'talking': talking,
         'events': List.of(_pendingEvents),
+        if (trace.isNotEmpty) ...{
+          'trace': trace,
+          'traceTs': traceTs,
+          'traceConf': [for (final _ in trace) 0.9],
+        },
       }),
     );
     _pendingEvents.clear();

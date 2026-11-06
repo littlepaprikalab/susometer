@@ -40,6 +40,28 @@ class ExprPoint {
   final Map<String, double> p;
 }
 
+/// One pulse-waveform sample (SPEC.md decision 63). [tsUs] is the SDK's own
+/// clock; [SignalLog.traceIn] maps it to wall-clock time.
+class TracePoint {
+  const TracePoint(
+    this.tsUs,
+    this.value, {
+    required this.ok,
+    required this.clock,
+  });
+
+  final int tsUs;
+  final double value;
+
+  /// Validation was OK and the pipeline was running when it arrived (the
+  /// same gate as [PulsePoint.validOk]).
+  final bool ok;
+
+  /// Which SDK-clock mapping applies (a new one starts if the SDK clock
+  /// jumps, e.g. after a restart).
+  final int clock;
+}
+
 class TalkEdge {
   const TalkEdge(this.tMs, this.talking);
 
@@ -50,17 +72,28 @@ class TalkEdge {
 /// Time series for the current player's turn, built from bridge snapshots.
 /// In memory only, cleared at the start of every turn, and capped in size.
 class SignalLog {
-  SignalLog({this.config = const ScoringConfig(), this.maxFrames = 30000});
+  SignalLog({
+    this.config = const ScoringConfig(),
+    this.maxFrames = 30000,
+    this.maxTracePoints = 60000,
+  });
 
   final ScoringConfig config;
   final int maxFrames;
+
+  /// About 33 minutes of waveform at 30 Hz: a whole turn.
+  final int maxTracePoints;
 
   final List<PulsePoint> pulse = [];
   final List<int> blinks = [];
   final List<FaceFrame> frames = [];
   final List<ExprPoint> expr = [];
   final List<TalkEdge> talkEdges = [];
-  final List<double> trace = [];
+  final List<TracePoint> trace = [];
+
+  /// Wall-clock ms minus SDK-clock ms, one entry per [TracePoint.clock].
+  final List<double> _traceOffsetMs = [];
+  int? _lastTraceTsUs;
 
   PresageSample? latest;
   int? _lastPulseAt;
@@ -73,6 +106,8 @@ class SignalLog {
     expr.clear();
     talkEdges.clear();
     trace.clear();
+    _traceOffsetMs.clear();
+    _lastTraceTsUs = null;
     latest = null;
     _lastPulseAt = null;
     _lastConfidentPulseMs = null;
@@ -118,8 +153,7 @@ class SignalLog {
     }
 
     if (s.expr.isNotEmpty) expr.add(ExprPoint(s.tMs, s.expr));
-    trace.addAll(s.trace);
-    if (trace.length > 600) trace.removeRange(0, trace.length - 600);
+    _addTrace(s, validOk);
 
     final last = _lastConfidentPulseMs;
     frames.add(
@@ -136,6 +170,55 @@ class SignalLog {
       ),
     );
     _trim();
+  }
+
+  /// Stores waveform samples with their SDK timestamps. The SDK clock is
+  /// mapped to wall-clock time by the smallest delay seen between a sample's
+  /// SDK time and the snapshot that carried it: delays only ever add to the
+  /// true offset, so the minimum is the best estimate. A late snapshot (the
+  /// app stalled) only looks like a longer delay and changes nothing. A new
+  /// mapping starts if the SDK clock runs ahead of the wall clock, or goes
+  /// back while the wall clock doesn't (the SDK restarted its clock); samples
+  /// that are simply old, with the same offset, are dropped as repeats.
+  void _addTrace(PresageSample s, bool ok) {
+    if (s.traceSamples.isEmpty) return;
+    final samples = [...s.traceSamples]
+      ..sort((a, b) => a.tsUs.compareTo(b.tsUs));
+    final newest = samples.last.tsUs;
+    final d = s.tMs - newest / 1000;
+    final last = _lastTraceTsUs;
+    final current = _traceOffsetMs.isEmpty ? null : _traceOffsetMs.last;
+    final wentBack = last != null && newest < last;
+    if (current == null ||
+        d < current - config.traceClockJumpMs ||
+        (wentBack && d > current + config.traceClockJumpMs)) {
+      _traceOffsetMs.add(d);
+      _lastTraceTsUs = null;
+    } else if (d < current) {
+      _traceOffsetMs[_traceOffsetMs.length - 1] = d;
+    }
+    final clock = _traceOffsetMs.length - 1;
+    for (final p in samples) {
+      final prev = _lastTraceTsUs;
+      if (prev != null && p.tsUs <= prev) continue;
+      _lastTraceTsUs = p.tsUs;
+      trace.add(TracePoint(p.tsUs, p.value, ok: ok, clock: clock));
+    }
+    if (trace.length > maxTracePoints) {
+      trace.removeRange(0, trace.length - maxTracePoints);
+    }
+  }
+
+  /// Waveform samples whose wall-clock time is in [t0, t1], oldest first, as
+  /// (time ms, value, ok).
+  List<(double, double, bool)> traceIn(int t0, int t1) {
+    final out = <(double, double, bool)>[];
+    for (final p in trace) {
+      final t = p.tsUs / 1000 + _traceOffsetMs[p.clock];
+      if (t >= t0 && t <= t1) out.add((t, p.value, p.ok));
+    }
+    out.sort((a, b) => a.$1.compareTo(b.$1));
+    return out;
   }
 
   void _trim() {

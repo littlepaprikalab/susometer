@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../game/game_controller.dart';
+import '../game/models.dart';
 import '../screens/question_screens.dart';
 import '../theme/tokens.dart';
 
@@ -31,12 +32,37 @@ class ProofPanel extends StatelessWidget {
           final base = game.inGame
               ? game.currentTurn.baseline ?? game.calibBaseline
               : null;
+          final live = game.live;
+          String n0(double? v) => v == null ? '--' : v.toStringAsFixed(0);
+          String signed(double? v) =>
+              v == null ? '--' : '${v >= 0 ? '+' : ''}${v.toStringAsFixed(0)}';
+          final scored = game.inGame
+              ? game.currentTurn.results.where((r) => r.scored).toList()
+              : const <QuestionResult>[];
+          final last = scored.isEmpty ? null : scored.last;
+          final lastShape = last?.features?.pulseShape;
+          final lastRank = last?.breakdown?.shape;
           final lines = <String>[
             'SDK ${s?.status.name ?? 'idle'} · telemetry ${telemetry ? 'ON' : 'off'}'
                 '${s?.insightSeen == true ? ' · LLM INSIGHT SEEN' : ''}',
             'pulse ${s?.pulse?.toStringAsFixed(1) ?? '--'} bpm  conf ${pct(s?.pulseConf)}'
                 '${s?.pulseStable == true ? ' stable' : ''}',
             'rmssd ${s?.rmssd?.toStringAsFixed(1) ?? '--'} ms  conf ${pct(s?.hrvConf)}',
+            'wave ${live.waveHz == null ? '--' : '${n0(live.waveHz)}/s'}'
+                '  conf ${pct(live.waveConf)}',
+            'beats ${n0(live.beatBpm)} bpm  rmssd ${n0(live.beatRmssdMs)} ms'
+                '  cover ${pct(live.beatCoverage)}',
+            if (last != null)
+              lastRank != null
+                  ? 'Q${last.index + 1} pulse by beats vs ${lastRank.refs}:'
+                        ' rise ${pct(lastRank.rise)} high ${pct(lastRank.sustained)}'
+                        ' dip ${pct(lastRank.dip)}'
+                  : 'Q${last.index + 1} pulse by SDK mean'
+                        '${last.breakdown?.pulseNote == null ? '' : ' (${last.breakdown!.pulseNote})'}',
+            if (lastShape != null)
+              '  pre ${n0(lastShape.preBpm)} rise ${signed(lastShape.rise)}'
+                  ' high ${signed(lastShape.sustained)} dip ${signed(lastShape.dip)}'
+                  ' vs SDK ${lastShape.sdkDiffBpm?.toStringAsFixed(1) ?? '--'}',
             'blink ${s?.blink == true ? 'Y' : 'n'}  talking ${s?.talking == true ? 'Y' : 'n'}'
                 '  mic ${(game.live.micLevel * 100).round()}%',
             'expr ${top == null ? '--' : '${top.key} ${pct(top.value)}'}',
