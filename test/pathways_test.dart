@@ -313,6 +313,9 @@ void main() {
       await rig.wait(1000);
       expect(find.text('PROOF PANEL · raw SmartSpectra'), findsOneWidget);
       expect(find.textContaining('telemetry off'), findsOneWidget);
+      // The rig sends no waveform: the beat check runs and says so.
+      expect(find.textContaining('wave 0/s'), findsOneWidget);
+      expect(find.textContaining('beats -- bpm'), findsOneWidget);
       await rig.until(
         () => rig.game.currentWarmup != null,
         what: 'first warm-up',

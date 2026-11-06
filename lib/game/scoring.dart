@@ -1,5 +1,6 @@
 import 'dart:math' as math;
 
+import 'beats.dart';
 import 'models.dart';
 import 'scoring_config.dart';
 import 'signal_log.dart';
@@ -55,7 +56,144 @@ class Scoring {
       b.confidentPulseMs >= config.calibMinConfidentPulseMs &&
       b.faceFraction >= config.calibMinFaceFraction;
 
-  WindowFeatures features(SignalLog log, QuestionTiming timing, Baseline base) {
+  /// Heartbeats in the waveform between [t0] and [t1] (SPEC.md decision 63).
+  BeatSeries beats(SignalLog log, int t0, int t1) =>
+      detectBeats(log.traceIn(t0, t1), config);
+
+  /// The beat heart rate's shape over one question's window, or null if there
+  /// weren't beats both before the question and during it.
+  PulseShape? pulseShape(
+    SignalLog log,
+    BeatSeries beats,
+    QuestionTiming timing,
+  ) {
+    final c = config;
+    final t0 = timing.tQ0;
+    final t1 = timing.windowEnd(c.minWindowAfterQuestionMs);
+    double? pre;
+    for (final span in [c.shapePreMs, c.shapePreFallbackMs]) {
+      if (beats.coverage(t0 - span, t0) >= c.shapePreMinCoverage) {
+        pre = beats.meanBpm(t0 - span, t0);
+        break;
+      }
+    }
+    final mean = beats.meanBpm(t0, t1);
+    if (pre == null || mean == null) return null;
+    final dipEnd = math.min(timing.tQ1 + c.shapeDipMs, t1);
+    double? peak;
+    double? low;
+    for (final (t, bpm) in beats.smoothed(
+      t0,
+      t1,
+      c.shapeGridMs,
+      c.shapeSmoothMs,
+    )) {
+      if (bpm == null) continue;
+      if (peak == null || bpm > peak) peak = bpm;
+      if (t >= timing.tQ1 && t <= dipEnd && (low == null || bpm < low)) {
+        low = bpm;
+      }
+    }
+    if (peak == null) return null;
+    return PulseShape(
+      preBpm: pre,
+      meanBpm: mean,
+      rise: peak - pre,
+      sustained: mean - pre,
+      dip: low == null ? null : pre - low,
+      coverage: beats.coverage(t0, t1),
+      sdkDiffBpm: sdkDiff(log, beats, t0, t1),
+    );
+  }
+
+  /// How far the beats are from the SDK's own pulse over [t0, t1]: the
+  /// median difference between each confident SDK reading and the beats'
+  /// average over the 12 s before it (the SDK's pulse is a 12 s average).
+  /// The SDK's reading may also arrive late, so this tries one delay for the
+  /// whole window, 0 to [ScoringConfig.beatSdkMaxLagMs] in 1 s steps, and
+  /// keeps the best. A steady offset still shows; a delay alone doesn't.
+  /// Null if no reading had enough beats before it.
+  double? sdkDiff(SignalLog log, BeatSeries beats, int t0, int t1) {
+    final c = config;
+    final readings = log.confidentPulse(t0, t1);
+    double? best;
+    for (var lag = 0; lag <= c.beatSdkMaxLagMs; lag += 1000) {
+      final diffs = <double>[];
+      for (final p in readings) {
+        final to = p.tMs - lag;
+        final from = to - c.beatSdkWindowMs;
+        if (beats.coverage(from, to) < 0.5) continue;
+        diffs.add((beats.meanBpm(from, to)! - p.bpm).abs());
+      }
+      // Compare delays on the same readings: one that leaves readings out
+      // can't win by dropping the hard ones.
+      if (diffs.isEmpty || diffs.length < readings.length / 2) continue;
+      final d = median(diffs);
+      if (best == null || d < best) best = d;
+    }
+    return best;
+  }
+
+  /// Why [s] can't be scored, or null if it can: the beats must cover enough
+  /// of the window and agree with the SDK's own pulse.
+  String? shapeProblem(PulseShape? s) {
+    final c = config;
+    if (s == null) return 'no beats found';
+    if (s.coverage < c.beatMinCoverage) {
+      return 'beats cover ${(s.coverage * 100).round()}%';
+    }
+    final diff = s.sdkDiffBpm;
+    if (diff == null) return 'beats not checked against the SDK';
+    if (diff > c.beatMaxSdkDiffBpm) {
+      return 'beats off the SDK by ${diff.toStringAsFixed(0)} BPM';
+    }
+    return null;
+  }
+
+  /// Ranks [q] against the player's earlier answers [refs] (warm-ups and
+  /// earlier questions): each feature's distance from their median, in robust
+  /// spreads (1.4826 × median absolute deviation, never under the feature's
+  /// floor). Null with fewer than [ScoringConfig.shapeMinRefs] references.
+  ShapeScore? rankShape(PulseShape q, List<PulseShape> refs) {
+    final c = config;
+    if (refs.length < c.shapeMinRefs) return null;
+    double part(double? x, Iterable<double?> values, double floor) {
+      final r = [for (final v in values) ?v];
+      if (x == null || r.length < c.shapeMinRefs) return 0;
+      final mid = median(r);
+      final mad = median([for (final v in r) (v - mid).abs()]);
+      final spread = math.max(1.4826 * mad, floor);
+      return _clamp01((x - mid) / spread / c.shapeZFull);
+    }
+
+    final rise = part(q.rise, refs.map((r) => r.rise), c.shapeRiseFloorBpm);
+    final sustained = part(
+      q.sustained,
+      refs.map((r) => r.sustained),
+      c.shapeSustainedFloorBpm,
+    );
+    final dip = part(q.dip, refs.map((r) => r.dip), c.shapeDipFloorBpm);
+    final total = c.wShapeRise + c.wShapeSustained + c.wShapeDip;
+    return ShapeScore(
+      rise: rise,
+      sustained: sustained,
+      dip: dip,
+      refs: refs.length,
+      zPulse: _clamp01(
+        (c.wShapeRise * rise +
+                c.wShapeSustained * sustained +
+                c.wShapeDip * dip) /
+            total,
+      ),
+    );
+  }
+
+  WindowFeatures features(
+    SignalLog log,
+    QuestionTiming timing,
+    Baseline base, {
+    BeatSeries? beats,
+  }) {
     final t0 = timing.tQ0;
     final t1 = timing.windowEnd(config.minWindowAfterQuestionMs);
     final pulses = log.confidentPulse(t0, t1);
@@ -81,6 +219,7 @@ class Scoring {
       hesitationS: hesitation.toDouble(),
       cleanFraction: log.cleanFraction(t0, t1),
       confidentPulseSamples: pulses.length,
+      pulseShape: beats == null ? null : pulseShape(log, beats, timing),
     );
   }
 
@@ -90,11 +229,45 @@ class Scoring {
       f.confidentPulseSamples > 0 &&
       f.cleanFraction >= config.minCleanFraction;
 
-  ScoreBreakdown score(WindowFeatures f, Baseline base) {
+  /// The 0–100 score. The pulse part comes from the beat shape ranked
+  /// against the player's [warmups] and [earlier] questions when the beats
+  /// are good; otherwise from the mean SDK pulse against the calibration
+  /// median, as before (SPEC.md §5.4, decision 63).
+  ///
+  /// Beats need at least [ScoringConfig.shapeMinRefs] good warm-ups. Earlier
+  /// questions add to the comparison but can't stand in for them, so a turn
+  /// whose warm-ups had no usable beats stays on one scale (the SDK mean)
+  /// instead of switching once enough questions have piled up.
+  ScoreBreakdown score(
+    WindowFeatures f,
+    Baseline base, {
+    List<PulseShape> warmups = const [],
+    List<PulseShape> earlier = const [],
+  }) {
     final c = config;
-    final zPulse = f.meanPulse == null
-        ? 0.0
-        : _clamp01((f.meanPulse! - base.pulse) / c.pulseScaleBpm);
+    var note = shapeProblem(f.pulseShape);
+    ShapeScore? shape;
+    if (note == null) {
+      final goodWarmups = [
+        for (final r in warmups)
+          if (shapeProblem(r) == null) r,
+      ];
+      if (goodWarmups.length < c.shapeMinRefs) {
+        final n = goodWarmups.length;
+        note = 'only $n warm-up${n == 1 ? '' : 's'} with beats';
+      } else {
+        shape = rankShape(f.pulseShape!, [
+          ...goodWarmups,
+          for (final r in earlier)
+            if (shapeProblem(r) == null) r,
+        ]);
+      }
+    }
+    final zPulse =
+        shape?.zPulse ??
+        (f.meanPulse == null
+            ? 0.0
+            : _clamp01((f.meanPulse! - base.pulse) / c.pulseScaleBpm));
     final blinkBase = math.max(base.blinkRatePerMin, c.blinkMinBaselinePerMin);
     var zBlink = _clamp01(
       ((f.blinkRatePerMin - base.blinkRatePerMin) / blinkBase) /
@@ -121,6 +294,9 @@ class Scoring {
       raw: raw,
       score: score,
       verdict: verdictFor(score, legitBelow: c.legitBelow, susFrom: c.susFrom),
+      pulseMethod: shape == null ? PulseMethod.sdkMean : PulseMethod.beats,
+      shape: shape,
+      pulseNote: note,
     );
   }
 

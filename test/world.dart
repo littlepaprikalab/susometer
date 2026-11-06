@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math';
 
 import 'package:fake_async/fake_async.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -12,6 +13,7 @@ import 'package:susometer/voice/speech_service.dart';
 import 'package:susometer/voice/turn_detector.dart';
 
 import 'fakes.dart';
+import 'synthetic.dart';
 
 /// Records which phase each haptic fired in.
 class PhaseHaptics implements HapticsApi {
@@ -76,6 +78,31 @@ class World {
   /// publishing a new expression sample every frame).
   Map<String, double> expr = const {'neutral': 0.8, 'surprise': 0.05};
   bool autoAnswerWarmups = true;
+
+  /// Pulse waveform (SPEC.md decision 63). When [heart] is set, each
+  /// snapshot carries the waveform since the last one, beating at
+  /// `heart(t)` BPM, and the SDK pulse becomes the mean heart rate over 12 s
+  /// ending [sdkLagMs] ago (a 12 s average that also arrives late, as the
+  /// real SDK's may), instead of [pulse].
+  double Function(int t)? heart;
+  int sdkLagMs = 2000;
+
+  /// Waveform samples reach the bridge this late, plus up to
+  /// [waveLatencyJitterMs] more, varying snapshot to snapshot.
+  int waveLatencyMs = 150;
+  int waveLatencyJitterMs = 120;
+  final Random _latencyJitter = Random(7);
+
+  /// Fuzzing: when set, some waveform batches are mangled the ways a
+  /// misbehaving SDK or bridge could (SDK clock jumps either way, samples
+  /// reversed or repeated, timestamps of the wrong length).
+  Random? waveChaos;
+  int _sdkShiftUs = 0;
+  List<double> _lastTrace = const [];
+  List<int> _lastTraceTs = const [];
+  final PulseWaveGen _wave = PulseWaveGen();
+  double? _waveAt;
+  final List<(double, double)> _heartLog = [];
   final List<Map<String, Object?>> _pendingEvents = [];
   int? _pulseAt;
   int _nextBlink = 0;
@@ -96,8 +123,64 @@ class World {
   );
 
   void _emit() {
-    if (!running || !emitting) return;
+    if (!running || !emitting) {
+      _waveAt = null;
+      return;
+    }
     final t = now;
+    final trace = <double>[];
+    final traceTs = <int>[];
+    final h = heart;
+    if (h != null) {
+      const dt = 1000 / 30;
+      final latency =
+          waveLatencyMs + _latencyJitter.nextInt(waveLatencyJitterMs + 1);
+      var at = _waveAt ?? (t - latency).toDouble();
+      while (at <= t - latency) {
+        final bpm = h(at.round());
+        trace.add(_wave.next(at, bpm, dt));
+        traceTs.add((at * 1000).round());
+        _heartLog.add((at, bpm));
+        at += dt;
+      }
+      _waveAt = at;
+      final r = waveChaos;
+      if (r != null) {
+        switch (r.nextInt(25)) {
+          case 0:
+            _sdkShiftUs -= r.nextInt(30000) * 1000;
+          case 1:
+            _sdkShiftUs += r.nextInt(30000) * 1000;
+          case 2:
+            final rt = trace.reversed.toList();
+            final rts = traceTs.reversed.toList();
+            trace
+              ..clear()
+              ..addAll(rt);
+            traceTs
+              ..clear()
+              ..addAll(rts);
+          case 3:
+            trace.insertAll(0, _lastTrace);
+            traceTs.insertAll(0, _lastTraceTs);
+          case 4:
+            traceTs.add(0);
+        }
+        for (var i = 0; i < traceTs.length; i++) {
+          traceTs[i] += _sdkShiftUs;
+        }
+        _lastTrace = List.of(trace);
+        _lastTraceTs = List.of(traceTs);
+      }
+      _heartLog.removeWhere((e) => e.$1 < t - sdkLagMs - 12000);
+      final window = [
+        for (final (at, bpm) in _heartLog)
+          if (at <= t - sdkLagMs) bpm,
+      ];
+      if (window.isNotEmpty) {
+        pulse = window.reduce((a, b) => a + b) / window.length;
+      }
+    }
     if (_pulseAt == null || t - _pulseAt! >= 1000) _pulseAt = t;
     if (t >= _nextBlink) {
       _pendingEvents.add({'e': 'blinkEvent', 't': t});
@@ -125,15 +208,26 @@ class World {
         'validation': {'code': code, 'hint': code == 'OK' ? '' : 'hint'},
         'talking': talking,
         'events': List.of(_pendingEvents),
+        if (trace.isNotEmpty) ...{
+          'trace': trace,
+          'traceTs': traceTs,
+          'traceConf': [for (final _ in trace) 0.9],
+        },
       }),
     );
     _pendingEvents.clear();
   }
 
   /// Advances fake time in 100 ms steps until [cond] holds.
-  void until(bool Function() cond, {int maxMs = 120000, String? what}) {
+  void until(
+    bool Function() cond, {
+    int maxMs = 120000,
+    String? what,
+    void Function()? step,
+  }) {
     var waited = 0;
     while (!cond()) {
+      step?.call();
       async.elapse(const Duration(milliseconds: 100));
       waited += 100;
       if (waited > maxMs) {

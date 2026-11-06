@@ -213,6 +213,52 @@ void main() {
       expect(scoreMs, lessThan(1500), reason: 'scoring took $scoreMs ms');
     });
 
+    test('heartbeat scoring costs the same at the end of the longest turn', () {
+      // 35 minutes of 30 Hz waveform fills the store (60,000 samples).
+      const end = 2100000;
+      final log = SignalLog();
+      final sw = Stopwatch()..start();
+      for (final s in synth(
+        start: 0,
+        end: end,
+        pulse: (_) => 72,
+        wave: pulseWave(start: 0, end: end, bpm: (_) => 72),
+      )) {
+        log.add(s);
+      }
+      final ingestMs = sw.elapsedMilliseconds;
+      expect(log.trace.length, log.maxTracePoints);
+      const scoring = Scoring(ScoringConfig());
+      const c = ScoringConfig();
+      double perQuestionMs(int tQ0) {
+        final t = QuestionTiming(
+          tQ0: tQ0,
+          tQ1: tQ0 + 3000,
+          tA0: tQ0 + 4000,
+          tA1: tQ0 + 9000,
+          hesitationFromMs: tQ0 + 3000,
+        );
+        final w = Stopwatch()..start();
+        for (var i = 0; i < 10; i++) {
+          final beats = scoring.beats(
+            log,
+            tQ0 - c.beatLookbackMs,
+            t.windowEnd(c.minWindowAfterQuestionMs),
+          );
+          expect(scoring.pulseShape(log, beats, t), isNotNull);
+        }
+        return w.elapsedMicroseconds / 10 / 1000;
+      }
+
+      final early = perQuestionMs(end - 1900000);
+      final late = perQuestionMs(end - 40000);
+      // ~20,000 snapshots with waveform; one question's beats in a few ms
+      // (JIT), wherever it falls in the turn.
+      expect(ingestMs, lessThan(3000), reason: 'ingest took $ingestMs ms');
+      expect(late, lessThan(25), reason: 'a question took $late ms');
+      expect(late, lessThan(early * 3 + 5), reason: 'early $early, late $late');
+    });
+
     test('the controller handles a live 10 Hz stream without slowing down', () {
       fakeAsync((async) {
         final w = World(async);
@@ -252,6 +298,96 @@ void main() {
         );
         w.dispose();
       });
+    });
+  });
+
+  test('10 Hz with the waveform and the Proof Panel on stays fast', () {
+    fakeAsync((async) {
+      final w = World(async);
+      w.settings.proofPanel = true;
+      w.heart = (_) => 72;
+      w.startGame(['Sam', 'Alex']);
+      w.calibrate();
+      w.game.doneAsking();
+      w.elapse(100);
+      expect(w.game.phase, GamePhase.answer);
+      // 5 minutes of snapshots straight through the answer-phase path, each
+      // with ~3 waveform samples; the beat readout runs once a second.
+      final gen = PulseWaveGen();
+      final t0 = w.now;
+      var readouts = 0;
+      var lastReadout = w.game.live.beatsAtMs;
+      final sw = Stopwatch()..start();
+      for (var i = 0; i < 3000; i++) {
+        final t = t0 + i * 100;
+        final ts = [for (var k = 0; k < 3; k++) t - 150 - 100 + k * 33.3];
+        w.presage.controller.add(
+          PresageSample.fromMap({
+            't': t,
+            'status': 'running',
+            'pulse': 72.0,
+            'pulseConf': 0.9,
+            'pulseAt': t - t % 1000,
+            'validation': {'code': 'OK', 'hint': ''},
+            'trace': [for (final x in ts) gen.next(x, 72, 33.3)],
+            'traceTs': [for (final x in ts) (x * 1000).round()],
+            'traceConf': [0.9, 0.9, 0.9],
+          }),
+        );
+        async.flushMicrotasks();
+        if (w.game.live.beatsAtMs != lastReadout) {
+          readouts++;
+          lastReadout = w.game.live.beatsAtMs;
+        }
+      }
+      expect(readouts, closeTo(300, 5));
+      expect(w.game.live.beatBpm, closeTo(72, 2));
+      expect(
+        sw.elapsedMilliseconds,
+        lessThan(4000),
+        reason: 'took ${sw.elapsedMilliseconds} ms',
+      );
+      w.dispose();
+    });
+  });
+
+  test('scale with heartbeats: 4 players × 7 questions, scored by beats', () {
+    fakeAsync((async) {
+      final w = World(async);
+      var hot = 70.0;
+      w.heart = (_) =>
+          w.game.phase == GamePhase.answer || w.game.phase == GamePhase.settle
+          ? hot
+          : 70;
+      final names = ['Sam', 'Alex', 'Priya', 'Jordan'];
+      w.startGame(names, questions: 7);
+      for (var p = 0; p < names.length; p++) {
+        w.calibrate();
+        for (var q = 0; q < 7; q++) {
+          hot = q == 4 ? 95 : 70;
+          final r = w.askAndAnswer(question: 'Question $q for ${names[p]}?');
+          final b = r.breakdown!;
+          expect(
+            b.pulseMethod,
+            PulseMethod.beats,
+            reason: '${names[p]} Q$q: ${b.pulseNote}',
+          );
+          if (q == 4) {
+            expect(b.zPulse, greaterThan(0.6), reason: '${names[p]} Q$q');
+          } else {
+            expect(b.zPulse, lessThan(0.25), reason: '${names[p]} Q$q');
+          }
+          expect(
+            w.game.log.trace.length,
+            lessThan(20000),
+            reason: 'the waveform restarts every turn',
+          );
+          w.game.nextQuestion();
+          w.elapse(100);
+        }
+      }
+      expect(w.game.phase, GamePhase.leaderboard);
+      w.dispose();
     });
   });
 

@@ -1,6 +1,10 @@
 /// Game data. Everything here lives in memory only (SPEC.md §8).
 library;
 
+import 'pulse_shape.dart';
+
+export 'pulse_shape.dart';
+
 enum GameMode { party, solo }
 
 enum DeckKind { mild, spicy }
@@ -70,6 +74,7 @@ class WindowFeatures {
     required this.hesitationS,
     required this.cleanFraction,
     required this.confidentPulseSamples,
+    this.pulseShape,
   });
 
   final double? meanPulse;
@@ -80,6 +85,9 @@ class WindowFeatures {
   final double hesitationS;
   final double cleanFraction;
   final int confidentPulseSamples;
+
+  /// Beat-by-beat heart-rate shape, if beats could be found in the window.
+  final PulseShape? pulseShape;
 }
 
 class ScoreBreakdown {
@@ -91,6 +99,9 @@ class ScoreBreakdown {
     required this.raw,
     required this.score,
     required this.verdict,
+    this.pulseMethod = PulseMethod.sdkMean,
+    this.shape,
+    this.pulseNote,
   });
 
   final double zPulse;
@@ -100,6 +111,15 @@ class ScoreBreakdown {
   final double raw;
   final int score;
   final Verdict verdict;
+
+  /// How [zPulse] was worked out.
+  final PulseMethod pulseMethod;
+
+  /// The beat-shape ranking, when [pulseMethod] is [PulseMethod.beats].
+  final ShapeScore? shape;
+
+  /// Why the beats weren't used, for the Proof Panel.
+  final String? pulseNote;
 }
 
 /// Timing markers for one question (SPEC.md §5.3), wall-clock ms.
@@ -110,6 +130,7 @@ class QuestionTiming {
     required this.tA0,
     required this.tA1,
     required this.hesitationFromMs,
+    this.endCapMs,
   });
 
   final int tQ0;
@@ -121,9 +142,16 @@ class QuestionTiming {
   /// "{name}, your answer?" prompt when the question ended on silence.
   final int hesitationFromMs;
 
+  /// The window never runs past this (ms), if set: a warm-up's window ends
+  /// where the next warm-up, or the first question, begins (SPEC.md
+  /// decision 63).
+  final int? endCapMs;
+
   int windowEnd(int minAfterQuestionMs) {
     final minEnd = tQ1 + minAfterQuestionMs;
-    return tA1 > minEnd ? tA1 : minEnd;
+    final end = tA1 > minEnd ? tA1 : minEnd;
+    final cap = endCapMs;
+    return cap != null && cap < end ? cap : end;
   }
 }
 
@@ -197,6 +225,14 @@ class PlayerTurn {
 
   final Player player;
   Baseline? baseline;
+
+  /// Timing of each answered warm-up, so its pulse shape can be a reference
+  /// for this player's questions (SPEC.md decision 63).
+  List<QuestionTiming> warmupTimings = const [];
+
+  /// Pulse shapes of those warm-ups, found once all their windows have
+  /// closed, then reused for every question in the turn.
+  List<PulseShape>? warmupShapes;
   bool skipped = false;
   final List<QuestionResult> results = [];
 

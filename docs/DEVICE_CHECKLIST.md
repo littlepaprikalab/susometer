@@ -72,6 +72,16 @@ Settings → **Signal check** → **Start both**. Allow microphone and speech re
   screen), and still fills its box after the "Too dark in here" banner slides in and out.
 - [ ] Sit so your face fills the oval: no "move closer" or "move back" banner. **If there's a
   small iPhone (SE/mini) around, try it there too, and with Larger Text on.**
+- [ ] **Heartbeats** (Proof Panel on, sit still during calibration):
+  - The `wave` line says about **30/s**. **Note the number and the conf %.** (`--` or 0 means
+    the bridge isn't sending waveform timestamps.)
+  - After ~20 s, `beats` shows a BPM within a few of the SDK's `pulse`, and `cover` is 80%+.
+  - After ~90 s, the beat `rmssd` is roughly near the SDK's `rmssd` (within about half). **Note
+    both.** If the beat RMSSD stays near 0 while the BPM matches, the waveform is a smoothed
+    template without real beat timing, so the beats add nothing and the score will keep using the
+    SDK mean.
+  - After the first question, the `Q1 pulse by …` line says **beats**. If it says SDK mean,
+    **note the reason in brackets.**
 - [ ] Call it! → tap your friend's chip (Legit/Sus) → Reveal → countdown → verdict.
 - [ ] Do the verdicts feel plausible? A calm answer should usually be Legit, and a jump-and-shout
   should be higher. **Note a few scores.**
@@ -123,5 +133,7 @@ Settings → **Signal check** → **Start both**. Allow microphone and speech re
 3. Mirrored preview: yes or no.
 4. Pulse and transcript together: yes or no.
 5. LLM insight seen after 90 s.
-6. Anything from sections 3–7 that didn't behave as described.
-7. App Privacy Report domains.
+6. Heartbeats: the `wave` rate and conf, beats vs SDK BPM, beat vs SDK RMSSD, and whether the
+   questions were scored by beats (or the reason they weren't).
+7. Anything from sections 3–7 that didn't behave as described.
+8. App Privacy Report domains.

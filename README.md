@@ -143,7 +143,7 @@ normalizes four signals to 0–1:
 
 | Signal | Formula | Weight |
 |---|---|---|
-| Pulse | (mean confident pulse − your baseline) ÷ 15 BPM | 0.45 |
+| Pulse | heartbeat shape compared with your earlier answers ([below](#pulse-from-heartbeats)), or if the beats aren't good enough, (mean confident pulse − your baseline) ÷ 15 BPM | 0.45 |
 | Blinks | ((rate − baseline) ÷ max(baseline, 6/min)) ÷ 0.6, or 0.6 for a 6 s "blink freeze" | 0.25 |
 | Expressions | peak rise in surprise / fear / contempt / disgust above your normal ÷ 0.4 | 0.15 |
 | Hesitation | (time to start answering − your usual) ÷ 3 s | 0.15 |
@@ -164,6 +164,38 @@ and a tie never shows an arbitrary expression. Red ink
 marks the four that move the score, teal the rest. It's hidden when no expression scores clearly,
 there's no usable face, or the SDK stops sending new expression readings. It's the raw reading, not compared to the player's normal, so it's for
 show; the score uses the comparison. Logic: [`lib/game/expression_tag.dart`](lib/game/expression_tag.dart).
+
+### Pulse from heartbeats
+
+SmartSpectra's pulse number is a 12-second average, so a reaction lasting a few seconds is
+smeared and arrives late. The app also gets the SDK's pulse waveform and finds each heartbeat
+itself ([`lib/game/beats.dart`](lib/game/beats.dart)):
+
+1. Keep only stretches of the waveform where validation was OK, with no gap over 0.3 s.
+2. Band-pass filter it to about 42–210 BPM, so breathing drift and fast noise drop out.
+3. Each peak at least 0.33 s after the previous one is a beat, timed between samples.
+4. Intervals far from their neighbours (a missed or extra beat) are thrown out.
+
+That gives heart rate beat by beat, with a lag of about one beat. For each question, the app reads
+three things from it, compared with your level in the 5 s just before the question:
+
+- **Rise:** the highest point in the window (smoothed over 3 s).
+- **Ran high:** the mean over the whole window.
+- **Early slowdown:** the lowest point in the 6 s after the question ends. A brief slowdown is the
+  heart-rate response that concealed-information studies most often report.
+
+Each one is compared with the same player's **warm-ups and earlier questions**: how far it is above
+their median, in robust spreads (1.4826 × median absolute deviation, at least 4 / 3 / 3 BPM). 2.5
+spreads counts in full. The pulse part is 0.4 × rise + 0.4 × ran high + 0.2 × slowdown. So a
+question is sus when your heart did something your other answers didn't, and a turn that's tense
+throughout doesn't make every question look sus.
+
+The beats are used only when they cover at least 60% of the window, their 12 s average agrees with
+the SDK's pulse within 8 BPM (allowing the SDK's reading to arrive up to 6 s late), and at least
+2 of your warm-ups had good beats (earlier questions add to the comparison but can't replace the
+warm-ups, so a turn stays on one scale). Otherwise
+the score uses the SDK-mean formula in the table. The Proof Panel shows which one each score used
+and why.
 
 ## How turn-taking works
 
@@ -208,7 +240,8 @@ flowchart LR
 
 - [`ios/Runner/Presage/PresageBridge.swift`](ios/Runner/Presage/PresageBridge.swift) configures
   the SDK, observes it with `withObservationTracking`, and streams snapshots (pulse + confidence,
-  HRV, blink/talk edges, expressions, validation, status, errors).
+  HRV, the pulse waveform with SDK timestamps, blink/talk edges, expressions, validation, status,
+  errors).
 - [`ios/Runner/Voice/SpeechBridge.swift`](ios/Runner/Voice/SpeechBridge.swift) runs
   `SFSpeechRecognizer` on-device only, plus the host's `AVSpeechSynthesizer` voice and sounds.
 - [`lib/game/`](lib/game/) holds the game logic, which is pure Dart and unit-tested.
@@ -219,6 +252,11 @@ For judges and the demo video: turn on **Settings → Proof panel**, or long-pre
 (or tap it 5 times). On every measuring screen it overlays the raw SmartSpectra stream (pulse and
 confidence, RMSSD and confidence, blink and talking flags, top expression, validation code and
 hint, SDK status, telemetry state), the baseline, and the timing markers `tQ0 tQ1 tA0 tA1`.
+It also shows the heartbeat check: waveform samples per second and their confidence; heart rate,
+beat-to-beat RMSSD and coverage from the beats the app found over the last 12 s; and, for the last
+scored question, whether the pulse part came from beats (with each part's 0–1 score and the raw
+BPM) or the SDK mean (with the reason). On a device, the beat rate should track the SDK's pulse and
+the beat RMSSD should be near the SDK's.
 **Settings → Signal check** opens a bare screen with the camera, live signals and the transcript
 side by side.
 
@@ -253,6 +291,9 @@ real fonts), accessibility actions and color contrast.
 - **Noise:** loud rooms make transcripts unreliable; use *Too loud? Tap when done asking*.
 - **Talking detection** comes from the camera, so a mumbled answer may need the *Final answer* tap.
 - **HRV** needs about 60 s of measurement; it's shown, not scored.
+- **Heartbeats from the waveform are untested on a device so far.** They're checked against the
+  SDK's pulse on every question, and the score falls back to the SDK mean when they disagree.
+  The shape constants (`ScoringConfig`) still need tuning from real play.
 - **Network:** the SDK must sign in to start a session (E5 explains if it can't).
 - **Languages:** transcripts need on-device recognition for the iPhone's language; otherwise the
   game is tap-to-advance.

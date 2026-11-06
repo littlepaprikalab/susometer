@@ -95,6 +95,21 @@ class PresageEdge {
   }
 }
 
+/// One sample of the SDK's pulse waveform (arterial pressure trace).
+class TraceSample {
+  const TraceSample(this.tsUs, this.value, this.conf);
+
+  /// SDK timestamp in microseconds. Only differences between samples are
+  /// trusted; [SignalLog] maps it to wall-clock time.
+  final int tsUs;
+
+  /// Unitless waveform value.
+  final double value;
+
+  /// SDK confidence 0..1, or null if the bridge didn't send one.
+  final double? conf;
+}
+
 /// One snapshot from `sus/presage/stream`.
 class PresageSample {
   const PresageSample({
@@ -115,6 +130,7 @@ class PresageSample {
     this.error,
     this.events = const [],
     this.trace = const [],
+    this.traceSamples = const [],
     this.insightSeen = false,
   });
 
@@ -157,6 +173,11 @@ class PresageSample {
   /// for drawing the live pulse waveform.
   final List<double> trace;
 
+  /// The same samples with their SDK timestamps, for finding heartbeats.
+  /// Empty if the bridge sent no timestamps (`traceTs`) or the two lists
+  /// don't line up.
+  final List<TraceSample> traceSamples;
+
   /// True if the SDK ever published an LLM insight. Should stay false: the
   /// app never enables Insights (SPEC.md §8).
   final bool insightSeen;
@@ -189,6 +210,20 @@ class PresageSample {
       if (traceRaw is List)
         for (final v in traceRaw) ?_finite(v),
     ];
+    final tsRaw = m['traceTs'];
+    final confRaw = m['traceConf'];
+    final traceSamples = <TraceSample>[];
+    if (traceRaw is List && tsRaw is List && tsRaw.length == traceRaw.length) {
+      final confOk = confRaw is List && confRaw.length == traceRaw.length;
+      for (var i = 0; i < traceRaw.length; i++) {
+        final v = _finite(traceRaw[i]);
+        final ts = _int(tsRaw[i]);
+        if (v == null || ts == null) continue;
+        traceSamples.add(
+          TraceSample(ts, v, confOk ? _finite(confRaw[i]) : null),
+        );
+      }
+    }
     return PresageSample(
       tMs: _int(m['t']) ?? DateTime.now().millisecondsSinceEpoch,
       status: parsePresageStatus(m['status']),
@@ -207,6 +242,7 @@ class PresageSample {
       error: PresageErrorInfo.fromMap(m['error']),
       events: events,
       trace: trace,
+      traceSamples: traceSamples,
       insightSeen: m['insightSeen'] as bool? ?? false,
     );
   }

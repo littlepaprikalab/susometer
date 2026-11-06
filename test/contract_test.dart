@@ -167,6 +167,8 @@ void main() {
           'error',
           'events',
           'trace',
+          'traceTs',
+          'traceConf',
           'insightSeen',
         ],
         presageSwift,
