@@ -170,7 +170,8 @@ class PresageSample {
     final expr = <String, double>{};
     if (exprRaw is Map) {
       exprRaw.forEach((key, value) {
-        if (key is String && value is num) expr[key] = value.toDouble();
+        final v = _finite(value);
+        if (key is String && v != null) expr[key] = v;
       });
     }
     final eventsRaw = m['events'];
@@ -181,18 +182,17 @@ class PresageSample {
     final traceRaw = m['trace'];
     final trace = <double>[
       if (traceRaw is List)
-        for (final v in traceRaw)
-          if (v is num) v.toDouble(),
+        for (final v in traceRaw) ?_finite(v),
     ];
     return PresageSample(
-      tMs: (m['t'] as num?)?.toInt() ?? DateTime.now().millisecondsSinceEpoch,
+      tMs: _int(m['t']) ?? DateTime.now().millisecondsSinceEpoch,
       status: parsePresageStatus(m['status']),
-      pulse: (m['pulse'] as num?)?.toDouble(),
-      pulseConf: (m['pulseConf'] as num?)?.toDouble(),
-      pulseAtMs: (m['pulseAt'] as num?)?.toInt(),
+      pulse: _finite(m['pulse']),
+      pulseConf: _finite(m['pulseConf']),
+      pulseAtMs: _int(m['pulseAt']),
       pulseStable: m['pulseStable'] as bool? ?? false,
-      rmssd: (m['rmssd'] as num?)?.toDouble(),
-      hrvConf: (m['hrvConf'] as num?)?.toDouble(),
+      rmssd: _finite(m['rmssd']),
+      hrvConf: _finite(m['hrvConf']),
       hrvStable: m['hrvStable'] as bool? ?? false,
       blink: m['blink'] as bool? ?? false,
       talking: m['talking'] as bool? ?? false,
@@ -249,3 +249,13 @@ class PresageException implements Exception {
   @override
   String toString() => 'PresageException($code): $message';
 }
+
+/// A finite number from the platform channel, else null: NaN or infinity
+/// from native code must never reach scoring or a chart.
+double? _finite(Object? v) => v is num && v.isFinite ? v.toDouble() : null;
+
+int? _int(Object? v) => switch (v) {
+  int() => v,
+  double() when v.isFinite => v.toInt(),
+  _ => null,
+};

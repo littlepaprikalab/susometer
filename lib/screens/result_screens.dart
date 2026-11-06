@@ -7,6 +7,7 @@ import '../game/awards.dart';
 import '../game/game_controller.dart';
 import '../game/models.dart';
 import '../theme/game_widgets.dart';
+import '../theme/sparkline.dart';
 import '../theme/tokens.dart';
 import '../theme/widgets.dart';
 
@@ -394,6 +395,10 @@ class VerdictScreen extends StatelessWidget {
                       ),
                     ],
                   ),
+                  if (r.pulseTrace.length > 1) ...[
+                    const SizedBox(height: 14),
+                    _PulseCard(result: r),
+                  ],
                   if (r.votes.isNotEmpty || game.mode == GameMode.party) ...[
                     const SizedBox(height: 14),
                     _VotesSummary(game: game, result: r),
@@ -971,19 +976,9 @@ class _ReplayCard extends StatelessWidget {
                     ).copyWith(fontStyle: FontStyle.italic),
                   ),
                 ],
-                if (result.pulseSpark.length > 1) ...[
+                if (result.pulseTrace.length > 1) ...[
                   const SizedBox(height: 4),
-                  SizedBox(
-                    height: 22,
-                    width: 200,
-                    child: CustomPaint(
-                      painter: WaveformLinePainter(
-                        _downsample(result.pulseSpark, 30),
-                        SusColors.ink,
-                        strokeWidth: 2,
-                      ),
-                    ),
-                  ),
+                  SizedBox(height: 24, child: PulseTrace(result: result)),
                 ],
               ],
             ),
@@ -1014,13 +1009,121 @@ class _ReplayCard extends StatelessWidget {
       ),
     );
   }
+}
 
-  static List<double> _downsample(List<double> values, int n) {
-    if (values.length <= n) return values;
-    final step = values.length / n;
-    return [
-      for (var i = 0; i < n; i++)
-        values[math.min(values.length - 1, (i * step).floor())],
-    ];
+/// A question's pulse over the scored window, with the answer shaded and the
+/// player's normal dashed (Verdict and Replay).
+class PulseTrace extends StatelessWidget {
+  const PulseTrace({super.key, required this.result});
+
+  final QuestionResult result;
+
+  @override
+  Widget build(BuildContext context) {
+    final timing = result.timing;
+    final trace = result.pulseTrace;
+    final from = timing?.tQ0 ?? trace.first.$1;
+    final to = result.traceEndMs ?? trace.last.$1;
+    return PulseSparkline(
+      points: trace,
+      baseline: result.basePulse,
+      fromMs: from,
+      nowMs: to,
+      minSpanMs: 0,
+      endDot: false,
+      highlight: timing == null ? null : (timing.tA0 ?? timing.tA1, timing.tA1),
+    );
   }
+}
+
+class _PulseCard extends StatelessWidget {
+  const _PulseCard({required this.result});
+
+  final QuestionResult result;
+
+  @override
+  Widget build(BuildContext context) {
+    final values = [for (final (_, v) in result.pulseTrace) v];
+    final mean = values.reduce((a, b) => a + b) / values.length;
+    final peak = values.reduce(math.max);
+    final base = result.basePulse;
+    final vs = base == null
+        ? ''
+        : ', ${(mean - base).abs().round()} '
+              '${mean >= base ? 'above' : 'below'} your normal of ${base.round()}';
+    return Semantics(
+      label:
+          'Pulse through the question: averaged ${mean.round()} BPM$vs. '
+          'Highest ${peak.round()} BPM.',
+      excludeSemantics: true,
+      child: SusCard(
+        padding: const EdgeInsets.fromLTRB(14, 10, 14, 10),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    'Pulse through the question',
+                    style: SusText.label(13),
+                  ),
+                ),
+                Text(
+                  'peak ${peak.round()} BPM',
+                  style: SusText.body(13, weight: FontWeight.w700),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            SizedBox(height: 56, child: PulseTrace(result: result)),
+            const SizedBox(height: 6),
+            Row(
+              children: [
+                Container(
+                  width: 16,
+                  height: 10,
+                  decoration: BoxDecoration(
+                    color: SusColors.mustard.withValues(alpha: 0.4),
+                    borderRadius: BorderRadius.circular(3),
+                  ),
+                ),
+                const SizedBox(width: 5),
+                Text(
+                  'Answering',
+                  style: SusText.body(12, weight: FontWeight.w600),
+                ),
+                const SizedBox(width: 14),
+                const SizedBox(width: 16, child: _DashSwatch()),
+                const SizedBox(width: 5),
+                Flexible(
+                  child: Text(
+                    base == null
+                        ? 'Your normal'
+                        : 'Your normal (${base.round()})',
+                    overflow: TextOverflow.ellipsis,
+                    style: SusText.body(12, weight: FontWeight.w600),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _DashSwatch extends StatelessWidget {
+  const _DashSwatch();
+
+  @override
+  Widget build(BuildContext context) => Row(
+    children: [
+      for (var i = 0; i < 2; i++) ...[
+        Container(width: 5, height: 2, color: SusColors.brown),
+        if (i == 0) const SizedBox(width: 3),
+      ],
+    ],
+  );
 }

@@ -122,6 +122,7 @@ void main() {
     await rig.wait(300);
     await rig.tap('I agree, measure me');
     await rig.until(() => rig.game.phase == GamePhase.ask);
+    await waitOutTapGuard(tester);
     await tester.tap(find.bySemanticsLabel('Pause the game'));
     await rig.wait(200);
     expect(find.text('Paused'), findsOneWidget);

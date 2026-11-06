@@ -93,7 +93,8 @@ class SignalLog {
     if (s.pulse != null &&
         s.pulseAtMs != null &&
         s.pulseAtMs != _lastPulseAt &&
-        s.pulse! > 0) {
+        s.pulse! >= config.pulseMinBpm &&
+        s.pulse! <= config.pulseMaxBpm) {
       _lastPulseAt = s.pulseAtMs;
       final point = PulsePoint(
         s.pulseAtMs!,

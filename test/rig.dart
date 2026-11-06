@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:clock/clock.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:susometer/game_root.dart';
 import 'package:susometer/app_scope.dart';
 import 'package:susometer/game/game_controller.dart';
 import 'package:susometer/main.dart';
@@ -93,8 +94,9 @@ class Rig {
       autoQuestionEnd: false,
       autoAnswerEnd: false,
     ),
+    Size size = const Size(390, 844),
   }) async {
-    tester.view.physicalSize = const Size(390 * 3, 844 * 3);
+    tester.view.physicalSize = size * 3;
     tester.view.devicePixelRatio = 3;
     addTearDown(tester.view.reset);
     services = AppServices(
@@ -137,6 +139,7 @@ class Rig {
   }
 
   Future<void> tap(String text) async {
+    await waitOutTapGuard(tester);
     final finder = find.text(text);
     await tester.ensureVisible(finder.first);
     await tester.tap(finder.first);
@@ -169,5 +172,18 @@ class Rig {
     await tester.pumpWidget(const SizedBox());
     game.dispose();
     await tester.pump(const Duration(seconds: 1));
+  }
+}
+
+/// Waits until the post-phase-change tap guard (see game_root.dart) is off,
+/// the way a person's next deliberate tap would.
+Future<void> waitOutTapGuard(WidgetTester tester) async {
+  bool guarded() {
+    final f = find.byKey(phaseTapGuardKey);
+    return f.evaluate().isNotEmpty && tester.widget<IgnorePointer>(f).ignoring;
+  }
+
+  for (var i = 0; i < 10 && guarded(); i++) {
+    await tester.pump(const Duration(milliseconds: 50));
   }
 }

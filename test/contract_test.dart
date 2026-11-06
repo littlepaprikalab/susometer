@@ -267,6 +267,28 @@ void main() {
         );
       }
     });
+    test('every code string Dart matches on is one Swift sends', () {
+      // Codes Dart makes up itself: off-iPhone, engine paused, watchdog.
+      const dartMade = {'UNAVAILABLE', 'NOT_RUNNING', 'NO_SIGNAL'};
+      final swift = [presageSwift, speechSwift, deviceSwift].join('\n');
+      final pattern = RegExp(r"'([A-Z][A-Z0-9]*(?:_[A-Z0-9]+)+|BUSY|OK)'");
+      final codes = <String, String>{};
+      for (final f in Directory('lib').listSync(recursive: true)) {
+        if (f is! File || !f.path.endsWith('.dart')) continue;
+        for (final m in pattern.allMatches(f.readAsStringSync())) {
+          codes[m[1]!] = f.path;
+        }
+      }
+      expect(codes.length, greaterThan(15), reason: 'the scan found codes');
+      for (final MapEntry(key: code, value: file) in codes.entries) {
+        if (dartMade.contains(code)) continue;
+        expect(
+          swift,
+          contains('"$code"'),
+          reason: '$file matches on $code, which no Swift bridge sends',
+        );
+      }
+    });
     test('validation codes used by the game', () {
       expectAllIn(
         [

@@ -138,7 +138,8 @@ class QuestionResult {
     this.breakdown,
     this.noCleanReadReasons = const [],
     this.noCleanReadTitle,
-    this.pulseSpark = const [],
+    this.pulseTrace = const [],
+    this.traceEndMs,
     this.basePulse,
     this.baseBlinkRate,
     this.skipped = false,
@@ -155,8 +156,13 @@ class QuestionResult {
   /// E4 heading, e.g. "Too much wiggle on that one".
   final String? noCleanReadTitle;
 
-  /// Confident pulse samples across the window, for the Replay sparkline.
-  final List<double> pulseSpark;
+  /// Confident pulse readings (time ms, BPM) across the scored window, from
+  /// the question's start to [traceEndMs], for the Verdict and Replay charts.
+  /// Kept in memory only, like everything else.
+  final List<(int, double)> pulseTrace;
+
+  /// End of the scored window (ms).
+  final int? traceEndMs;
   final double? basePulse;
   final double? baseBlinkRate;
   final bool skipped;

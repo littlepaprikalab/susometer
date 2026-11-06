@@ -19,6 +19,8 @@ class ScoringConfig {
     this.hesitationScaleS = 3.0,
     this.defaultBaseLatencyS = 1.0,
     this.pulseConfMin = 0.4,
+    this.pulseMinBpm = 30,
+    this.pulseMaxBpm = 220,
     this.pulseFreshMs = 3000,
     this.pulseMaxGapMs = 2000,
     this.minWindowAfterQuestionMs = 12000,
@@ -73,6 +75,11 @@ class ScoringConfig {
   /// Pulse samples below this confidence (0..1) are ignored. The SDK marks
   /// pulse `stable` at 40% and above.
   final double pulseConfMin;
+
+  /// Pulse readings outside this range (BPM) are treated as glitches and
+  /// dropped, so one bad value can't skew a score or a chart's scale.
+  final double pulseMinBpm;
+  final double pulseMaxBpm;
 
   /// A confident pulse value counts as current for this long.
   final int pulseFreshMs;

@@ -169,6 +169,7 @@ void main() {
     rig.presage.code = 'OK';
     await rig.tap('Ask it again');
     await rig.wait(300);
+    await waitOutTapGuard(tester);
     await tester.tap(find.bySemanticsLabel('Pause the game'));
     await rig.wait(300);
     await shot(tester, key, 'pause');

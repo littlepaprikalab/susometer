@@ -64,6 +64,19 @@ class _IssueBanner extends StatelessWidget {
 /// place from "Ask your question!" through "Locking in the reading…".
 const _cardHeight = 160.0;
 const _actionsHeight = 92.0;
+const _liveCardHeight = 48.0;
+const _liveCardInset = 10.0;
+
+/// Distance from the bottom of the safe area to just above the camera's
+/// live Pulse/Blinks cards, so overlays (the Proof Panel) never cover them:
+/// screen padding + bottom row + gap + card inset + card + 8 pt.
+const hotSeatOverlayBottom =
+    ScreenFrame.defaultBottomPadding +
+    _actionsHeight +
+    12 +
+    _liveCardInset +
+    _liveCardHeight +
+    8;
 
 /// 4a and 4b in one layout (mocks: Question.dc.html, Question-Solo.dc.html,
 /// Answer.dc.html). Ask, Answer and Settle share one frame: only the host
@@ -147,19 +160,31 @@ class _MeasuringCamera extends StatelessWidget {
                 ),
               ),
               Positioned(
-                left: 10,
-                right: 10,
-                bottom: 10,
+                left: _liveCardInset,
+                right: _liveCardInset,
+                bottom: _liveCardInset,
                 child: _LiveStats(game: game),
               ),
+              // On a short camera (small phone plus the E3 banner) this
+              // chip would cover "Reading paused"; the banner says it too.
               if (issue != null)
-                const Positioned(
-                  bottom: 68,
-                  left: 12,
-                  child: DotChip(
-                    label: "Picks up again when it's clear",
-                    dot: SusColors.bulb,
-                    fontSize: 12,
+                Positioned.fill(
+                  child: LayoutBuilder(
+                    builder: (context, c) => c.maxHeight < 200
+                        ? const SizedBox.shrink()
+                        : const Stack(
+                            children: [
+                              Positioned(
+                                bottom: 68,
+                                left: 12,
+                                child: DotChip(
+                                  label: "Picks up again when it's clear",
+                                  dot: SusColors.bulb,
+                                  fontSize: 12,
+                                ),
+                              ),
+                            ],
+                          ),
                   ),
                 ),
             ],
@@ -261,7 +286,7 @@ class _StatChip extends StatelessWidget {
       ],
     );
     return Container(
-      height: 48,
+      height: _liveCardHeight,
       padding: const EdgeInsets.symmetric(horizontal: 10),
       decoration: BoxDecoration(
         color: SusColors.cream,
@@ -345,7 +370,10 @@ class _Actions extends StatelessWidget {
                 child: FitText(
                   hint,
                   textAlign: TextAlign.center,
-                  sizes: notice == null ? const [15, 13, 12] : const [13, 12],
+                  sizes: notice == null
+                      ? const [15, 13, 12, 11]
+                      : const [13, 12, 11],
+                  overflow: FitOverflow.keepStart,
                   style: (size) => SusText.body(size, weight: FontWeight.w700),
                 ),
               ),
@@ -441,6 +469,9 @@ class _AskerCard extends StatelessWidget {
                       ? 'Ask your question, then tap Done asking.'
                       : (text.isEmpty ? 'Listening for the question…' : text),
                   sizes: placeholder ? const [22, 18] : const [28, 24, 20, 17],
+                  overflow: placeholder
+                      ? FitOverflow.keepStart
+                      : FitOverflow.keepEnd,
                   style: (size) => SusText.display(
                     size,
                     color: placeholder ? SusColors.brown : SusColors.ink,
@@ -507,6 +538,7 @@ class _SoloQuestionCard extends StatelessWidget {
           Expanded(
             child: FitText(
               game.questionText,
+              overflow: FitOverflow.keepStart,
               style: (size) => SusText.display(size, color: SusColors.cream),
             ),
           ),
@@ -575,7 +607,10 @@ class _AnswerCard extends StatelessWidget {
                   !game.micEnabled
                       ? 'Answer out loud.'
                       : (text.isEmpty ? '…' : text),
-                  sizes: placeholder ? const [22] : const [26, 22, 18],
+                  sizes: placeholder ? const [22, 18] : const [26, 22, 18],
+                  overflow: placeholder
+                      ? FitOverflow.keepStart
+                      : FitOverflow.keepEnd,
                   style: (size) => SusText.display(
                     size,
                     color: placeholder ? SusColors.brown : SusColors.ink,

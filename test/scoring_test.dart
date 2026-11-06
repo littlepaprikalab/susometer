@@ -5,6 +5,7 @@ import 'package:susometer/game/models.dart';
 import 'package:susometer/game/scoring.dart';
 import 'package:susometer/game/scoring_config.dart';
 import 'package:susometer/game/signal_log.dart';
+import 'package:susometer/presage/presage_models.dart';
 
 import 'synthetic.dart';
 
@@ -436,5 +437,46 @@ void main() {
     expect(log.frames.length, 500);
     expect(log.pulse.length, lessThanOrEqualTo(500));
     expect(log.trace.length, lessThanOrEqualTo(600));
+  });
+
+  group('bad values from native code', () {
+    PresageSample sample(Map<String, Object?> extra) => PresageSample.fromMap({
+      't': 1000,
+      'status': 'running',
+      'pulseConf': 0.9,
+      'pulseAt': 1000,
+      'validation': {'code': 'OK', 'hint': ''},
+      ...extra,
+    });
+
+    test('NaN and infinity never get past parsing', () {
+      final s = PresageSample.fromMap({
+        't': double.nan,
+        'status': 'running',
+        'pulse': double.infinity,
+        'pulseConf': double.nan,
+        'pulseAt': double.infinity,
+        'rmssd': double.negativeInfinity,
+        'expr': {'happy': double.nan, 'neutral': 0.5},
+        'trace': [1.0, double.nan, 2.0],
+      });
+      expect(s.pulse, isNull);
+      expect(s.pulseConf, isNull);
+      expect(s.pulseAtMs, isNull);
+      expect(s.rmssd, isNull);
+      expect(s.expr, {'neutral': 0.5});
+      expect(s.trace, [1.0, 2.0]);
+      expect(s.tMs, greaterThan(0), reason: 'falls back to now, no throw');
+    });
+
+    test('glitch pulse readings are dropped, plausible ones kept', () {
+      final log = SignalLog();
+      var at = 1000;
+      for (final bpm in [72.0, 900.0, 4.0, 220.0, 30.0]) {
+        log.add(sample({'pulse': bpm, 'pulseAt': at, 't': at}));
+        at += 1000;
+      }
+      expect(log.confidentPulse(0, at).map((p) => p.bpm), [72, 220, 30]);
+    });
   });
 }

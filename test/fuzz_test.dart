@@ -68,6 +68,24 @@ void abuse(
       fw(1, 1),
       () => g.setMode(rng.nextBool() ? GameMode.party : GameMode.solo),
     ),
+    // Lobby settings poked at any moment must be no-ops mid-game.
+    (
+      fw(2, 1),
+      () {
+        switch (rng.nextInt(4)) {
+          case 0:
+            g.setQuestionsPerTurn(const [3, 5, 7][rng.nextInt(3)]);
+          case 1:
+            g.setDeck(rng.nextBool() ? DeckKind.mild : DeckKind.spicy);
+          case 2:
+            if (g.players.isNotEmpty) {
+              g.removePlayer(g.players[rng.nextInt(g.players.length)].id);
+            }
+          default:
+            g.addPlayer('Late${rng.nextInt(99)}');
+        }
+      },
+    ),
     (fw(2, 6), g.dismissHowToPlay),
     (fw(2, 2), g.playWithoutVoice),
     (fw(4, 10), () => g.agreeToMeasure()),

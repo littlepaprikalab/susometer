@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../game/game_controller.dart';
+import '../screens/question_screens.dart';
 import '../theme/tokens.dart';
 
 /// Proof Panel (SPEC.md §10): a translucent overlay with the raw SmartSpectra
@@ -52,13 +53,18 @@ class ProofPanel extends StatelessWidget {
               'tQ0 ${rel(d.tQ0)} tQ1 ${rel(d.tQ1)} tA0 ${rel(d.tA0)} tA1 ${rel(d.tA1)}'
                   '${d.questionEndReason == null ? '' : ' (${d.questionEndReason!.name})'}',
           ];
-          // Sits low, over the camera area, so the host bubble and the live
-          // transcript stay visible for the demo.
+          // Sits over the camera, between the live transcript above and the
+          // Pulse/Blinks cards below, so both stay visible for the demo.
           return Align(
             alignment: Alignment.bottomCenter,
             child: SafeArea(
               child: Container(
-                margin: const EdgeInsets.fromLTRB(10, 0, 10, 150),
+                margin: const EdgeInsets.fromLTRB(
+                  10,
+                  0,
+                  10,
+                  hotSeatOverlayBottom,
+                ),
                 padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
                 decoration: BoxDecoration(
                   color: SusColors.ink.withValues(alpha: 0.82),

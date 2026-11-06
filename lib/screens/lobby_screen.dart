@@ -252,15 +252,19 @@ class _ModeToggle extends StatelessWidget {
           onTap: () => game.setMode(mode),
           child: Container(
             height: 44,
-            padding: const EdgeInsets.symmetric(horizontal: 14),
+            padding: const EdgeInsets.symmetric(horizontal: 10),
             alignment: Alignment.center,
             color: on ? SusColors.ink : Colors.transparent,
-            child: Text(
-              label,
-              style: SusText.body(
-                14,
-                weight: FontWeight.w700,
-                color: on ? SusColors.mustard : SusColors.ink,
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Text(
+                label,
+                maxLines: 1,
+                style: SusText.body(
+                  14,
+                  weight: FontWeight.w700,
+                  color: on ? SusColors.mustard : SusColors.ink,
+                ),
               ),
             ),
           ),

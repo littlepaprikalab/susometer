@@ -6,22 +6,29 @@ import 'package:susometer/theme/sparkline.dart';
 
 import 'world.dart';
 
-SparklinePainter painter(List<(int, double)> points, {double? baseline}) =>
-    SparklinePainter(
-      points: points,
-      baseline: baseline,
-      fromMs: 0,
-      nowMs: 10000,
-      minHalfRange: 12,
-      minSpanMs: 15000,
-      maxGapMs: 4000,
-    );
+SparklinePainter painter(
+  List<(int, double)> points, {
+  double? baseline,
+  (int, int)? highlight,
+  bool endDot = true,
+}) => SparklinePainter(
+  points: points,
+  baseline: baseline,
+  fromMs: 0,
+  nowMs: 10000,
+  minHalfRange: 12,
+  minSpanMs: 15000,
+  maxGapMs: 4000,
+  highlight: highlight,
+  endDot: endDot,
+);
 
 /// Records the path segments the painter draws.
 class _Canvas implements Canvas {
   final paths = <Path>[];
   final circles = <Offset>[];
   final lines = <(Offset, Offset)>[];
+  final rrects = <RRect>[];
 
   @override
   void drawPath(Path path, Paint paint) => paths.add(path);
@@ -29,6 +36,8 @@ class _Canvas implements Canvas {
   void drawCircle(Offset c, double radius, Paint paint) => circles.add(c);
   @override
   void drawLine(Offset p1, Offset p2, Paint paint) => lines.add((p1, p2));
+  @override
+  void drawRRect(RRect rrect, Paint paint) => rrects.add(rrect);
   @override
   dynamic noSuchMethod(Invocation invocation) => null;
 }
@@ -73,6 +82,24 @@ void main() {
       expect(canvas.lines, isNotEmpty, reason: 'dashed normal line');
     });
 
+    test('Verdict style: the answer is shaded, lone readings get a dot', () {
+      final canvas = _Canvas();
+      painter(
+        [(0, 70), (1000, 72), (9000, 85)],
+        baseline: 70,
+        highlight: (3000, 6000),
+        endDot: false,
+      ).paint(canvas, const Size(150, 30));
+      final band = canvas.rrects.single;
+      expect(band.left, closeTo(30, 0.01), reason: '3 of 15 s');
+      expect(band.right, closeTo(60, 0.01));
+      expect(
+        canvas.circles.length,
+        1,
+        reason: 'the reading at 9 s has no neighbour within 4 s',
+      );
+    });
+
     test('no readings yet: only the normal line, no crash', () {
       final canvas = _Canvas();
       painter(const [], baseline: 70).paint(canvas, const Size(100, 30));
@@ -104,7 +131,37 @@ void main() {
       final next = w.game.questionStartMs;
       expect(next, greaterThan(start));
       expect(w.game.live.questionPulse.every((p) => p.tMs >= next), isTrue);
+      // Privacy: Wipe everything leaves no pulse readings anywhere.
+      w.game.wipeAll();
+      w.elapse(500);
+      expect(w.game.live.questionPulse, isEmpty);
+      expect(w.game.turns, isEmpty);
+      expect(w.game.currentResult, isNull);
+      expect(w.game.log.pulse, isEmpty);
       w.dispose();
     });
   });
+
+  test(
+    'a scored result keeps its pulse trace and window end for the charts',
+    () {
+      fakeAsync((async) {
+        final w = World(async);
+        w.startGame(['Sam', 'Alex']);
+        w.calibrate();
+        final r = w.askAndAnswer(answerPulse: 88);
+        final timing = r.timing!;
+        expect(r.traceEndMs, timing.windowEnd(12000));
+        expect(r.pulseTrace.length, greaterThan(5));
+        expect(
+          r.pulseTrace.every(
+            (p) => p.$1 >= timing.tQ0 && p.$1 <= r.traceEndMs!,
+          ),
+          isTrue,
+        );
+        expect(r.pulseTrace.map((p) => p.$2), contains(88));
+        w.dispose();
+      });
+    },
+  );
 }

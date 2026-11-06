@@ -587,4 +587,20 @@ void main() {
       w.dispose();
     });
   });
+
+  test('lobby settings are locked once a game starts', () {
+    fakeAsync((async) {
+      final w = World(async);
+      w.startGame(['Sam', 'Alex'], questions: 5);
+      final g = w.game;
+      final before = (g.mode, g.questionsPerTurn, g.deck, g.players.length);
+      g.setMode(GameMode.solo);
+      g.setQuestionsPerTurn(3);
+      g.setDeck(g.deck == DeckKind.mild ? DeckKind.spicy : DeckKind.mild);
+      expect(g.addPlayer('Late'), isFalse);
+      g.removePlayer(g.players.first.id);
+      expect((g.mode, g.questionsPerTurn, g.deck, g.players.length), before);
+      w.dispose();
+    });
+  });
 }

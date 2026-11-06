@@ -61,6 +61,8 @@ The spec wins where the two disagree (see SPEC.md, "Decisions made during build"
 - **Pulse card:** adds a small trend line for the current question, against a dashed line at the
   player's calibrated normal. The same Pulse and Blinks cards replace the Ask mock's "84 BPM" chip,
   so the camera overlay doesn't change between Ask and Answer.
+- **Verdict:** adds a "Pulse through the question" chart under the three tiles (answer shaded,
+  normal dashed). Replay rows use the same chart.
 - **Leaderboard footnote:** "Scores are wiped when you leave this screen" conflicts with going on to
   the Replay. The app says scores are wiped when a new game starts or on Wipe.
 

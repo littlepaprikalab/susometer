@@ -9,11 +9,13 @@ class ScreenFrame extends StatelessWidget {
   const ScreenFrame({
     super.key,
     required this.child,
-    this.padding = const EdgeInsets.fromLTRB(18, 8, 18, 16),
+    this.padding = const EdgeInsets.fromLTRB(18, 8, 18, defaultBottomPadding),
     this.background = SusColors.mustard,
   });
 
   final Widget child;
+  static const defaultBottomPadding = 16.0;
+
   final EdgeInsets padding;
   final Color background;
 
@@ -46,8 +48,13 @@ class HostBubble extends StatelessWidget {
   final bool singleLine;
 
   double _lineHeight(BuildContext context) {
+    final ambient = DefaultTextStyle.of(context);
     final painter = TextPainter(
-      text: TextSpan(text: 'Ag', style: SusText.display(fontSize)),
+      text: TextSpan(
+        text: 'Ag',
+        style: ambient.style.merge(SusText.display(fontSize)),
+      ),
+      textHeightBehavior: ambient.textHeightBehavior,
       textDirection: Directionality.of(context),
       textScaler: MediaQuery.textScalerOf(context),
       maxLines: 1,

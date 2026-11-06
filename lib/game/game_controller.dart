@@ -188,7 +188,11 @@ class GameController extends ChangeNotifier {
   int get minPlayers => mode == GameMode.party ? 2 : 1;
   bool get canStart => players.length >= minPlayers;
 
+  // Lobby settings only change in the lobby: mid-game they would break turn
+  // order, question counts or how transcripts are routed.
+
   bool addPlayer(String name) {
+    if (phase != GamePhase.lobby) return false;
     final trimmed = name.trim();
     if (trimmed.isEmpty || players.length >= maxPlayers) return false;
     final clipped = trimmed.length > 20 ? trimmed.substring(0, 20) : trimmed;
@@ -198,21 +202,25 @@ class GameController extends ChangeNotifier {
   }
 
   void removePlayer(String id) {
+    if (phase != GamePhase.lobby) return;
     players.removeWhere((p) => p.id == id);
     notifyListeners();
   }
 
   void setMode(GameMode m) {
+    if (phase != GamePhase.lobby) return;
     mode = m;
     notifyListeners();
   }
 
   void setQuestionsPerTurn(int n) {
+    if (phase != GamePhase.lobby) return;
     questionsPerTurn = n;
     notifyListeners();
   }
 
   void setDeck(DeckKind d) {
+    if (phase != GamePhase.lobby) return;
     deck = d;
     notifyListeners();
   }
@@ -763,7 +771,9 @@ class GameController extends ChangeNotifier {
     final timing = d.timing();
     final features = scoring.features(log, timing, base);
     final t1 = timing.windowEnd(config.minWindowAfterQuestionMs);
-    final spark = [for (final p in log.confidentPulse(timing.tQ0, t1)) p.bpm];
+    final trace = [
+      for (final p in log.confidentPulse(timing.tQ0, t1)) (p.tMs, p.bpm),
+    ];
     final question = mode == GameMode.solo
         ? questionText
         : (_askerTranscript.text.isNotEmpty
@@ -782,7 +792,8 @@ class GameController extends ChangeNotifier {
           currentPlayer.name,
         ),
         noCleanReadTitle: scoring.noCleanReadTitle(log, timing),
-        pulseSpark: spark,
+        pulseTrace: trace,
+        traceEndMs: t1,
         basePulse: base.pulse,
         baseBlinkRate: base.blinkRatePerMin,
       );
@@ -796,7 +807,8 @@ class GameController extends ChangeNotifier {
       timing: timing,
       features: features,
       breakdown: scoring.score(features, base),
-      pulseSpark: spark,
+      pulseTrace: trace,
+      traceEndMs: t1,
       basePulse: base.pulse,
       baseBlinkRate: base.blinkRatePerMin,
     );

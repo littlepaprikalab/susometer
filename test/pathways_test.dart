@@ -91,6 +91,10 @@ void main() {
       await rig.until(() => rig.game.phase == GamePhase.verdict);
       await checkScreen(tester, 'verdict');
       expect(find.textContaining('How the room called it'), findsNothing);
+      expect(
+        find.bySemanticsLabel(RegExp('^Pulse through the question')),
+        findsOneWidget,
+      );
       await rig.tap(q < 2 ? 'Next question' : 'See the winners');
       await rig.wait(300);
     }
@@ -132,6 +136,7 @@ void main() {
     final rig = Rig(tester);
     await rig.pumpApp();
     await rig.startParty(['Sam', 'Alex'], questions: 3);
+    await waitOutTapGuard(tester);
     await tester.tap(find.byTooltip('Back to lobby').first);
     await rig.wait(300);
     expect(
@@ -167,6 +172,7 @@ void main() {
     );
     if (rig.game.phase == GamePhase.ask) {
       // Skip it moved to question 2; end Sam's turn from Pause instead.
+      await waitOutTapGuard(tester);
       await tester.tap(find.bySemanticsLabel('Pause the game'));
       await rig.wait(200);
       await rig.tap('End the show');
@@ -178,6 +184,7 @@ void main() {
       await rig.tap('Resume');
       await rig.wait(200);
     } else {
+      await waitOutTapGuard(tester);
       await tester.tap(find.byTooltip('Back to lobby').first);
       await rig.wait(300);
       expect(
@@ -312,6 +319,7 @@ void main() {
     await rig.wait(500);
     expect(find.text('Settings'), findsOneWidget);
     await checkScreen(tester, 'settings');
+    await waitOutTapGuard(tester);
     await tester.tap(find.byTooltip('Back to lobby').first);
     await rig.wait(500);
     expect(find.text("The meter won't warm up"), findsOneWidget);
@@ -340,79 +348,148 @@ void main() {
     await rig.finish();
   });
 
-  for (final scale in [1.0, 1.3]) {
-    for (final mode in GameMode.values) {
-      testWidgets(
-        'the camera keeps its size, place and native view from Ask to Settle '
-        '(${mode.name}, text ×$scale)',
-        (tester) async {
-          tester.platformDispatcher.textScaleFactorTestValue = scale;
-          addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
-          final rig = Rig(tester);
-          await rig.pumpApp();
-          if (mode == GameMode.solo) {
-            await rig.tap('Solo · host asks');
-            // The fake host finishes instantly; with the voice off the host
-            // "reads" for a few seconds, so Ask stays on screen.
-            rig.services.settings.hostVoice = false;
-          }
-          await rig.startParty(
-            mode == GameMode.solo ? ['Christopher'] : ['Christopher', 'Alex'],
-          );
-          await rig.tap('I agree, measure me');
-          await rig.until(() => rig.game.phase == GamePhase.ask);
-          await rig.wait(200);
+  // iPhone 14/15 and the smallest iOS 17 phone (iPhone SE, 375×667).
+  for (final screen in const [Size(390, 844), Size(375, 667)]) {
+    for (final scale in [1.0, 1.3]) {
+      for (final mode in GameMode.values) {
+        testWidgets(
+          'the camera keeps its size, place and native view from Ask to Settle '
+          '(${mode.name}, text ×$scale, ${screen.width.round()}×${screen.height.round()})',
+          (tester) async {
+            tester.platformDispatcher.textScaleFactorTestValue = scale;
+            addTearDown(
+              tester.platformDispatcher.clearTextScaleFactorTestValue,
+            );
+            final rig = Rig(tester);
+            await rig.pumpApp(size: screen);
+            if (mode == GameMode.solo) {
+              await rig.tap('Solo · host asks');
+              // The fake host finishes instantly; with the voice off the host
+              // "reads" for a few seconds, so Ask stays on screen.
+              rig.services.settings.hostVoice = false;
+            }
+            await rig.startParty(
+              mode == GameMode.solo ? ['Christopher'] : ['Christopher', 'Alex'],
+            );
+            await rig.tap('I agree, measure me');
+            await rig.until(() => rig.game.phase == GamePhase.ask);
+            await rig.wait(200);
 
-          final camera = find.byType(CameraPreview);
-          final rect = tester.getRect(camera);
-          final element = tester.element(camera);
-          void same(String when) {
-            expect(tester.getRect(camera), rect, reason: when);
+            final camera = find.byType(CameraPreview);
+            final rect = tester.getRect(camera);
+            final element = tester.element(camera);
+            void same(String when) {
+              expect(tester.getRect(camera), rect, reason: when);
+              expect(
+                identical(tester.element(camera), element),
+                isTrue,
+                reason: '$when: the camera view was rebuilt',
+              );
+            }
+
             expect(
-              identical(tester.element(camera), element),
-              isTrue,
-              reason: '$when: the camera view was rebuilt',
+              rect.height,
+              greaterThan(screen.height > 700 ? 240 : 150),
+              reason: 'the face stays big enough to frame',
             );
-          }
-
-          expect(
-            rect.height,
-            greaterThan(240),
-            reason: 'the face stays big enough to frame',
-          );
-          if (mode == GameMode.party) {
+            if (mode == GameMode.party) {
+              rig.say(
+                'Have you ever told a friend you loved a gift they gave you and '
+                'then quietly returned it to the store the very next day?',
+              );
+              await rig.wait(300);
+              same('a long question');
+              rig.game.doneAsking();
+            }
+            await rig.until(() => rig.game.phase == GamePhase.answer);
+            await rig.wait(200);
+            same('answer starts');
+            expect(find.text('Final answer'), findsOneWidget);
+            rig.presage.talk(true);
+            await rig.wait(1200);
             rig.say(
-              'Have you ever told a friend you loved a gift they gave you and '
-              'then quietly returned it to the store the very next day?',
+              'No way, absolutely not, I would never, okay maybe once but it '
+              'was a really ugly sweater and honestly anyone would have done it',
             );
-            await rig.wait(300);
-            same('a long question');
-            rig.game.doneAsking();
-          }
-          await rig.until(() => rig.game.phase == GamePhase.answer);
-          await rig.wait(200);
-          same('answer starts');
-          expect(find.text('Final answer'), findsOneWidget);
-          rig.presage.talk(true);
-          await rig.wait(1200);
-          rig.say(
-            'No way, absolutely not, I would never, okay maybe once but it '
-            'was a really ugly sweater and honestly anyone would have done it',
-          );
-          await rig.wait(800);
-          expect(find.textContaining('to start answering'), findsOneWidget);
-          same('a long answer with the hesitation chip');
-          rig.presage.talk(false);
-          await rig.wait(400);
-          await rig.tap('Final answer');
-          await rig.wait(200);
-          expect(rig.game.phase, GamePhase.settle);
-          expect(find.text('Locking in the reading…'), findsOneWidget);
-          same('settle');
-          expect(find.bySemanticsLabel('Pause the game'), findsOneWidget);
-          await rig.finish();
-        },
-      );
+            await rig.wait(800);
+            expect(find.textContaining('to start answering'), findsOneWidget);
+            same('a long answer with the hesitation chip');
+            rig.presage.talk(false);
+            await rig.wait(400);
+            await rig.tap('Final answer');
+            await rig.wait(200);
+            expect(rig.game.phase, GamePhase.settle);
+            expect(find.text('Locking in the reading…'), findsOneWidget);
+            same('settle');
+            expect(find.bySemanticsLabel('Pause the game'), findsOneWidget);
+            // The Proof Panel sits above the live cards, never over them.
+            rig.services.settings.proofPanel = true;
+            await rig.wait(200);
+            final panel = tester.getRect(
+              find
+                  .ancestor(
+                    of: find.text('PROOF PANEL · raw SmartSpectra'),
+                    // The panel's own box (a Container's rect would include
+                    // its margin).
+                    matching: find.byType(DecoratedBox),
+                  )
+                  .first,
+            );
+            final cards = tester.getRect(
+              find
+                  .ancestor(
+                    of: find.text('Pulse'),
+                    matching: find.byType(Container),
+                  )
+                  .first,
+            );
+            expect(
+              panel.bottom,
+              lessThanOrEqualTo(cards.top),
+              reason: 'Proof Panel covers the live cards',
+            );
+            rig.services.settings.proofPanel = false;
+            await rig.finish();
+          },
+        );
+      }
     }
   }
+
+  testWidgets('a double tap never carries into the next screen', (
+    tester,
+  ) async {
+    final rig = Rig(tester);
+    await rig.pumpApp();
+    rig.presage.storedKey = 'k';
+    await rig.addPlayer('Sam');
+    await rig.addPlayer('Alex');
+    await rig.tap('Start the show');
+    await rig.wait(300);
+
+    Future<void> quickSecondTap(String first, String second) async {
+      await waitOutTapGuard(tester);
+      await tester.tap(find.text(first));
+      // Two frames, 120 ms in all: a typical double tap's second touch.
+      await tester.pump(const Duration(milliseconds: 60));
+      await tester.pump(const Duration(milliseconds: 60));
+      await tester.tap(find.text(second), warnIfMissed: false);
+      await tester.pump(const Duration(milliseconds: 50));
+    }
+
+    // "Got it" → "I agree" must not consent by accident.
+    await quickSecondTap("Got it, let's play", 'I agree, measure me');
+    expect(rig.game.phase, GamePhase.consent, reason: 'consent is deliberate');
+    await rig.tap('I agree, measure me');
+    await rig.until(() => rig.game.phase == GamePhase.ask);
+    // "Tap when done asking" → "Final answer" must not end the answer
+    // before it starts.
+    await quickSecondTap('Tap when done asking', 'Final answer');
+    expect(rig.game.phase, GamePhase.answer);
+    await rig.wait(500);
+    await rig.tap('Final answer');
+    await rig.wait(100);
+    expect(rig.game.phase, GamePhase.settle, reason: 'a deliberate tap works');
+    await rig.finish();
+  });
 }

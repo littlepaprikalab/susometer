@@ -314,7 +314,7 @@ final class PresageBridge {
     for sample in metrics.cardio.pulseRate.sorted(by: { $0.timestamp < $1.timestamp })
     where sample.timestamp > state.lastPulseTs {
       state.lastPulseTs = sample.timestamp
-      guard sample.value > 0 else { continue }
+      guard sample.value > 0, sample.value.isFinite else { continue }
       state.pulse = Double(sample.value)
       state.pulseConf = Double(sample.confidence) / 100.0
       state.pulseStable = sample.stable
@@ -325,7 +325,7 @@ final class PresageBridge {
     for sample in metrics.cardio.hrv.sorted(by: { $0.timestamp < $1.timestamp })
     where sample.timestamp > state.lastHrvTs {
       state.lastHrvTs = sample.timestamp
-      guard sample.rmssd > 0 else { continue }
+      guard sample.rmssd > 0, sample.rmssd.isFinite else { continue }
       state.rmssd = sample.rmssd
       state.hrvConf = Double(sample.confidence) / 100.0
       state.hrvStable = sample.stable

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import 'app_scope.dart';
@@ -19,9 +21,33 @@ class GameRoot extends StatefulWidget {
   State<GameRoot> createState() => _GameRootState();
 }
 
+/// After any phase change, taps are ignored this long: the second tap of a
+/// double tap would otherwise land on whatever the new phase put in the same
+/// spot ("Tap when done asking" → "Final answer", "Got it" → "I agree").
+const phaseTapGuard = Duration(milliseconds: 450);
+
+/// The guard's [IgnorePointer], so tests can wait it out.
+const phaseTapGuardKey = ValueKey('phaseTapGuard');
+
 class _GameRootState extends State<GameRoot> with WidgetsBindingObserver {
   bool _confirmEnd = false;
   final GlobalKey _shareKey = GlobalKey();
+  GamePhase? _shownPhase;
+  bool _freshPhase = false;
+  Timer? _freshTimer;
+
+  void _notePhase(GamePhase phase) {
+    if (phase == _shownPhase) return;
+    final first = _shownPhase == null;
+    _shownPhase = phase;
+    // The first screen at launch has no earlier tap to absorb.
+    if (first) return;
+    _freshPhase = true;
+    _freshTimer?.cancel();
+    _freshTimer = Timer(phaseTapGuard, () {
+      if (mounted) setState(() => _freshPhase = false);
+    });
+  }
 
   @override
   void initState() {
@@ -31,6 +57,7 @@ class _GameRootState extends State<GameRoot> with WidgetsBindingObserver {
 
   @override
   void dispose() {
+    _freshTimer?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
@@ -88,6 +115,7 @@ class _GameRootState extends State<GameRoot> with WidgetsBindingObserver {
       listenable: Listenable.merge([game, services.settings]),
       builder: (context, _) {
         final showProof = services.settings.proofPanel && game.isMeasuring;
+        _notePhase(game.phase);
         return Stack(
           children: [
             if (game.phase == GamePhase.leaderboard && game.awards != null)
@@ -103,16 +131,22 @@ class _GameRootState extends State<GameRoot> with WidgetsBindingObserver {
                 ),
               ),
             Positioned.fill(
-              child: KeyedSubtree(
-                // Ask, answer and settle share one screen, so the camera
-                // preview isn't torn down and rebuilt between them.
-                key: ValueKey<Object>(switch (game.phase) {
-                  GamePhase.ask ||
-                  GamePhase.answer ||
-                  GamePhase.settle => 'hotSeat',
-                  final phase => phase,
-                }),
-                child: _screen(game),
+              // Blocks touch and VoiceOver actions for 450 ms; a deliberate
+              // tap (VoiceOver: swipe to it, then double-tap) takes longer.
+              child: IgnorePointer(
+                key: phaseTapGuardKey,
+                ignoring: _freshPhase,
+                child: KeyedSubtree(
+                  // Ask, answer and settle share one screen, so the camera
+                  // preview isn't torn down and rebuilt between them.
+                  key: ValueKey<Object>(switch (game.phase) {
+                    GamePhase.ask ||
+                    GamePhase.answer ||
+                    GamePhase.settle => 'hotSeat',
+                    final phase => phase,
+                  }),
+                  child: _screen(game),
+                ),
               ),
             ),
             if (showProof)

@@ -23,6 +23,8 @@ class PulseSparkline extends StatelessWidget {
     this.minHalfRange = 12,
     this.minSpanMs = 15000,
     this.maxGapMs = 4000,
+    this.highlight,
+    this.endDot = true,
   });
 
   /// (time ms, BPM), oldest first.
@@ -33,6 +35,12 @@ class PulseSparkline extends StatelessWidget {
   final double minHalfRange;
   final int minSpanMs;
   final int maxGapMs;
+
+  /// A stretch to shade behind the line, e.g. the answer (start ms, end ms).
+  final (int, int)? highlight;
+
+  /// Mark the latest reading with a dot (for a live line).
+  final bool endDot;
 
   @override
   Widget build(BuildContext context) {
@@ -48,6 +56,8 @@ class PulseSparkline extends StatelessWidget {
           minHalfRange: minHalfRange,
           minSpanMs: minSpanMs,
           maxGapMs: maxGapMs,
+          highlight: highlight,
+          endDot: endDot,
         ),
       ),
     );
@@ -63,6 +73,8 @@ class SparklinePainter extends CustomPainter {
     required this.minHalfRange,
     required this.minSpanMs,
     required this.maxGapMs,
+    this.highlight,
+    this.endDot = true,
   });
 
   final List<(int, double)> points;
@@ -72,6 +84,8 @@ class SparklinePainter extends CustomPainter {
   final double minHalfRange;
   final int minSpanMs;
   final int maxGapMs;
+  final (int, int)? highlight;
+  final bool endDot;
 
   static const _stroke = 2.5;
 
@@ -93,11 +107,24 @@ class SparklinePainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     final (center, half) = scale();
     const pad = _stroke + 1;
-    final span = math.max(nowMs - fromMs, minSpanMs).toDouble();
+    final span = math.max(math.max(nowMs - fromMs, minSpanMs), 1).toDouble();
     double x(int t) => ((t - fromMs) / span).clamp(0.0, 1.0) * size.width;
     double y(double v) =>
         size.height / 2 - (v - center) / half * (size.height / 2 - pad);
 
+    final band = highlight;
+    if (band != null && band.$2 > band.$1) {
+      canvas.drawRRect(
+        RRect.fromLTRBR(
+          x(band.$1),
+          0,
+          x(band.$2),
+          size.height,
+          const Radius.circular(4),
+        ),
+        Paint()..color = SusColors.mustard.withValues(alpha: 0.4),
+      );
+    }
     if (baseline != null) {
       final dash = Paint()
         ..color = SusColors.brown
@@ -131,6 +158,17 @@ class SparklinePainter extends CustomPainter {
       prevT = t;
     }
     canvas.drawPath(path, line);
+    final dot = Paint()..color = SusColors.tomato;
+    for (var i = 0; i < points.length; i++) {
+      final t = points[i].$1;
+      final alone =
+          (i == 0 || t - points[i - 1].$1 > maxGapMs) &&
+          (i == points.length - 1 || points[i + 1].$1 - t > maxGapMs);
+      if (alone && !(endDot && i == points.length - 1)) {
+        canvas.drawCircle(Offset(x(t), y(points[i].$2)), 2.5, dot);
+      }
+    }
+    if (!endDot) return;
     final (lt, lv) = points.last;
     canvas.drawCircle(
       Offset(x(lt), y(lv)),
@@ -143,6 +181,7 @@ class SparklinePainter extends CustomPainter {
   bool shouldRepaint(SparklinePainter old) =>
       old.nowMs != nowMs ||
       old.baseline != baseline ||
+      old.highlight != highlight ||
       old.points.length != points.length ||
       (points.isNotEmpty && old.points.last != points.last);
 }
