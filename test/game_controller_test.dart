@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:susometer/audio/host_audio.dart';
 import 'package:susometer/game/decks.dart';
 import 'package:susometer/game/game_controller.dart';
+import 'package:susometer/game/scoring.dart';
 import 'package:susometer/game/models.dart';
 import 'package:susometer/presage/presage_models.dart';
 import 'package:susometer/voice/speech_service.dart';
@@ -132,6 +133,115 @@ void main() {
       }
       w.elapse(1000);
       expect(w.game.live.expression.tag, 'happy');
+      w.dispose();
+    });
+  });
+
+  group('the camera problem on screen (E3)', () {
+    const motion = SignalIssue(
+      'EXCESSIVE_MOTION',
+      'Hold still',
+      'Hold still',
+      'Rest your elbows.',
+    );
+    const far = SignalIssue('FACE_TOO_FAR', 'Move closer', 'Move closer', '');
+
+    /// Feeds [raw] every 100 ms for [ms] from [t]; returns the new time and
+    /// every change of what's on screen.
+    (int, List<String?>) feed(LiveState live, int t, int ms, SignalIssue? raw) {
+      final seen = <String?>[];
+      for (var i = 0; i < ms ~/ 100; i++) {
+        t += 100;
+        final before = live.issue?.stamp;
+        live.updateIssue(raw, t);
+        if (live.issue?.stamp != before) seen.add(live.issue?.stamp);
+      }
+      return (t, seen);
+    }
+
+    test('shows after 1.5 s; a shorter blip never shows', () {
+      final live = LiveState();
+      var (t, seen) = feed(live, 0, 1400, motion);
+      expect(live.issue, isNull);
+      (t, seen) = feed(live, t, 1000, null);
+      expect(seen, isEmpty, reason: 'a 1.4 s blip');
+      // 16 snapshots 100 ms apart: 1.5 s from the first to the last.
+      (t, seen) = feed(live, t, 1600, motion);
+      expect(seen, ['Hold still']);
+    });
+
+    test('a shaky hand keeps it up instead of blinking it', () {
+      final live = LiveState();
+      var t = 0;
+      final seen = <String?>[];
+      for (var cycle = 0; cycle < 8; cycle++) {
+        final (t1, a) = feed(live, t, 2000, motion);
+        final (t2, b) = feed(live, t1, 300, null);
+        t = t2;
+        seen
+          ..addAll(a)
+          ..addAll(b);
+      }
+      expect(seen, ['Hold still'], reason: 'shown once, kept');
+      // Fixed for good: gone after 1 s clean, not before.
+      var (t3, gone) = feed(live, t, 700, null);
+      expect(gone, isEmpty);
+      (t3, gone) = feed(live, t3, 500, null);
+      expect(gone, [null]);
+    });
+
+    test('another problem takes over with no gap', () {
+      final live = LiveState();
+      var (t, seen) = feed(live, 0, 1600, motion);
+      expect(seen, ['Hold still']);
+      (t, seen) = feed(live, t, 1400, far);
+      expect(seen, isEmpty, reason: 'the old stamp stays meanwhile');
+      (t, seen) = feed(live, t, 200, far);
+      expect(seen, ['Move closer'], reason: 'straight from one to the other');
+    });
+
+    test('a new session forgets it', () {
+      final live = LiveState();
+      feed(live, 0, 1600, motion);
+      expect(live.issue, isNotNull);
+      live.resetCamera();
+      expect(live.issue, isNull);
+      // And it starts counting afresh.
+      final (_, seen) = feed(live, 10000, 1400, motion);
+      expect(seen, isEmpty);
+    });
+  });
+
+  test('a camera problem follows the player in the seat too: Alex never '
+      'starts on Sam\'s "Hold still"', () {
+    fakeAsync((async) {
+      final w = World(async);
+      w.startGame(['Sam', 'Alex'], questions: 3);
+      w.calibrate();
+      for (var q = 0; q < 3; q++) {
+        w.askAndAnswer();
+        if (q == 2) {
+          // Sam fidgets while the last verdict is up.
+          w.code = 'EXCESSIVE_MOTION';
+          w.elapse(2000);
+          expect(w.game.visibleIssue?.stamp, 'Hold still');
+        }
+        w.game.nextQuestion();
+      }
+      w.elapse(100);
+      expect(w.game.phase, GamePhase.consent);
+      expect(w.game.visibleIssue, isNull, reason: 'camera is off');
+
+      // Alex's camera is slow to send its first frame.
+      w.code = 'OK';
+      w.emitting = false;
+      w.game.agreeToMeasure();
+      w.elapse(2000);
+      expect(w.game.phase, GamePhase.calibrate);
+      expect(w.game.visibleIssue, isNull, reason: "Sam's problem, on Alex");
+      w.emitting = true;
+      w.elapse(1000);
+      expect(w.game.visibleIssue, isNull);
       w.dispose();
     });
   });

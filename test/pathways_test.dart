@@ -384,6 +384,27 @@ void main() {
       'bad signal',
       type: IssueStamp,
     );
+    // Like the #tag: while the problem holds, the 10 Hz overlay rebuild
+    // doesn't repaint the stamp (its worn-ink layer is the costly part).
+    final issueLayer = tester.renderObject<RenderRepaintBoundary>(
+      find
+          .descendant(
+            of: find.byType(IssueStamp),
+            matching: find.byType(RepaintBoundary),
+          )
+          .first,
+    );
+    int issuePaints() =>
+        issueLayer.debugSymmetricPaintCount +
+        issueLayer.debugAsymmetricPaintCount;
+    final painted = issuePaints();
+    expect(painted, greaterThan(0), reason: 'paint counts are tracked');
+    await rig.wait(1000);
+    expect(
+      issuePaints(),
+      painted,
+      reason: 'the stamp repainted while unchanged',
+    );
     // VoiceOver hears the problem and its fix once, when the stamp lands.
     final handle = tester.ensureSemantics();
     expect(
@@ -776,7 +797,7 @@ void main() {
     // Fixed: the reading runs again, so the pulse card is back, but the
     // hint stays stamped while the baseline is still short.
     rig.presage.code = 'OK';
-    await rig.wait(1000);
+    await rig.wait(1500); // 1 s clean before the live stamp goes
     expect(rig.game.visibleIssue, isNull);
     expect(find.text('Off center'), findsOneWidget);
     expect(find.byType(LiveStatCard), findsOneWidget);
@@ -797,14 +818,17 @@ void main() {
     await checkScreen(tester, 'calibrate, slow');
     same('the hint changes');
 
-    // The stamp goes once the baseline is good.
+    // The stamp goes as soon as the baseline is good, before calibration
+    // ends.
     await rig.until(
       () => rig.game.calibIssue == null,
       what: 'a clean baseline',
     );
+    expect(rig.game.phase, GamePhase.calibrate);
     await rig.wait(300);
     expect(find.byType(IssueStamp), findsNothing);
     same('the hint goes');
+    await rig.wait(2000); // the rig's warm-up answer ends
     await rig.finish();
   });
 

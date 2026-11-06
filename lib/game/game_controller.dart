@@ -91,8 +91,53 @@ class LiveState extends ChangeNotifier {
   String askerText = '';
   String answerText = '';
   final List<double> trace = [];
+
+  /// The camera problem stamped on the camera (E3, SPEC.md decision 69),
+  /// or null. Set by [updateIssue].
   SignalIssue? issue;
-  int? issueSinceMs;
+  SignalIssue? _nextIssue;
+  int? _nextIssueSinceMs;
+  int? _clearSinceMs;
+
+  /// A problem shows once it has lasted this long, so a passing blip
+  /// doesn't stamp anything.
+  static const issueShowAfterMs = 1500;
+
+  /// Once shown, it stays until the picture has been clean this long, so a
+  /// shaky hand (bad, a moment's OK, bad again) doesn't blink it on and off.
+  static const issueHoldMs = 1000;
+
+  /// Feeds the problem in one snapshot ([raw], null when clean) at [t].
+  /// Another problem takes the shown one's place, with no gap, once it has
+  /// lasted [issueShowAfterMs].
+  void updateIssue(SignalIssue? raw, int t) {
+    if (raw == null) {
+      _nextIssue = null;
+      _nextIssueSinceMs = null;
+      if (issue == null) return;
+      final clear = _clearSinceMs ??= t;
+      if (t - clear >= issueHoldMs) {
+        issue = null;
+        _clearSinceMs = null;
+      }
+      return;
+    }
+    _clearSinceMs = null;
+    if (raw.code == issue?.code) {
+      _nextIssue = null;
+      _nextIssueSinceMs = null;
+      return;
+    }
+    if (raw.code != _nextIssue?.code) {
+      _nextIssue = raw;
+      _nextIssueSinceMs = t;
+    }
+    if (t - _nextIssueSinceMs! >= issueShowAfterMs) {
+      issue = raw;
+      _nextIssue = null;
+      _nextIssueSinceMs = null;
+    }
+  }
 
   /// Hesitation once the player has started answering (s).
   double? hesitationS;
@@ -117,6 +162,18 @@ class LiveState extends ChangeNotifier {
   double? beatRmssdMs;
   double? beatCoverage;
   int beatsAtMs = 0;
+
+  /// Forgets what the camera last saw about the player: the #tag and any
+  /// camera problem. Called wherever a reading can't carry on (no camera, a
+  /// new session, the app backgrounded), so neither outlives the camera or
+  /// shows on the next player.
+  void resetCamera() {
+    expression.reset();
+    issue = null;
+    _nextIssue = null;
+    _nextIssueSinceMs = null;
+    _clearSinceMs = null;
+  }
 
   void resetBeats() {
     waveHz = null;
@@ -318,9 +375,11 @@ class GameController extends ChangeNotifier {
 
   void _setPhase(GamePhase p) {
     phase = p;
-    // No camera, no expression: covers every way out of a turn (E5, the
-    // lobby, the next player's consent), stopped cleanly or not.
-    if (!_sdkShouldRun) live.expression.reset();
+    // No camera, no expression or camera problem: covers every way out of a
+    // turn (E5, the lobby, the next player's consent), stopped cleanly or
+    // not.
+    if (!_sdkShouldRun) live.resetCamera();
+    if (p != GamePhase.calibrate) calibIssue = null;
     notifyListeners();
   }
 
@@ -530,7 +589,7 @@ class GameController extends ChangeNotifier {
       await presage.start();
       // A new session: nothing carries over from the last player or the
       // last attempt.
-      live.expression.reset();
+      live.resetCamera();
       if (epoch != _epoch || !(_sdkShouldRun || fromOffline)) {
         await _safeStopSdk();
         return false;
@@ -1160,7 +1219,7 @@ class GameController extends ChangeNotifier {
   Future<void> _stopMeasuring() async {
     _stopTicker();
     detector = null;
-    live.expression.reset();
+    live.resetCamera();
     if (micEnabled) {
       await speech.stop().catchError((Object _) {});
     }
@@ -1339,7 +1398,7 @@ class GameController extends ChangeNotifier {
     paused = true;
     _needsRestart = true;
     _stopTicker();
-    live.expression.reset();
+    live.resetCamera();
     if (micEnabled) await speech.stop().catchError((Object _) {});
     await host.stopSpeaking().catchError((Object _) {});
     try {
@@ -1380,7 +1439,7 @@ class GameController extends ChangeNotifier {
       }
     }
     if (!_sdkShouldRun) {
-      live.expression.reset();
+      live.resetCamera();
       live.notify();
       return;
     }
@@ -1399,15 +1458,8 @@ class GameController extends ChangeNotifier {
       exprAtMs: s.exprAtMs,
     );
 
-    // E3: a validation problem that lasts more than 1.5 s.
-    final issue = SignalIssue.fromCode(s.validation?.code);
-    if (issue == null) {
-      live.issue = null;
-      live.issueSinceMs = null;
-    } else if (live.issueSinceMs == null || live.issue?.code != issue.code) {
-      live.issueSinceMs = s.tMs;
-      live.issue = issue;
-    }
+    // E3: a validation problem, once it has lasted 1.5 s.
+    live.updateIssue(SignalIssue.fromCode(s.validation?.code), s.tMs);
 
     for (final e in s.events) {
       if (e.type == PresageEdgeType.blink) continue;
@@ -1452,12 +1504,9 @@ class GameController extends ChangeNotifier {
     live.beatRmssdMs = beats.rmssdMs(now - 30000, now);
   }
 
-  /// Shows E3 only once an issue has lasted 1.5 s.
-  SignalIssue? get visibleIssue {
-    final since = live.issueSinceMs;
-    if (live.issue == null || since == null) return null;
-    return nowMs - since >= 1500 ? live.issue : null;
-  }
+  /// The camera problem on screen (E3): shown once it has lasted 1.5 s,
+  /// kept through clean gaps under 1 s (see [LiveState.updateIssue]).
+  SignalIssue? get visibleIssue => live.issue;
 
   void _onSpeech(SpeechEvent e) {
     switch (e) {
