@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import 'app_scope.dart';
+import 'audio/host_audio.dart';
 import 'game/decks.dart';
 import 'game_root.dart';
 import 'presage/presage_channel.dart';
@@ -14,6 +15,7 @@ Future<void> main() async {
   final services = AppServices(
     presage: MethodChannelPresage(),
     speech: MethodChannelSpeech(),
+    host: MethodChannelHostAudio(),
   );
   try {
     services.game.setDecks(await DeckLibrary.load(rootBundle));

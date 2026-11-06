@@ -71,3 +71,51 @@ open class AVCaptureDevice: NSObject {
   public class func authorizationStatus(for mediaType: AVMediaType) -> AVAuthorizationStatus { .notDetermined }
   public class func requestAccess(for mediaType: AVMediaType) async -> Bool { false }
 }
+
+extension AVAudioSession.Category {
+  public static let playback = AVAudioSession.Category()
+}
+extension AVAudioSession.CategoryOptions {
+  public static let duckOthers = AVAudioSession.CategoryOptions(rawValue: 2)
+}
+
+public enum AVSpeechBoundary: Int, Sendable { case immediate, word }
+public enum AVSpeechSynthesisVoiceQuality: Int, Sendable { case `default` = 1, enhanced, premium }
+public let AVSpeechUtteranceDefaultSpeechRate: Float = 0.5
+
+open class AVSpeechSynthesisVoice: NSObject {
+  public init?(language: String?) { nil }
+  open class func speechVoices() -> [AVSpeechSynthesisVoice] { [] }
+  open var language: String { "en-US" }
+  open var quality: AVSpeechSynthesisVoiceQuality { .default }
+}
+
+open class AVSpeechUtterance: NSObject {
+  public init(string: String) {}
+  open var voice: AVSpeechSynthesisVoice?
+  open var rate: Float = 0.5
+  open var pitchMultiplier: Float = 1
+}
+
+public protocol AVSpeechSynthesizerDelegate: NSObjectProtocol {
+  func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didFinish utterance: AVSpeechUtterance)
+  func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didCancel utterance: AVSpeechUtterance)
+}
+
+open class AVSpeechSynthesizer: NSObject {
+  public override init() {}
+  open weak var delegate: AVSpeechSynthesizerDelegate?
+  open func speak(_ utterance: AVSpeechUtterance) {}
+  @discardableResult open func stopSpeaking(at boundary: AVSpeechBoundary) -> Bool { true }
+}
+
+public protocol AVAudioPlayerDelegate: NSObjectProtocol {
+  func audioPlayerDidFinishPlaying(_ player: AVAudioPlayer, successfully flag: Bool)
+  func audioPlayerDecodeErrorDidOccur(_ player: AVAudioPlayer, error: Error?)
+}
+
+open class AVAudioPlayer: NSObject {
+  public init(contentsOf url: URL) throws {}
+  open weak var delegate: AVAudioPlayerDelegate?
+  open func play() -> Bool { true }
+}

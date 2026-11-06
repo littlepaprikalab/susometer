@@ -42,10 +42,21 @@ final class SpeechBridge {
   private var levelTimer: Timer?
   private var observers: [NSObjectProtocol] = []
 
+  // Host voice and sound effects (half-duplex, SPEC.md §7).
+  private let synthesizer = AVSpeechSynthesizer()
+  private var synthDelegate: SynthDelegate?
+  private var pendingSpeech: [ObjectIdentifier: FlutterResult] = [:]
+  private var players: [ObjectIdentifier: (AVAudioPlayer, PlayerDelegate, FlutterResult)] = [:]
+  private var hostOutputs = 0
+  private var reopenWork: DispatchWorkItem?
+
   private init(messenger: FlutterBinaryMessenger) {
     methodChannel = FlutterMethodChannel(name: Self.methodChannelName, binaryMessenger: messenger)
     eventChannel = FlutterEventChannel(name: Self.eventChannelName, binaryMessenger: messenger)
     eventChannel.setStreamHandler(stream)
+    let delegate = SynthDelegate(bridge: self)
+    synthDelegate = delegate
+    synthesizer.delegate = delegate
     methodChannel.setMethodCallHandler { [weak self] call, result in
       MainActor.assumeIsolated {
         guard let self else {
@@ -100,6 +111,21 @@ final class SpeechBridge {
 
     case "newSegment":
       result(newSegment())
+
+    case "speak":
+      let text = (args["text"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+      guard !text.isEmpty else {
+        result(nil)
+        return
+      }
+      speak(text, result: result)
+
+    case "stopSpeaking":
+      synthesizer.stopSpeaking(at: .immediate)
+      result(nil)
+
+    case "playSound":
+      playSound(args["name"] as? String ?? "", result: result)
 
     default:
       result(FlutterMethodNotImplemented)
@@ -158,7 +184,7 @@ final class SpeechBridge {
     listening = true
     paused = false
     quickFailures = 0
-    feed.setGated(false)
+    applyGate()
     beginSegment()
     startLevelTimer()
     observeAudioNotifications()
@@ -181,12 +207,11 @@ final class SpeechBridge {
     sendState("stopped")
   }
 
-  /// Half-duplex (SPEC.md §7): stop feeding audio while the host speaks or a
-  /// sound plays. Ending the request closes the current segment cleanly.
+  /// Manual pause: ending the request closes the current segment cleanly.
   private func pause() {
     guard listening, !paused else { return }
     paused = true
-    feed.setGated(true)
+    applyGate()
     feed.setRequest(nil)
     request?.endAudio()
     request = nil
@@ -196,7 +221,7 @@ final class SpeechBridge {
   private func resume() {
     guard listening, paused else { return }
     paused = false
-    feed.setGated(false)
+    applyGate()
     beginSegment()
     sendState("listening")
   }
@@ -215,6 +240,103 @@ final class SpeechBridge {
     let session = AVAudioSession.sharedInstance()
     try session.setCategory(.playAndRecord, mode: .default, options: [.defaultToSpeaker])
     try session.setActive(true)
+  }
+
+  /// For host output when not listening (no-mic mode, or before listening):
+  /// `.playback` so the host is heard even with the silent switch on.
+  private func ensurePlaybackSession() {
+    guard !listening else { return }
+    let session = AVAudioSession.sharedInstance()
+    try? session.setCategory(.playback, mode: .default, options: [.duckOthers])
+    try? session.setActive(true)
+  }
+
+  // MARK: - Host voice and sound effects
+
+  /// Recognition hears nothing while the host speaks or a sound plays, and
+  /// for 150 ms after (SPEC.md §7), so transcripts never contain the host.
+  private func applyGate() {
+    feed.setGated(paused || hostOutputs > 0 || reopenWork != nil)
+  }
+
+  private func beginHostOutput() {
+    hostOutputs += 1
+    reopenWork?.cancel()
+    reopenWork = nil
+    applyGate()
+  }
+
+  private func endHostOutput() {
+    hostOutputs = max(0, hostOutputs - 1)
+    guard hostOutputs == 0 else { return }
+    let work = DispatchWorkItem { [weak self] in
+      MainActor.assumeIsolated {
+        guard let self else { return }
+        self.reopenWork = nil
+        self.applyGate()
+      }
+    }
+    reopenWork = work
+    applyGate()
+    DispatchQueue.main.asyncAfter(deadline: .now() + 0.15, execute: work)
+  }
+
+  private func speak(_ text: String, result: @escaping FlutterResult) {
+    ensurePlaybackSession()
+    beginHostOutput()
+    let utterance = AVSpeechUtterance(string: text)
+    utterance.voice = Self.hostVoice()
+    utterance.rate = AVSpeechUtteranceDefaultSpeechRate
+    utterance.pitchMultiplier = 1.05
+    pendingSpeech[ObjectIdentifier(utterance)] = result
+    synthesizer.speak(utterance)
+  }
+
+  /// Called by [SynthDelegate] when an utterance finishes or is cancelled.
+  func utteranceDone(_ id: ObjectIdentifier) {
+    guard let result = pendingSpeech.removeValue(forKey: id) else { return }
+    endHostOutput()
+    result(nil)
+  }
+
+  /// Best English voice available: premium, then enhanced, then default.
+  private static func hostVoice() -> AVSpeechSynthesisVoice? {
+    let preferred = Locale.current.identifier.replacingOccurrences(of: "_", with: "-")
+    let language = preferred.hasPrefix("en") ? preferred : "en-US"
+    let voices = AVSpeechSynthesisVoice.speechVoices().filter { $0.language == language }
+    if let best = voices.max(by: { $0.quality.rawValue < $1.quality.rawValue }) {
+      return best
+    }
+    return AVSpeechSynthesisVoice(language: language) ?? AVSpeechSynthesisVoice(language: "en-US")
+  }
+
+  /// Plays `assets/sfx/<name>.wav` from the Flutter assets. Missing files are
+  /// skipped quietly; the game never waits on a sound that can't play.
+  private func playSound(_ name: String, result: @escaping FlutterResult) {
+    let safe = name.filter { $0.isLetter || $0.isNumber || $0 == "_" }
+    let key = FlutterDartProject.lookupKey(forAsset: "assets/sfx/\(safe).wav")
+    guard !safe.isEmpty, let path = Bundle.main.path(forResource: key, ofType: nil),
+      let player = try? AVAudioPlayer(contentsOf: URL(fileURLWithPath: path))
+    else {
+      result(nil)
+      return
+    }
+    ensurePlaybackSession()
+    beginHostOutput()
+    let delegate = PlayerDelegate(bridge: self)
+    player.delegate = delegate
+    let id = ObjectIdentifier(player)
+    players[id] = (player, delegate, result)
+    if !player.play() {
+      soundDone(id)
+    }
+  }
+
+  /// Called by [PlayerDelegate] when a sound finishes or fails.
+  func soundDone(_ id: ObjectIdentifier) {
+    guard let (_, _, result) = players.removeValue(forKey: id) else { return }
+    endHostOutput()
+    result(nil)
   }
 
   private func startEngine() throws {
@@ -458,5 +580,47 @@ final class RecognitionFeed: @unchecked Sendable {
     return { buffer, _ in
       feed.consume(buffer)
     }
+  }
+}
+
+/// Forwards AVSpeechSynthesizer callbacks to the bridge on the main actor.
+final class SynthDelegate: NSObject, AVSpeechSynthesizerDelegate {
+  private weak var bridge: SpeechBridge?
+
+  init(bridge: SpeechBridge) {
+    self.bridge = bridge
+  }
+
+  func speechSynthesizer(
+    _ synthesizer: AVSpeechSynthesizer, didFinish utterance: AVSpeechUtterance
+  ) {
+    let id = ObjectIdentifier(utterance)
+    Task { @MainActor [weak bridge] in bridge?.utteranceDone(id) }
+  }
+
+  func speechSynthesizer(
+    _ synthesizer: AVSpeechSynthesizer, didCancel utterance: AVSpeechUtterance
+  ) {
+    let id = ObjectIdentifier(utterance)
+    Task { @MainActor [weak bridge] in bridge?.utteranceDone(id) }
+  }
+}
+
+/// Forwards AVAudioPlayer callbacks to the bridge on the main actor.
+final class PlayerDelegate: NSObject, AVAudioPlayerDelegate {
+  private weak var bridge: SpeechBridge?
+
+  init(bridge: SpeechBridge) {
+    self.bridge = bridge
+  }
+
+  func audioPlayerDidFinishPlaying(_ player: AVAudioPlayer, successfully flag: Bool) {
+    let id = ObjectIdentifier(player)
+    Task { @MainActor [weak bridge] in bridge?.soundDone(id) }
+  }
+
+  func audioPlayerDecodeErrorDidOccur(_ player: AVAudioPlayer, error: Error?) {
+    let id = ObjectIdentifier(player)
+    Task { @MainActor [weak bridge] in bridge?.soundDone(id) }
   }
 }

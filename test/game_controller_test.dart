@@ -283,6 +283,9 @@ void main() {
       expect(awards.ranked.single.player.name, 'Sam');
       expect(awards.unscored.single.name, 'Alex');
       expect(awards.biggestSpike!.result.question, 'Do you floss every day?');
+      w.elapse(100);
+      expect(w.host.said.last, 'And the winners are…');
+      expect(w.host.played.last, Sfx.applause);
       expect(w.device.calls.last, 'keepAwake(false)');
 
       // No haptics ever fired while measuring.
@@ -326,7 +329,9 @@ void main() {
         2,
         reason: 'one when the question starts, one when the answer starts',
       );
+      expect(w.host.said, contains('Ask your question!'));
       expect(w.host.said, contains('Call it! Legit or sus?'));
+      expect(w.host.said.last, isIn(['Legit!', 'Hmm…', 'Sus!']));
       expect(w.host.played, contains(Sfx.drumroll));
       w.dispose();
     });

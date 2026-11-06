@@ -75,3 +75,7 @@ public protocol FlutterImplicitEngineDelegate: NSObjectProtocol {
 open class FlutterStandardTypedData: NSObject {
   open var data: Data { Data() }
 }
+
+open class FlutterDartProject: NSObject {
+  open class func lookupKey(forAsset asset: String) -> String { asset }
+}

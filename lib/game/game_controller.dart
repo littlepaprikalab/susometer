@@ -605,6 +605,7 @@ class GameController extends ChangeNotifier {
     live.resetQuestion();
     questionText = mode == GameMode.solo ? (repeat ?? _questions.next()) : '';
     _setPhase(GamePhase.ask);
+    if (mode == GameMode.party) unawaited(_say('Ask your question!'));
     if (micEnabled) {
       unawaited(
         speech
@@ -918,7 +919,10 @@ class GameController extends ChangeNotifier {
     _setPhase(GamePhase.leaderboard);
     if (awards!.ranked.isNotEmpty) {
       _haptic(HapticCue.award);
-      if (settings.soundEffects) unawaited(host.play(Sfx.applause));
+      unawaited(() async {
+        await _say('And the winners are…');
+        if (settings.soundEffects) await host.play(Sfx.applause);
+      }());
     }
   }
 
