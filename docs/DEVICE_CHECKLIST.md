@@ -70,6 +70,17 @@ Settings → **Signal check** → **Start both**. Allow microphone and speech re
 - [ ] Leaderboard → **Share results** opens the share sheet with an image (names and scores only,
   no question text) → **Watch the replay** shows each Q and A with a sparkline.
 
+## 4b. Solo (1 player, 3 questions)
+
+- [ ] After the host reads the question, **wait about 10 s without talking**: the question card
+  stays up, with *Different question* and *Ready to answer*. The camera doesn't move or flash.
+- [ ] Start talking without tapping: the answer card appears and your words show up.
+- [ ] Next question: tap *Ready to answer* **while the host is still reading**. The host stops
+  mid-sentence, and when you answer right away your first words are in the transcript (the mic
+  reopens).
+- [ ] Double-tap *Ready to answer* fast: the answer must **not** end (the second tap lands where
+  *Final answer* appears).
+
 ## 5. Edge cases
 
 - [ ] **E2:** in iOS Settings, turn the app's microphone off → Start the show → "The show needs

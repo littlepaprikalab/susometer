@@ -88,8 +88,9 @@ class HotSeatScreen extends StatelessWidget {
     final game = GameScope.of(context);
     final name = game.currentPlayer.name;
     final solo = game.mode == GameMode.solo;
-    final answering =
-        game.phase == GamePhase.answer || game.phase == GamePhase.settle;
+    // Solo keeps the question card up until the player is ready.
+    final shown = game.shownPhase;
+    final answering = shown == GamePhase.answer || shown == GamePhase.settle;
     final host = answering
         ? '$name, your answer?'
         : solo
@@ -266,7 +267,7 @@ class _Actions extends StatelessWidget {
       ],
     );
 
-    switch (game.phase) {
+    switch (game.shownPhase) {
       case GamePhase.settle:
         return beside(_SettleCard(game: game));
       case GamePhase.answer:
@@ -305,12 +306,28 @@ class _Actions extends StatelessWidget {
             const SizedBox(height: 8),
             beside(
               solo
-                  ? ChunkyButton.light(
-                      label: 'Different question',
-                      icon: Icons.shuffle_rounded,
-                      height: 48,
-                      fontSize: 15,
-                      onPressed: game.differentQuestion,
+                  ? Row(
+                      children: [
+                        // No icon: two buttons share the row, and the
+                        // label needs the width to stay readable.
+                        Expanded(
+                          child: ChunkyButton.light(
+                            label: 'Different question',
+                            height: 48,
+                            fontSize: 15,
+                            onPressed: game.differentQuestion,
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: ChunkyButton(
+                            label: 'Ready to answer',
+                            height: 48,
+                            fontSize: 15,
+                            onPressed: game.readyToAnswer,
+                          ),
+                        ),
+                      ],
                     )
                   : game.micEnabled
                   ? DashedButton(

@@ -112,6 +112,13 @@ void main() {
       () => rig.game.phase == GamePhase.answer,
       what: 'host reads the question',
     );
+    // The question stays on screen until Sam is ready.
+    await rig.wait(3000);
+    expect(find.text('Q: “${rig.game.questionText}”'), findsNothing);
+    expect(find.text('Ready to answer'), findsOneWidget);
+    await checkScreen(tester, 'ask-solo');
+    await rig.tap('Ready to answer');
+    await rig.wait(100);
     expect(find.text('Q: “${rig.game.questionText}”'), findsOneWidget);
     await checkScreen(tester, 'answer-solo');
     for (var q = 0; q < 3; q++) {
@@ -476,6 +483,14 @@ void main() {
             await rig.until(() => rig.game.phase == GamePhase.answer);
             await rig.wait(200);
             same('answer starts');
+            if (mode == GameMode.solo) {
+              // The question stays up until the player is ready.
+              expect(find.text('Ready to answer'), findsOneWidget);
+              expect(find.text('Final answer'), findsNothing);
+              await rig.tap('Ready to answer');
+              await rig.wait(100);
+              same('ready to answer');
+            }
             expect(find.text('Final answer'), findsOneWidget);
             rig.presage.talk(true);
             await rig.wait(1200);
@@ -568,6 +583,33 @@ void main() {
     // before it starts.
     await quickSecondTap('Tap when done asking', 'Final answer');
     expect(rig.game.phase, GamePhase.answer);
+    await rig.wait(500);
+    await rig.tap('Final answer');
+    await rig.wait(100);
+    expect(rig.game.phase, GamePhase.settle, reason: 'a deliberate tap works');
+    await rig.finish();
+  });
+
+  testWidgets('solo: a double tap on Ready to answer never ends the answer', (
+    tester,
+  ) async {
+    final rig = Rig(tester);
+    await rig.pumpApp();
+    await rig.tap('Solo · host asks');
+    await rig.startParty(['Sam']);
+    await rig.tap('I agree, measure me');
+    await rig.until(() => rig.game.phase == GamePhase.answer);
+    await rig.wait(600);
+    expect(rig.game.soloHoldsQuestion, isTrue);
+    // Final answer appears where Ready to answer was, with no phase change.
+    await waitOutTapGuard(tester);
+    await tester.tap(find.text('Ready to answer'));
+    await tester.pump(const Duration(milliseconds: 60));
+    await tester.pump(const Duration(milliseconds: 60));
+    expect(find.text('Final answer'), findsOneWidget);
+    await tester.tap(find.text('Final answer'), warnIfMissed: false);
+    await tester.pump(const Duration(milliseconds: 50));
+    expect(rig.game.phase, GamePhase.answer, reason: 'second tap ignored');
     await rig.wait(500);
     await rig.tap('Final answer');
     await rig.wait(100);
