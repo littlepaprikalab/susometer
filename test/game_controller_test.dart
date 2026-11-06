@@ -795,6 +795,22 @@ void main() {
     });
   });
 
+  test('a mic that fails to restart falls back to tap-to-advance', () {
+    fakeAsync((async) {
+      final w = World(async);
+      w.startGame(['Sam', 'Alex']);
+      w.calibrate();
+      w.speech.controller.add(
+        const SpeechError('AUDIO_RESTART_FAILED', 'no input', 0),
+      );
+      w.elapse(100);
+      expect(w.game.micEnabled, isFalse);
+      expect(w.game.notice, contains('tap-to-advance'));
+      expect(w.speech.calls.last, 'stop');
+      w.dispose();
+    });
+  });
+
   test(
     'automatic turns: silence ends the question, host prompts, 4 s silence ends the answer',
     () {

@@ -1521,8 +1521,11 @@ class GameController extends ChangeNotifier {
       case SpeechStateChange():
         break;
       case SpeechError():
+        // Each of these leaves the mic dead: say so and go tap-to-advance
+        // rather than wait out the 20 s no-answer timeout on every question.
         if (e.code == 'RECOGNIZER_FAILING' ||
-            e.code == 'ON_DEVICE_UNAVAILABLE') {
+            e.code == 'ON_DEVICE_UNAVAILABLE' ||
+            e.code == 'AUDIO_RESTART_FAILED') {
           _fallBackToNoVoice(e.code);
         }
     }

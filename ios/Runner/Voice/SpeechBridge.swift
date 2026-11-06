@@ -47,7 +47,6 @@ final class SpeechBridge {
   private var synthDelegate: SynthDelegate?
   private var pendingSpeech: [ObjectIdentifier: FlutterResult] = [:]
   private var players: [ObjectIdentifier: (AVAudioPlayer, PlayerDelegate, FlutterResult)] = [:]
-  private var hostOutputs = 0
   private var reopenWork: DispatchWorkItem?
 
   private init(messenger: FlutterBinaryMessenger) {
@@ -121,7 +120,7 @@ final class SpeechBridge {
       speak(text, result: result)
 
     case "stopSpeaking":
-      synthesizer.stopSpeaking(at: .immediate)
+      stopSpeaking()
       result(nil)
 
     case "playSound":
@@ -256,19 +255,26 @@ final class SpeechBridge {
   /// Recognition hears nothing while the host speaks or a sound plays, and
   /// for 150 ms after (SPEC.md §7), so transcripts never contain the host.
   private func applyGate() {
-    feed.setGated(paused || hostOutputs > 0 || reopenWork != nil)
+    feed.setGated(paused || hostBusy || reopenWork != nil)
   }
 
+  /// Host output still waiting for its finish callback. Read from the
+  /// pending maps rather than a separate counter, so the gate always matches
+  /// what's actually outstanding.
+  private var hostBusy: Bool { !pendingSpeech.isEmpty || !players.isEmpty }
+
+  /// Call after adding the utterance or sound to its pending map.
   private func beginHostOutput() {
-    hostOutputs += 1
     reopenWork?.cancel()
     reopenWork = nil
     applyGate()
   }
 
+  /// Call after removing the utterance or sound from its pending map. The mic
+  /// reopens 150 ms after the last host output ends.
   private func endHostOutput() {
-    hostOutputs = max(0, hostOutputs - 1)
-    guard hostOutputs == 0 else { return }
+    guard !hostBusy else { return }
+    reopenWork?.cancel()
     let work = DispatchWorkItem { [weak self] in
       MainActor.assumeIsolated {
         guard let self else { return }
@@ -283,12 +289,12 @@ final class SpeechBridge {
 
   private func speak(_ text: String, result: @escaping FlutterResult) {
     ensurePlaybackSession()
-    beginHostOutput()
     let utterance = AVSpeechUtterance(string: text)
     utterance.voice = Self.hostVoice()
     utterance.rate = AVSpeechUtteranceDefaultSpeechRate
     utterance.pitchMultiplier = 1.05
     pendingSpeech[ObjectIdentifier(utterance)] = result
+    beginHostOutput()
     synthesizer.speak(utterance)
   }
 
@@ -297,6 +303,26 @@ final class SpeechBridge {
     guard let result = pendingSpeech.removeValue(forKey: id) else { return }
     endHostOutput()
     result(nil)
+  }
+
+  /// Stops the host mid-sentence (solo "Ready to answer", "Different
+  /// question", pause, end of turn, or Dart's speak timeout).
+  ///
+  /// iOS doesn't promise a didCancel for every utterance it drops, for
+  /// example one stopped before it started or one queued behind another. A
+  /// missing callback used to leave the mic gated for the rest of the
+  /// session, so recognition heard nothing. Nothing is speaking after this
+  /// call, so every pending utterance finishes here and a late callback finds
+  /// nothing.
+  private func stopSpeaking() {
+    synthesizer.stopSpeaking(at: .immediate)
+    guard !pendingSpeech.isEmpty else { return }
+    let results = Array(pendingSpeech.values)
+    pendingSpeech.removeAll()
+    endHostOutput()
+    for result in results {
+      result(nil)
+    }
   }
 
   /// Best English voice the app can use: premium, then enhanced, then
@@ -341,11 +367,11 @@ final class SpeechBridge {
       return
     }
     ensurePlaybackSession()
-    beginHostOutput()
     let delegate = PlayerDelegate(bridge: self)
     player.delegate = delegate
     let id = ObjectIdentifier(player)
     players[id] = (player, delegate, result)
+    beginHostOutput()
     if !player.play() {
       soundDone(id)
     }

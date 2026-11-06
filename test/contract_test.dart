@@ -252,7 +252,12 @@ void main() {
         'permission values',
       );
       expectAllIn(
-        ['RECOGNIZER_FAILING', 'ON_DEVICE_UNAVAILABLE', 'MIC_DENIED'],
+        [
+          'RECOGNIZER_FAILING',
+          'ON_DEVICE_UNAVAILABLE',
+          'MIC_DENIED',
+          'AUDIO_RESTART_FAILED',
+        ],
         speechSwift,
         'speech error codes',
       );
@@ -436,6 +441,31 @@ void main() {
       ]) {
         expect(speechSwift, contains(s));
       }
+    });
+    test('a lost synthesizer callback cannot leave the mic gated', () {
+      // The gate follows what's still pending, not a counter that a missing
+      // didCancel would leave above zero for the rest of the session.
+      expect(speechSwift, isNot(contains('hostOutputs')));
+      expect(
+        speechSwift,
+        contains('!pendingSpeech.isEmpty || !players.isEmpty'),
+      );
+      // Stopping the host finishes every pending utterance itself.
+      final stop = RegExp(
+        r'private func stopSpeaking\(\) \{([\s\S]*?)\n  \}',
+      ).firstMatch(speechSwift);
+      expect(stop, isNotNull);
+      expect(
+        stop!.group(1),
+        contains('synthesizer.stopSpeaking(at: .immediate)'),
+      );
+      expect(stop.group(1), contains('pendingSpeech.removeAll()'));
+      expect(stop.group(1), contains('endHostOutput()'));
+      expect(swiftCases(speechSwift), contains('stopSpeaking'));
+      expect(
+        speechSwift,
+        contains('case "stopSpeaking":\n      stopSpeaking()'),
+      );
     });
     test('decks and fonts are bundled', () {
       final pubspec = read('pubspec.yaml');

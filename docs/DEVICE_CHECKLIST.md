@@ -99,6 +99,9 @@ Settings → **Signal check** → **Start both**. Allow microphone and speech re
   reopens).
 - [ ] Double-tap *Ready to answer* fast: the answer must **not** end (the second tap lands where
   *Final answer* appears).
+- [ ] Tap *Different question* while the host is reading, twice in a row, then *Ready to answer*
+  mid-sentence on the next one. Answer out loud: your words still show up on every later question
+  (a lost cancel callback used to mute recognition for the rest of the session).
 
 ## 5. Edge cases
 
