@@ -1,22 +1,46 @@
 import 'package:flutter/widgets.dart';
 
+import 'audio/host_audio.dart';
+import 'device/device_api.dart';
+import 'game/game_controller.dart';
 import 'presage/presage_channel.dart';
 import 'settings/app_settings.dart';
 import 'voice/speech_service.dart';
+import 'voice/turn_detector.dart';
 
 /// App-wide services. Tests swap in fakes.
 class AppServices {
   AppServices({
     required this.presage,
     required this.speech,
+    DeviceApi? device,
     AppSettings? settings,
-  }) : settings = settings ?? AppSettings(),
-       apiKey = ApiKeyController(presage);
+    HostAudio? host,
+    HapticsApi? haptics,
+    TurnConfig? turnConfig,
+    int Function()? now,
+  }) : device = device ?? MethodChannelDevice(),
+       settings = settings ?? AppSettings(),
+       apiKey = ApiKeyController(presage) {
+    game = GameController(
+      presage: presage,
+      speech: speech,
+      device: this.device,
+      settings: this.settings,
+      apiKey: apiKey,
+      host: host ?? const SilentHostAudio(),
+      haptics: haptics ?? const SystemHaptics(),
+      turnConfig: turnConfig ?? const TurnConfig(),
+      now: now,
+    );
+  }
 
   final PresageApi presage;
   final SpeechApi speech;
+  final DeviceApi device;
   final AppSettings settings;
   final ApiKeyController apiKey;
+  late final GameController game;
 }
 
 class AppScope extends InheritedWidget {
@@ -32,4 +56,19 @@ class AppScope extends InheritedWidget {
 
   @override
   bool updateShouldNotify(AppScope oldWidget) => services != oldWidget.services;
+}
+
+/// Gives screens the [GameController] and rebuilds them whenever it notifies.
+class GameScope extends InheritedNotifier<GameController> {
+  const GameScope({
+    super.key,
+    required GameController game,
+    required super.child,
+  }) : super(notifier: game);
+
+  static GameController of(BuildContext context) {
+    final scope = context.dependOnInheritedWidgetOfExactType<GameScope>();
+    assert(scope != null, 'GameScope missing above this widget');
+    return scope!.notifier!;
+  }
 }

@@ -17,6 +17,7 @@
 		97C146FC1CF9000F007C117D /* Main.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 97C146FA1CF9000F007C117D /* Main.storyboard */; };
 		97C146FE1CF9000F007C117D /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 97C146FD1CF9000F007C117D /* Assets.xcassets */; };
 		97C147011CF9000F007C117D /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 97C146FF1CF9000F007C117D /* LaunchScreen.storyboard */; };
+		A069B2EDA41A5207F959F4F7 /* DeviceBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3B0D1AD7B4296D80B91922C6 /* DeviceBridge.swift */; };
 		CD44EC160A5802132AA440EE /* KeychainStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5F14B5B790D732D9BB203EAC /* KeychainStore.swift */; };
 		CF719CE9175E6AA23856C668 /* CameraPreviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0FB7C04737C54EDB22B795E6 /* CameraPreviewView.swift */; };
 		E51FCE481F6E49F1CAC1C15F /* EventStreamHandler.swift in Sources */ = {isa = PBXBuildFile; fileRef = AECEAC18B3C1E513FBB4E8BE /* EventStreamHandler.swift */; };
@@ -54,6 +55,7 @@
 		1498D2331E8E89220040F4C2 /* GeneratedPluginRegistrant.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = GeneratedPluginRegistrant.m; sourceTree = "<group>"; };
 		331C807B294A618700263BE5 /* RunnerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RunnerTests.swift; sourceTree = "<group>"; };
 		331C8081294A63A400263BE5 /* RunnerTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = RunnerTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		3B0D1AD7B4296D80B91922C6 /* DeviceBridge.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = DeviceBridge.swift; sourceTree = "<group>"; };
 		3B3967151E833CAA004F5970 /* AppFrameworkInfo.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; name = AppFrameworkInfo.plist; path = Flutter/AppFrameworkInfo.plist; sourceTree = "<group>"; };
 		5C374A2103E0EA7690689D14 /* SpeechBridge.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SpeechBridge.swift; sourceTree = "<group>"; };
 		5F14B5B790D732D9BB203EAC /* KeychainStore.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = KeychainStore.swift; sourceTree = "<group>"; };
@@ -103,6 +105,15 @@
 			);
 			name = Presage;
 			path = Presage;
+			sourceTree = "<group>";
+		};
+		867A4D91A392CB7CC744EB35 /* Device */ = {
+			isa = PBXGroup;
+			children = (
+				3B0D1AD7B4296D80B91922C6 /* DeviceBridge.swift */,
+			);
+			name = Device;
+			path = Device;
 			sourceTree = "<group>";
 		};
 		89D7F9F5D954BB57745E171E /* Voice */ = {
@@ -159,6 +170,7 @@
 				74858FAD1ED2DC5600515810 /* Runner-Bridging-Header.h */,
 				42EE39E55A21889810875B4A /* Presage */,
 				89D7F9F5D954BB57745E171E /* Voice */,
+				867A4D91A392CB7CC744EB35 /* Device */,
 			);
 			path = Runner;
 			sourceTree = "<group>";
@@ -326,6 +338,7 @@
 				F2703ADCB703D28579F27365 /* PresageBridge.swift in Sources */,
 				CF719CE9175E6AA23856C668 /* CameraPreviewView.swift in Sources */,
 				E64F12618C34EE5B774806BB /* SpeechBridge.swift in Sources */,
+				A069B2EDA41A5207F959F4F7 /* DeviceBridge.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

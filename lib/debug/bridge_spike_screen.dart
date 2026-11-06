@@ -87,7 +87,7 @@ class _BridgeSpikeScreenState extends State<BridgeSpikeScreen> {
     if (services != null) {
       services.presage.stop().catchError((Object _) {});
       services.speech.stop().catchError((Object _) {});
-      services.presage.setKeepAwake(false).catchError((Object _) {});
+      services.device.setKeepAwake(false);
     }
     super.dispose();
   }
@@ -154,7 +154,7 @@ class _BridgeSpikeScreenState extends State<BridgeSpikeScreen> {
     try {
       await services.presage.configure(telemetry: services.settings.telemetry);
       await services.presage.start();
-      await services.presage.setKeepAwake(true);
+      await services.device.setKeepAwake(true);
     } on PresageException catch (e) {
       _presageError =
           'Error code: ${e.code}. ${describePresageCode(e.code, e.message)}';
@@ -171,7 +171,7 @@ class _BridgeSpikeScreenState extends State<BridgeSpikeScreen> {
     } on PresageException catch (e) {
       _presageError = 'Error code: ${e.code}. ${e.message}';
     } finally {
-      await services.presage.setKeepAwake(false).catchError((Object _) {});
+      await services.device.setKeepAwake(false);
       if (mounted) setState(() => _measureBusy = false);
     }
   }

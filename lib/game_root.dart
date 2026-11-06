@@ -1,0 +1,135 @@
+import 'package:flutter/material.dart';
+
+import 'app_scope.dart';
+import 'debug/proof_panel.dart';
+import 'game/game_controller.dart';
+import 'game/models.dart';
+import 'screens/edge_screens.dart';
+import 'screens/intro_screens.dart';
+import 'screens/lobby_screen.dart';
+import 'screens/question_screens.dart';
+import 'screens/result_screens.dart';
+import 'share/share_card.dart';
+
+/// Shows the screen for the current [GamePhase], plus the Pause and End the
+/// show overlays and the Proof Panel. Also forwards app lifecycle changes.
+class GameRoot extends StatefulWidget {
+  const GameRoot({super.key});
+
+  @override
+  State<GameRoot> createState() => _GameRootState();
+}
+
+class _GameRootState extends State<GameRoot> with WidgetsBindingObserver {
+  bool _confirmEnd = false;
+  final GlobalKey _shareKey = GlobalKey();
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    final game = GameScope.of(context);
+    if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.hidden) {
+      game.onAppBackgrounded();
+    } else if (state == AppLifecycleState.resumed) {
+      game.onAppResumed();
+    }
+  }
+
+  void _askEnd() => setState(() => _confirmEnd = true);
+  void _closeEnd() => setState(() => _confirmEnd = false);
+
+  Widget _screen(GameController game) {
+    return switch (game.phase) {
+      GamePhase.lobby => const LobbyScreen(),
+      GamePhase.howToPlay => const HowToPlayScreen(),
+      GamePhase.permissions => const PermissionsScreen(),
+      GamePhase.consent => ConsentScreen(
+        onBack: () {
+          final anyPlayed = game.turns.any((t) => t.results.isNotEmpty);
+          if (game.playerIndex == 0 && !anyPlayed) {
+            game.backToLobby();
+          } else {
+            _askEnd();
+          }
+        },
+      ),
+      GamePhase.calibrate => const CalibrateScreen(),
+      GamePhase.ask =>
+        game.mode == GameMode.solo ? const SoloAskScreen() : const AskScreen(),
+      GamePhase.answer || GamePhase.settle => const AnswerScreen(),
+      GamePhase.redo => const RedoScreen(),
+      GamePhase.callIt => const CallItScreen(),
+      GamePhase.countdown => const CountdownScreen(),
+      GamePhase.verdict => const VerdictScreen(),
+      GamePhase.sdkOffline => const SdkOfflineScreen(),
+      GamePhase.leaderboard => LeaderboardScreen(
+        onShare: () => shareResults(context, _shareKey),
+      ),
+      GamePhase.replay => const ReplayScreen(),
+    };
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final services = AppScope.of(context);
+    final game = services.game;
+    return ListenableBuilder(
+      listenable: Listenable.merge([game, services.settings]),
+      builder: (context, _) {
+        final showProof = services.settings.proofPanel && game.isMeasuring;
+        return Stack(
+          children: [
+            if (game.phase == GamePhase.leaderboard && game.awards != null)
+              Positioned(
+                left: -2000,
+                top: 0,
+                // Off-screen, only rendered for the share image: hidden from
+                // VoiceOver and touches.
+                child: ExcludeSemantics(
+                  child: IgnorePointer(
+                    child: ShareCard(boundaryKey: _shareKey, game: game),
+                  ),
+                ),
+              ),
+            Positioned.fill(
+              child: KeyedSubtree(
+                key: ValueKey(game.phase),
+                child: _screen(game),
+              ),
+            ),
+            if (showProof)
+              Positioned.fill(
+                child: ProofPanel(
+                  game: game,
+                  telemetry: services.settings.telemetry,
+                ),
+              ),
+            if (game.paused && !_confirmEnd)
+              Positioned.fill(
+                child: SheetOverlay(child: PauseSheet(onEndShow: _askEnd)),
+              ),
+            if (_confirmEnd && game.inGame)
+              Positioned.fill(
+                child: SheetOverlay(
+                  onDismiss: _closeEnd,
+                  child: EndShowSheet(onKeepPlaying: _closeEnd),
+                ),
+              ),
+          ],
+        );
+      },
+    );
+  }
+}

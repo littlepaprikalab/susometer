@@ -130,11 +130,6 @@ final class PresageBridge {
     case "reset":
       Task { await self.run(result) { try await self.reset() } }
 
-    case "setKeepAwake":
-      // Keep the screen awake during a game (SPEC.md §9).
-      UIApplication.shared.isIdleTimerDisabled = args["on"] as? Bool ?? false
-      result(nil)
-
     case "sdkInfo":
       let info: [String: Any] = [
         "version": SmartSpectraSDK.version,

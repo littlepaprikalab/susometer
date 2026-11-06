@@ -22,6 +22,9 @@ import UIKit
       if let registrar = registry.registrar(forPlugin: "SusSpeechBridge") {
         SpeechBridge.register(with: registrar)
       }
+      if let registrar = registry.registrar(forPlugin: "SusDeviceBridge") {
+        DeviceBridge.register(with: registrar)
+      }
     }
   }
 }

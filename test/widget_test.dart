@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:susometer/app_scope.dart';
+import 'package:susometer/debug/bridge_spike_screen.dart';
 import 'package:susometer/main.dart';
 import 'package:susometer/presage/presage_models.dart';
 import 'package:susometer/screens/settings_screen.dart';
@@ -20,7 +21,12 @@ void main() {
     addTearDown(tester.view.reset);
     await tester.pumpWidget(
       SusApp(
-        services: AppServices(presage: presage, speech: speech),
+        services: AppServices(
+          presage: presage,
+          speech: speech,
+          device: FakeDevice(),
+        ),
+        home: const BridgeSpikeScreen(),
       ),
     );
     await tester.pump();
@@ -39,6 +45,8 @@ void main() {
   testWidgets('starting without a key opens Settings instead', (tester) async {
     final (presage, _) = await pumpApp(tester);
     await tester.scrollUntilVisible(find.text('Start both'), 300);
+    await tester.ensureVisible(find.text('Start both'));
+    await tester.pump();
     await tester.tap(find.text('Start both'));
     await tester.pumpAndSettle();
     expect(find.byType(SettingsScreen), findsOneWidget);
@@ -48,6 +56,8 @@ void main() {
   testWidgets('live samples and transcript both show up', (tester) async {
     final (presage, speech) = await pumpApp(tester, key: 'k-1234');
     await tester.scrollUntilVisible(find.text('Start both'), 300);
+    await tester.ensureVisible(find.text('Start both'));
+    await tester.pump();
     await tester.tap(find.text('Start both'));
     await tester.pumpAndSettle();
     expect(

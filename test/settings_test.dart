@@ -88,7 +88,11 @@ void main() {
       String? key,
     }) async {
       final api = FakePresage()..storedKey = key;
-      final services = AppServices(presage: api, speech: FakeSpeech());
+      final services = AppServices(
+        presage: api,
+        speech: FakeSpeech(),
+        device: FakeDevice(),
+      );
       await services.apiKey.refresh();
       tester.view.physicalSize = const Size(390 * 3, 844 * 3);
       tester.view.devicePixelRatio = 3;
@@ -100,32 +104,38 @@ void main() {
       return (api, services);
     }
 
-    testWidgets('shows No key yet, saves a key, then connects', (tester) async {
+    testWidgets('shows No key yet, then Save & test saves and connects', (
+      tester,
+    ) async {
       final (api, _) = await pumpSettings(tester);
       expect(find.text('No key yet'), findsOneWidget);
-      expect(find.text('Save key'), findsNothing);
+      expect(find.text('Test connection'), findsOneWidget);
 
       await tester.enterText(
         find.byKey(const ValueKey('apiKeyField')),
         'secret-key-9f3e',
       );
       await tester.pump();
-      await tester.tap(find.text('Save key'));
+      expect(find.text('Save & test'), findsOneWidget);
+      await tester.tap(find.text('Save & test'));
       await tester.pumpAndSettle();
 
       expect(api.storedKey, 'secret-key-9f3e');
-      expect(find.text('Key saved'), findsOneWidget);
+      expect(
+        api.calls,
+        containsAllInOrder(['setApiKey', 'testConnection(telemetry: false)']),
+      );
       // The field is cleared after saving; only the hint remains.
       expect(find.text('secret-key-9f3e'), findsNothing);
       expect(
         find.text('Saved ••••9f3e. Paste a new key to replace it.'),
         findsOneWidget,
       );
-
-      await tester.tap(find.text('Test connection'));
-      await tester.pumpAndSettle();
       expect(find.text('Connected'), findsOneWidget);
-      expect(find.text('Signed in to Presage in 2.3 s.'), findsOneWidget);
+      expect(
+        find.textContaining('Signed in to Presage in 2.3 s.'),
+        findsOneWidget,
+      );
     });
 
     testWidgets('shows the SDK error code when the key is rejected', (

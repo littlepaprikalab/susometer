@@ -20,9 +20,6 @@ abstract class PresageApi {
   Future<void> stop();
   Future<void> reset();
   Future<Map<String, Object?>> sdkInfo();
-
-  /// Keeps the screen from auto-locking during a game (SPEC.md §9).
-  Future<void> setKeepAwake(bool on);
 }
 
 class MethodChannelPresage implements PresageApi {
@@ -96,9 +93,6 @@ class MethodChannelPresage implements PresageApi {
 
   @override
   Future<void> reset() => _call<void>('reset');
-
-  @override
-  Future<void> setKeepAwake(bool on) => _call<void>('setKeepAwake', {'on': on});
 
   @override
   Future<Map<String, Object?>> sdkInfo() async {

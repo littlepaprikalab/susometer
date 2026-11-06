@@ -1,4 +1,8 @@
 import 'dart:async';
+import 'dart:typed_data';
+
+import 'package:susometer/audio/host_audio.dart';
+import 'package:susometer/device/device_api.dart';
 
 import 'package:susometer/presage/presage_channel.dart';
 import 'package:susometer/presage/presage_models.dart';
@@ -74,9 +78,6 @@ class FakePresage implements PresageApi {
   Future<void> reset() async => calls.add('reset');
 
   @override
-  Future<void> setKeepAwake(bool on) async => calls.add('setKeepAwake($on)');
-
-  @override
   Future<Map<String, Object?>> sdkInfo() async => {'version': 'fake'};
 }
 
@@ -110,4 +111,66 @@ class FakeSpeech implements SpeechApi {
 
   @override
   Future<void> resume() async => calls.add('resume');
+
+  int segment = 0;
+
+  @override
+  Future<int?> newSegment() async {
+    calls.add('newSegment');
+    return ++segment;
+  }
+}
+
+class FakeDevice implements DeviceApi {
+  String camera = 'granted';
+  String thermal = 'nominal';
+  final List<String> calls = [];
+  int shares = 0;
+
+  @override
+  Future<String> cameraPermission() async => camera;
+
+  @override
+  Future<bool> requestCameraPermission() async {
+    calls.add('requestCamera');
+    if (camera == 'undetermined') camera = 'granted';
+    return camera == 'granted';
+  }
+
+  @override
+  Future<void> openAppSettings() async => calls.add('openAppSettings');
+
+  @override
+  Future<void> openPortal() async => calls.add('openPortal');
+
+  @override
+  Future<void> setKeepAwake(bool on) async => calls.add('keepAwake($on)');
+
+  @override
+  Future<String> thermalState() async => thermal;
+
+  @override
+  Future<void> shareImage(Uint8List png, {String? text}) async => shares++;
+}
+
+/// Records host lines and sounds; completes immediately.
+class FakeHostAudio implements HostAudio {
+  final List<String> said = [];
+  final List<Sfx> played = [];
+
+  @override
+  Future<void> say(String text) async => said.add(text);
+
+  @override
+  Future<void> stopSpeaking() async {}
+
+  @override
+  Future<void> play(Sfx sfx) async => played.add(sfx);
+}
+
+class FakeHaptics implements HapticsApi {
+  final List<HapticCue> cues = [];
+
+  @override
+  Future<void> cue(HapticCue cue) async => cues.add(cue);
 }

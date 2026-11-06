@@ -31,7 +31,9 @@ final class SpeechBridge {
 
   private var recognizer: SFSpeechRecognizer?
   private var request: SFSpeechAudioBufferRecognitionRequest?
-  private var task: SFSpeechRecognitionTask?
+  /// Recognition tasks by segment. Ended segments stay here until they
+  /// deliver their final text, so the last words of a question aren't lost.
+  private var tasks: [Int: SFSpeechRecognitionTask] = [:]
   private var listening = false
   private var paused = false
   private var segment = 0
@@ -95,6 +97,9 @@ final class SpeechBridge {
     case "resume":
       resume()
       result(nil)
+
+    case "newSegment":
+      result(newSegment())
 
     default:
       result(FlutterMethodNotImplemented)
@@ -196,6 +201,16 @@ final class SpeechBridge {
     sendState("listening")
   }
 
+  /// Ends the current segment (its final text still arrives) and starts a
+  /// new one. Returns the new segment id, or nil when not listening.
+  private func newSegment() -> Int? {
+    guard listening, !paused else { return nil }
+    feed.setRequest(nil)
+    request?.endAudio()
+    beginSegment()
+    return segment
+  }
+
   private func configureAudioSession() throws {
     let session = AVAudioSession.sharedInstance()
     try session.setCategory(.playAndRecord, mode: .default, options: [.defaultToSpeaker])
@@ -214,7 +229,10 @@ final class SpeechBridge {
 
   private func beginSegment() {
     guard let recognizer else { return }
-    task?.cancel()
+    // Don't let finished-but-silent segments pile up.
+    while tasks.count >= 4, let oldest = tasks.keys.min() {
+      tasks.removeValue(forKey: oldest)?.cancel()
+    }
     let request = SFSpeechAudioBufferRecognitionRequest()
     request.shouldReportPartialResults = true
     request.requiresOnDeviceRecognition = true
@@ -224,7 +242,7 @@ final class SpeechBridge {
     segmentStartedAt = Date()
     self.request = request
     feed.setRequest(request)
-    task = recognizer.recognitionTask(
+    tasks[segment] = recognizer.recognitionTask(
       with: request, resultHandler: Self.makeResultHandler(bridge: self, segment: segment))
   }
 
@@ -250,13 +268,14 @@ final class SpeechBridge {
   private func handleResult(
     segment seg: Int, text: String?, isFinal: Bool, errorCode: Int?, errorMessage: String?
   ) {
-    guard seg == segment else { return }
+    // Text from an ended segment still counts: Dart files it by segment id.
     if let text, !text.isEmpty {
       stream.send([
         "type": isFinal ? "final" : "partial", "text": text, "seg": seg, "t": nowMs(),
       ])
     }
     guard isFinal || errorCode != nil else { return }
+    tasks.removeValue(forKey: seg)
 
     if let errorCode, !Self.isBenign(errorCode) {
       stream.send([
@@ -264,7 +283,8 @@ final class SpeechBridge {
         "message": errorMessage ?? "", "t": nowMs(),
       ])
     }
-    guard listening, !paused else { return }
+    // Only the current segment restarts listening.
+    guard seg == segment, listening, !paused else { return }
 
     // The recognizer ends segments on long silence or errors. Keep listening
     // with a fresh segment, but don't spin if it keeps failing straight away.

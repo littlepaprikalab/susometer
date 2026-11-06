@@ -15,6 +15,11 @@ abstract class SpeechApi {
   /// Half-duplex: stop feeding audio while the host speaks (SPEC.md §7).
   Future<void> pause();
   Future<void> resume();
+
+  /// Closes the current recognition segment (it still delivers its final
+  /// text) and starts a new one. Returns the new segment's id, or null if
+  /// not listening. Used to keep question text and answer text apart.
+  Future<int?> newSegment();
 }
 
 class SpeechPermissions {
@@ -193,6 +198,9 @@ class MethodChannelSpeech implements SpeechApi {
 
   @override
   Future<void> resume() => _call<void>('resume');
+
+  @override
+  Future<int?> newSegment() => _call<int>('newSegment');
 }
 
 /// Builds a running transcript from segment-based partial/final results.

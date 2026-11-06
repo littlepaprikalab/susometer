@@ -15,6 +15,7 @@ class ChunkyButton extends StatefulWidget {
     this.height = SusShape.buttonHeight,
     this.fontSize = 17,
     this.expand = true,
+    this.showLabel = true,
   });
 
   /// Light variant: cream fill, ink text.
@@ -26,6 +27,7 @@ class ChunkyButton extends StatefulWidget {
     this.height = SusShape.buttonHeight,
     this.fontSize = 17,
     this.expand = true,
+    this.showLabel = true,
   }) : color = SusColors.cream,
        textColor = SusColors.ink;
 
@@ -37,6 +39,9 @@ class ChunkyButton extends StatefulWidget {
   final double height;
   final double fontSize;
   final bool expand;
+
+  /// False for an icon-only button; [label] is then only for accessibility.
+  final bool showLabel;
 
   @override
   State<ChunkyButton> createState() => _ChunkyButtonState();
@@ -56,19 +61,20 @@ class _ChunkyButtonState extends State<ChunkyButton> {
       children: [
         if (widget.icon != null) ...[
           Icon(widget.icon, color: widget.textColor, size: widget.fontSize + 5),
-          const SizedBox(width: 8),
+          if (widget.showLabel) const SizedBox(width: 8),
         ],
-        Flexible(
-          child: Text(
-            widget.label,
-            overflow: TextOverflow.ellipsis,
-            style: SusText.body(
-              widget.fontSize,
-              weight: FontWeight.w700,
-              color: widget.textColor,
+        if (widget.showLabel)
+          Flexible(
+            child: Text(
+              widget.label,
+              overflow: TextOverflow.ellipsis,
+              style: SusText.body(
+                widget.fontSize,
+                weight: FontWeight.w700,
+                color: widget.textColor,
+              ),
             ),
           ),
-        ),
       ],
     );
     return Semantics(
@@ -109,7 +115,9 @@ class _ChunkyButtonState extends State<ChunkyButton> {
                   top: pressed ? shadow : 0,
                   height: widget.height,
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    padding: EdgeInsets.symmetric(
+                      horizontal: widget.showLabel ? 12 : 2,
+                    ),
                     decoration: BoxDecoration(
                       color: widget.color,
                       borderRadius: BorderRadius.circular(
