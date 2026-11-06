@@ -182,7 +182,9 @@ class TurnDetector {
         tQ0 ??= tMs;
         lastAskerSpeechMs = tMs;
       }
-    } else if (_talk.talking || _talk.rawTalking) {
+    } else if (_talk.talking || _talk.rawTalking || tA0 != null) {
+      // Once the player has started answering, new words keep the answer
+      // open even if SmartSpectra's talking flag drops out for a moment.
       lastPlayerActivityMs = math.max(lastPlayerActivityMs ?? 0, tMs);
     }
     return const [];

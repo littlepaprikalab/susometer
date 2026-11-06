@@ -653,4 +653,85 @@ void main() {
       w.dispose();
     });
   });
+
+  test(
+    'automatic turns: silence ends the question, host prompts, 4 s silence ends the answer',
+    () {
+      fakeAsync((async) {
+        final w = World(async, turnConfig: const TurnConfig());
+        w.startGame(['Sam', 'Alex'], questions: 1);
+        w.calibrate();
+        expect(w.game.phase, GamePhase.ask);
+        w.elapse(500);
+        for (final part in [
+          'Have you',
+          'Have you ever',
+          'Have you ever lied?',
+        ]) {
+          w.say(part);
+          w.elapse(400);
+        }
+        expect(w.game.phase, GamePhase.ask);
+        w.until(
+          () => w.game.phase == GamePhase.answer,
+          maxMs: 3000,
+          what: 'silence to end the question',
+        );
+        expect(
+          w.game.detector!.questionEndReason,
+          QuestionEndReason.askerSilence,
+        );
+        w.elapse(100);
+        expect(w.host.said, contains('Sam, your answer?'));
+        w.elapse(900);
+        w.talk(true);
+        w.elapse(300);
+        w.say('Nope.');
+        w.elapse(1700);
+        w.talk(false);
+        w.until(
+          () => w.game.phase == GamePhase.settle,
+          maxMs: 6000,
+          what: '4 s of silence',
+        );
+        expect(w.game.detector!.answerEndReason, AnswerEndReason.silence);
+        w.until(() => w.game.phase == GamePhase.callIt);
+        w.game.reveal();
+        w.until(() => w.game.phase == GamePhase.verdict);
+        final r = w.game.currentResult!;
+        expect(r.question, 'Have you ever lied?');
+        expect(r.answer, 'Nope.');
+        expect(
+          r.features!.hesitationS,
+          closeTo(0.9, 0.3),
+          reason: 'measured from the prompt end',
+        );
+        w.dispose();
+      });
+    },
+  );
+
+  test(
+    'automatic turns: answering straight away ends the question with no prompt',
+    () {
+      fakeAsync((async) {
+        final w = World(async, turnConfig: const TurnConfig());
+        w.startGame(['Sam', 'Alex'], questions: 1);
+        w.calibrate();
+        w.elapse(500);
+        w.say('Do you floss?');
+        w.elapse(300);
+        w.talk(true);
+        w.elapse(400);
+        expect(w.game.phase, GamePhase.answer);
+        expect(
+          w.game.detector!.questionEndReason,
+          QuestionEndReason.playerTalk,
+        );
+        expect(w.host.said, isNot(contains('Sam, your answer?')));
+        expect(w.game.live.hesitationS, 0);
+        w.dispose();
+      });
+    },
+  );
 }

@@ -354,4 +354,30 @@ void main() {
     expect(rig.game.phase, GamePhase.ask);
     await rig.finish();
   });
+
+  testWidgets('automatic mode: backup copy from the mocks', (tester) async {
+    final rig = Rig(tester);
+    await rig.pumpApp(turnConfig: const TurnConfig());
+    rig.presage.storedKey = 'k';
+    rig.game.hasSeenHowToPlay = true;
+    await rig.addPlayer('Sam');
+    await rig.addPlayer('Alex');
+    await rig.tap('Start the show');
+    await rig.wait(300);
+    await rig.tap('I agree, measure me');
+    await rig.until(() => rig.game.phase == GamePhase.ask);
+    expect(find.text('Too loud? Tap when done asking'), findsOneWidget);
+    expect(
+      find.text("Sam: just start answering when you're ready."),
+      findsOneWidget,
+    );
+    rig.say('Have you ever lied?');
+    await rig.until(() => rig.game.phase == GamePhase.answer, maxMs: 4000);
+    expect(
+      find.text('Forgot to tap? It ends itself after 4s of silence.'),
+      findsOneWidget,
+    );
+    expect(find.text('“Have you ever lied?”'), findsOneWidget);
+    await rig.finish();
+  });
 }
