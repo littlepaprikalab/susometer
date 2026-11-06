@@ -315,6 +315,74 @@ void main() {
     });
   });
 
+  test('a frozen camera is restarted, so "Reading paused" clears', () {
+    fakeAsync((async) {
+      final w = World(async);
+      w.startGame(['Sam', 'Alex']);
+      w.calibrate();
+      expect(w.game.phase, GamePhase.ask);
+      int starts() => w.presage.calls.where((c) => c == 'start').length;
+      final before = starts();
+      // The camera stalls on a shaky frame: the SDK still says running and
+      // the bridge keeps resending the last validation code.
+      w.code = 'EXCESSIVE_MOTION';
+      w.cameraFrozen = true;
+      w.elapse(4500);
+      expect(starts(), before, reason: 'a short gap is not a frozen camera');
+      expect(w.game.visibleIssue?.code, 'EXCESSIVE_MOTION');
+      w.elapse(1000);
+      expect(starts(), before + 1, reason: 'restarted after 5 s');
+      expect(w.game.phase, GamePhase.ask, reason: 'the question restarts');
+      // The restart brings the camera back.
+      w.cameraFrozen = false;
+      w.code = 'OK';
+      w.elapse(10000);
+      expect(starts(), before + 1, reason: 'no more restarts');
+      expect(w.game.visibleIssue, isNull);
+      w.dispose();
+    });
+  });
+
+  test('a camera that stays frozen ends in E5, not "Reading paused" '
+      'forever', () {
+    fakeAsync((async) {
+      final w = World(async);
+      w.startGame(['Sam', 'Alex']);
+      w.calibrate();
+      w.code = 'EXCESSIVE_MOTION';
+      w.cameraFrozen = true;
+      w.until(() => w.game.phase == GamePhase.sdkOffline, maxMs: 30000);
+      expect(w.game.sdkError!.code, 'NO_SIGNAL');
+      expect(w.game.sdkError!.message, contains('camera froze'));
+      w.cameraFrozen = false;
+      w.code = 'OK';
+      w.game.retrySdk();
+      w.elapse(200);
+      expect(w.game.phase, GamePhase.ask);
+      w.dispose();
+    });
+  });
+
+  test('a camera that froze while paused is restarted on resume', () {
+    fakeAsync((async) {
+      final w = World(async);
+      w.startGame(['Sam', 'Alex']);
+      w.calibrate();
+      int starts() => w.presage.calls.where((c) => c == 'start').length;
+      final before = starts();
+      w.game.pause();
+      w.cameraFrozen = true;
+      w.elapse(10000);
+      expect(starts(), before, reason: 'the watchdog rests while paused');
+      w.game.resume();
+      w.elapse(300);
+      expect(starts(), before + 1);
+      expect(w.game.paused, isFalse);
+      expect(w.game.phase, GamePhase.ask);
+      w.dispose();
+    });
+  });
+
   test('pause freezes the question; resume starts it over', () {
     fakeAsync((async) {
       final w = World(async);

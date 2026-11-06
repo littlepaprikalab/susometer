@@ -126,6 +126,7 @@ class PresageSample {
     this.talking = false,
     this.expr = const {},
     this.exprAtMs,
+    this.frameAtMs,
     this.validation,
     this.error,
     this.events = const [],
@@ -163,6 +164,19 @@ class PresageSample {
   /// When the bridge received the current [expr] sample (the bridge keeps
   /// the last scores between SDK updates), or null if it hasn't said.
   final int? exprAtMs;
+
+  /// When the SDK last published a camera frame, or when it started running
+  /// if that's later; null before either. Snapshots keep coming while the
+  /// SDK says it's running even if the camera has stalled, so this is how a
+  /// frozen camera shows.
+  final int? frameAtMs;
+
+  /// How old the camera image was when this snapshot was sent.
+  int? get frameAgeMs {
+    final at = frameAtMs;
+    return at == null ? null : tMs - at;
+  }
+
   final ValidationInfo? validation;
   final PresageErrorInfo? error;
 
@@ -238,6 +252,7 @@ class PresageSample {
       talking: m['talking'] as bool? ?? false,
       expr: expr,
       exprAtMs: _int(m['exprAt']),
+      frameAtMs: _int(m['frameAt']),
       validation: ValidationInfo.fromMap(m['validation']),
       error: PresageErrorInfo.fromMap(m['error']),
       events: events,

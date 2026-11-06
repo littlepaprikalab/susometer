@@ -163,6 +163,7 @@ void main() {
           'talking',
           'expr',
           'exprAt',
+          'frameAt',
           'validation',
           'error',
           'events',
@@ -274,6 +275,7 @@ void main() {
         'pulseAt',
         'expr',
         'exprAt',
+        'frameAt',
       ]) {
         expect(src, contains("'$key':"), reason: '$fake: $key');
       }

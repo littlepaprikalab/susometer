@@ -64,6 +64,7 @@ class StreamingPresage extends FakePresage {
         'talking': talking,
         'expr': expr,
         'exprAt': expr.isEmpty ? null : t,
+        'frameAt': t,
         'events': List.of(pending),
       }),
     );

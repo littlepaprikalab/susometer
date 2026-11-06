@@ -1526,7 +1526,8 @@ class GameController extends ChangeNotifier {
   }
 
   /// Self-healing: if the SDK stops sending while it should be measuring,
-  /// or reports an error, restart it; after repeated failures show E5.
+  /// its camera freezes, or it reports an error, restart it; after repeated
+  /// failures show E5.
   void _watchdog(int now) {
     if (!isMeasuring || paused || _recovering) return;
     final status = live.sample?.status;
@@ -1540,12 +1541,19 @@ class GameController extends ChangeNotifier {
             status == PresageStatus.stopping) &&
         now - _watchStatusSince > 15000 &&
         !(phase == GamePhase.calibrate && calibStage == CalibStage.starting);
-    if (silent || status == PresageStatus.error || stuck) {
-      _recoverSdk(
-        silent
-            ? 'no signal for 6 seconds'
-            : (stuck ? 'stuck while ${status!.name}' : 'SDK error'),
-      );
+    // Snapshots keep coming while the SDK says it's running, even when its
+    // camera has stalled: the preview and the validation code freeze, and
+    // "Reading paused" would never clear. So check the frames too.
+    final frameAge = live.sample?.frameAgeMs;
+    final frozen =
+        status == PresageStatus.running && frameAge != null && frameAge > 5000;
+    if (silent || status == PresageStatus.error || stuck || frozen) {
+      _recoverSdk(switch ((silent, stuck, frozen)) {
+        (true, _, _) => 'no signal for 6 seconds',
+        (_, true, _) => 'stuck while ${status!.name}',
+        (_, _, true) => 'the camera froze',
+        _ => 'SDK error',
+      });
     }
   }
 

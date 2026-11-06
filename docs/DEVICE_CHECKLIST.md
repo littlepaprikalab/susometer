@@ -116,6 +116,10 @@ Settings → **Signal check** → **Start both**. Allow microphone and speech re
   restarts the question.
 - [ ] **Hand-held:** play one turn holding the phone in your hand. **How often does "Hold still"
   appear?** (SPEC §16.)
+- [ ] **Frozen camera:** with the Proof Panel on, watch `cam` after the validation code through a
+  turn: it should stay under 1 s. **If the preview ever freezes, note what happened just before**
+  (Pause, a notification, Control Center, moving the phone) and the `cam` value. The game should
+  restart the camera and the question within about 5 s (SPEC decision 64).
 
 ## 6. Network check (privacy claim)
 

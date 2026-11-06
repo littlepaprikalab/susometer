@@ -72,6 +72,7 @@ final class PresageBridge {
       }
     }
     observeSDK()
+    observeFrames(changed: false)
   }
 
   // MARK: - Method calls
@@ -295,6 +296,23 @@ final class PresageBridge {
     ingest()
   }
 
+  /// Notes when the SDK last published a camera frame (`imageOutput`). The
+  /// stream sends a snapshot every tick while the SDK says it's running,
+  /// even if the camera has stalled, so the snapshots alone can't show a
+  /// frozen camera; `frameAt` can.
+  private func observeFrames(changed: Bool) {
+    let image = withObservationTracking {
+      sdk.imageOutput
+    } onChange: { [weak self] in
+      Task { @MainActor [weak self] in
+        self?.observeFrames(changed: true)
+      }
+    }
+    if changed, image != nil {
+      state.frameAt = nowMs()
+    }
+  }
+
   private func ingest() {
     let now = nowMs()
     let previousStatus = state.status
@@ -308,6 +326,11 @@ final class PresageBridge {
     }
     if previousStatus != state.status {
       state.dirty = true
+    }
+    if previousStatus != .running, state.status == .running {
+      // Frame age counts from here at the latest, so a camera that never
+      // delivers a frame shows as frozen too.
+      state.frameAt = now
     }
     guard let metrics = sdk.metrics else { return }
 
@@ -577,6 +600,9 @@ struct StreamState {
   /// scores from ones the SDK stopped updating.
   var exprAt: Int64?
   var faceSamples = 0
+  /// When the SDK last published a camera frame, or when it started
+  /// running if that's later. Nil before either this session.
+  var frameAt: Int64?
 
   var events: [[String: Any]] = []
   var trace: [Double] = []
@@ -604,6 +630,7 @@ struct StreamState {
     expr = [:]
     exprAt = nil
     faceSamples = 0
+    frameAt = nil
     events.removeAll()
     trace.removeAll()
     traceTs.removeAll()
@@ -636,6 +663,7 @@ struct StreamState {
     if let pulseConf { out["pulseConf"] = pulseConf }
     if let pulseAt { out["pulseAt"] = pulseAt }
     if let exprAt { out["exprAt"] = exprAt }
+    if let frameAt { out["frameAt"] = frameAt }
     if let rmssd { out["rmssd"] = rmssd }
     if let hrvConf { out["hrvConf"] = hrvConf }
     if let validation {
