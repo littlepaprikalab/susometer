@@ -68,36 +68,13 @@ void main() {
         {'sad': 0.4, 'angry': 0.4, 'neutral': 0.1},
         {'fear': 0.43, 'disgust': 0.45, 'neutral': 0.1},
         {'neutral': 0.45, 'surprise': 0.44},
+        {'happy': 0.4, 'contempt': 0.4, 'neutral': 0.1},
+        {'contempt': 0.42, 'happy': 0.39},
       ]) {
         final t = ExpressionTagger();
         feed(t, 0, 50, (_) => tie);
         expect(t.tag, isNull, reason: '$tie');
       }
-    });
-
-    test('a close call goes to the happier expression', () {
-      // The SDK scores a smile as contempt too: a tie is a smile.
-      for (final (tie, tag) in const [
-        ({'happy': 0.4, 'contempt': 0.4, 'neutral': 0.1}, 'happy'),
-        ({'contempt': 0.42, 'happy': 0.39}, 'happy'),
-        ({'happy': 0.45, 'neutral': 0.45}, 'happy'),
-        ({'fear': 0.44, 'surprise': 0.42}, 'surprise'),
-      ]) {
-        final t = ExpressionTagger();
-        feed(t, 0, 50, (_) => tie);
-        expect(t.tag, tag, reason: '$tie');
-      }
-    });
-
-    test('a shown #contempt gives way to a tied smile', () {
-      final t = ExpressionTagger();
-      var at = feed(t, 0, 20, (_) => const {'contempt': 0.6, 'happy': 0.1});
-      expect(t.tag, 'contempt');
-      at = feed(t, at, 30, (_) => const {'contempt': 0.42, 'happy': 0.41});
-      expect(t.tag, 'happy');
-      // A clear lead is still a clear lead.
-      feed(t, at, 30, (_) => const {'contempt': 0.6, 'happy': 0.2});
-      expect(t.tag, 'contempt');
     });
 
     test('a close call keeps the tag already shown, without blinking', () {
@@ -112,7 +89,7 @@ void main() {
 
       run(20, const {'fear': 0.6, 'neutral': 0.2});
       expect(t.tag, 'fear');
-      // Disgust (just as unhappy) creeps up to within a hair and stays.
+      // Disgust creeps up to within a hair and stays.
       run(50, const {'fear': 0.44, 'disgust': 0.42});
       expect(t.tag, 'fear');
       // Then clearly overtakes.

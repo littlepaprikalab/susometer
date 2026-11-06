@@ -320,39 +320,34 @@ class SignalLog {
   }
 
   /// The strongest each of [categories] got in [t0, t1]: the peak of its
-  /// [smoothMs] moving average, after subtracting [smile] frame by frame (so
-  /// a smile the SDK also scores as contempt doesn't count). Categories with
-  /// no samples are left out.
+  /// [smoothMs] moving average. Categories with no samples are left out.
   Map<String, double> exprPeaks(
     int t0,
     int t1,
     List<String> categories,
-    int smoothMs, {
-    String? smile,
-  }) {
+    int smoothMs,
+  ) {
     final points = [
       for (final e in expr)
         if (e.tMs >= t0 && e.tMs <= t1) e,
     ];
     if (points.isEmpty) return {};
     return {
-      for (final cat in categories)
-        cat: _smoothedPeak(points, cat, smile, smoothMs),
+      for (final cat in categories) cat: _smoothedPeak(points, cat, smoothMs),
     };
   }
 
-  /// Largest rise of any category's smoothed, smile-free score in [t0, t1]
-  /// above [basePeak] (its peak during the warm-ups, see [exprPeaks]), and
-  /// which category it was.
+  /// Largest rise of any category's smoothed score in [t0, t1] above
+  /// [basePeak] (its peak during the warm-ups, see [exprPeaks]), and which
+  /// category it was.
   (double, String?) exprPeakDelta(
     int t0,
     int t1,
     Map<String, double> basePeak,
     List<String> categories,
-    int smoothMs, {
-    String? smile,
-  }) {
-    final peaks = exprPeaks(t0, t1, categories, smoothMs, smile: smile);
+    int smoothMs,
+  ) {
+    final peaks = exprPeaks(t0, t1, categories, smoothMs);
     var best = 0.0;
     String? bestCat;
     for (final cat in categories) {
@@ -367,24 +362,18 @@ class SignalLog {
     return (best, bestCat);
   }
 
-  static double _net(ExprPoint e, String cat, String? smile) {
-    final v = (e.p[cat] ?? 0) - (smile == null ? 0 : e.p[smile] ?? 0);
-    return v > 0 ? v : 0;
-  }
-
   static double _smoothedPeak(
     List<ExprPoint> points,
     String cat,
-    String? smile,
     int smoothMs,
   ) {
     var best = 0.0;
     var start = 0;
     var sum = 0.0;
     for (var i = 0; i < points.length; i++) {
-      sum += _net(points[i], cat, smile);
+      sum += points[i].p[cat] ?? 0;
       while (points[i].tMs - points[start].tMs > smoothMs) {
-        sum -= _net(points[start], cat, smile);
+        sum -= points[start].p[cat] ?? 0;
         start++;
       }
       // The first few averages hold only a frame or two, so one noisy frame

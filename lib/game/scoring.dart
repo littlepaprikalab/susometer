@@ -36,13 +36,8 @@ class Scoring {
     // Questions are mostly listening and talking, so compare them with the
     // warm-up chat rather than the still part: people blink more talking.
     final blinkFrom = end - quietEnd >= c.calibMinChatMs ? quietEnd : start;
-    Map<String, double> peaks(int from) => log.exprPeaks(
-      from,
-      end,
-      c.exprCategories,
-      c.exprSmoothMs,
-      smile: c.exprSmile,
-    );
+    Map<String, double> peaks(int from) =>
+        log.exprPeaks(from, end, c.exprCategories, c.exprSmoothMs);
     final chatPeaks = peaks(quietEnd);
     final latencies = warmupLatenciesS.where((l) => l >= 0).toList();
     return Baseline(
@@ -217,7 +212,6 @@ class Scoring {
       base.exprPeak,
       config.exprCategories,
       config.exprSmoothMs,
-      smile: config.exprSmile,
     );
     final answerStart = timing.tA0 ?? timing.tA1;
     final hesitation =

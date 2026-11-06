@@ -10,7 +10,7 @@ import 'world.dart';
 
 void main() {
   test('an honest, smiling answer from a frequent blinker is Legit, '
-      'and the camera stamps #happy, not #contempt', () {
+      'and the camera stamps #happy', () {
     fakeAsync((async) {
       final w = World(async);
       // 10 blinks a minute sitting still, 24 while chatting and answering.
@@ -28,8 +28,7 @@ void main() {
         reason: 'the chat rate, not the still-and-chat mix',
       );
 
-      // A real question: Sam smiles while answering, and the SDK scores the
-      // smile as contempt just as much as happy.
+      // A real question: Sam smiles while answering.
       expect(w.game.phase, GamePhase.ask);
       w.elapse(300);
       w.say('Have you ever re-gifted a present?');
@@ -37,7 +36,7 @@ void main() {
       w.game.doneAsking();
       w.elapse(1300);
       w.talk(true);
-      w.expr = const {'happy': 0.4, 'contempt': 0.4, 'neutral': 0.2};
+      w.expr = const {'happy': 0.6, 'neutral': 0.3};
       w.say('Ha, no. Never. I keep everything.');
       w.elapse(2500);
       expect(w.game.live.expression.tag, 'happy');
@@ -50,7 +49,7 @@ void main() {
       w.until(() => w.game.phase == GamePhase.verdict, what: 'verdict');
 
       final b = w.game.currentResult!.breakdown!;
-      expect(b.zExpr, lessThan(0.1), reason: 'the smile cancels');
+      expect(b.zExpr, lessThan(0.1), reason: 'a smile is not scored');
       expect(b.zBlink, 0, reason: 'blinking like in the warm-ups');
       expect(b.verdict, Verdict.legit, reason: 'score ${b.score}');
       w.dispose();

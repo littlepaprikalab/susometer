@@ -60,7 +60,7 @@ class Baseline {
   final int blinkBaseMs;
 
   /// The strongest each stress expression got during the warm-ups (0..1,
-  /// smoothed, with smiles taken out; see [SignalLog.exprPeaks]).
+  /// smoothed; see [SignalLog.exprPeaks]).
   final Map<String, double> exprPeak;
 
   /// Median warm-up answer latency (s).

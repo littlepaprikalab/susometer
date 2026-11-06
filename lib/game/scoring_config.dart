@@ -17,7 +17,6 @@ class ScoringConfig {
     this.blinkChanceSpreads = 1.0,
     this.exprScale = 0.3,
     this.exprCategories = const ['surprise', 'fear', 'contempt', 'disgust'],
-    this.exprSmile = 'happy',
     this.exprSmoothMs = 1000,
     this.hesitationScaleS = 3.0,
     this.hesitationGraceS = 1.0,
@@ -105,17 +104,12 @@ class ScoringConfig {
   final double blinkFreezeMinBaselinePerMin;
   final double blinkFreezeZ;
 
-  /// zExpr = max over the window of (x[cat] − warm-up peak of x[cat]) / this,
-  /// where x is the expression's score minus [exprSmile]'s.
+  /// zExpr = max over the window of (score[cat] − warm-up peak of
+  /// score[cat]) / this, with each score smoothed over [exprSmoothMs].
   final double exprScale;
 
   /// SDK expression categories that count as a stress reaction.
   final List<String> exprCategories;
-
-  /// A stress expression counts only by how far it's above this one, so a
-  /// smile the SDK also scores as contempt (or a laugh as surprise) cancels
-  /// out, and a tie goes to the smile.
-  final String exprSmile;
 
   /// Moving-average width applied to expressions before taking the max, so a
   /// single noisy frame can't spike the score.

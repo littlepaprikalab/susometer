@@ -48,7 +48,7 @@ class Scenario {
   final double riseUp;
   final double sustainedUp;
 
-  /// A 2 s smile that the SDK scores as contempt as much as happy.
+  /// A 2 s smile (happy only).
   final double smile;
 
   /// A 3 s burst of surprise and fear with no smile.
@@ -114,7 +114,6 @@ Tally simulate(Scenario sc, {int players = 1500, int seed = 7}) {
       final p = {for (final e in x.entries) e.key: e.value.clamp(0.0, 1.0)};
       if (smileAt != null && t >= smileAt && t < smileAt + 2000) {
         p['happy'] = p['happy']! + sc.smile;
-        p['contempt'] = p['happy']!;
       }
       if (stressAt != null && t >= stressAt && t < stressAt + 3000) {
         p['surprise'] = p['surprise']! + sc.stress;
@@ -229,8 +228,7 @@ void main() {
   test('an ordinary honest answer to a real question: still Legit', () {
     // Sitting still blinks less than chatting; a real question takes longer
     // to think about and to answer than "coffee or tea?", talking raises the
-    // heart rate a little, and the answer comes with a smile the SDK also
-    // scores as contempt.
+    // heart rate a little, and the answer comes with a smile.
     final t = simulate(
       const Scenario(
         stillBlinks: 10,
@@ -264,14 +262,5 @@ void main() {
   test('a racing heart alone: mostly Hmm…', () {
     final t = simulate(const Scenario(riseUp: 12, sustainedUp: 8));
     expect(t.share(Verdict.legit), lessThanOrEqualTo(0.15), reason: '$t');
-  });
-
-  test('a smile scored as contempt changes nothing', () {
-    const honest = Scenario(thinkFactor: 2, riseUp: 4, sustainedUp: 2.5);
-    final plain = simulate(honest);
-    final smiling = simulate(
-      const Scenario(thinkFactor: 2, riseUp: 4, sustainedUp: 2.5, smile: 0.3),
-    );
-    expect(smiling.mean, closeTo(plain.mean, 1.5));
   });
 }

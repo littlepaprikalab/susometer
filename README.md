@@ -158,7 +158,7 @@ calm, honest answer scores near 0:
 |---|---|---|
 | Pulse | heartbeat shape compared with your earlier answers, first spread free ([below](#pulse-from-heartbeats)), or if the beats aren't good enough, (mean confident pulse − your baseline) ÷ 15 BPM | 0.45 |
 | Blinks | (blinks − expected − chance) ÷ (0.6 × expected), where expected = your chat rate × window (at least 6/min) and chance = √expected, widened for how long your baseline was counted. Or 0.6 for a blink "freeze" longer than chance would explain | 0.25 |
-| Expressions | how far surprise / fear / contempt / disgust, minus happy, goes above its warm-up peak, ÷ 0.3 | 0.15 |
+| Expressions | how far surprise / fear / contempt / disgust goes above its warm-up peak, ÷ 0.3 | 0.15 |
 | Hesitation | (time to start answering − your usual − 1 s) ÷ 3 s | 0.15 |
 
 `score = round(100 × (weighted sum)^0.8)`. **Legit** under 35, **Hmm…** 35–59, **Sus!** 60+.
@@ -172,18 +172,18 @@ Why each part is built that way:
   in 20 (at 17 blinks a minute that's longer than a 15 s window, so it can't happen; a fast
   blinker can freeze in about 8 s). Never under 6 s, and not below 12 blinks a minute.
 - **Expressions:** the highest moment of an answer is always above your *average*, so the
-  comparison is with your *highest* moment in the warm-ups, smoothed over 1 s. SmartSpectra often
-  scores a smile as contempt (or a laugh as surprise) too, so each stress expression counts only
-  by how far it's above happy at that moment: a tie is a smile.
+  comparison is with your *highest* moment in the warm-ups, smoothed over 1 s. Each of the four
+  counts on its own score; happy, sad, angry and neutral don't count. Presage publishes no
+  accuracy figures for its expression scores.
 - **Hesitation:** real questions take a little longer to think about than warm-ups, so the first
   extra second is free.
 - **Pulse:** beats within one robust spread of your other answers are your normal wobble.
 
 `test/calm_answers_test.dart` checks the zero point by simulation: thousands of made-up players
 answer through the real code. With nothing changed since the warm-ups, about 93% come out Legit
-and none Sus. With an ordinary honest answer (longer to think about, more talking, a smile the SDK
-also scores as contempt), about 84% are Legit and none Sus. A clear stress reaction (pulse up
-12 BPM, a 3 s pause, a blink burst, a burst of surprise) is still about 83% Sus. Before this change
+and none Sus. With an ordinary honest answer (longer to think about, more talking, a smile),
+about 85% are Legit and none Sus. A clear stress reaction (pulse up 12 BPM, a 3 s pause, a blink
+burst, a burst of surprise) is still about 87% Sus. Before the zero-point fixes (SPEC decision 65)
 the honest answer was Sus a third of the time. The noise levels in the simulation are assumptions,
 not measured on a device.
 
@@ -197,10 +197,8 @@ Sam's face for about 5 seconds") and an *Ask it again* button. Every constant li
 its top-right corner as a #tag, in the SDK's own words (#surprise, #happy, #neutral…). SmartSpectra
 gives a score per expression rather than one label, so the tag is the top score, smoothed over
 about 0.6 s and changed only once a new one has clearly led for 0.7 s, so it doesn't flicker
-and a tie never shows an arbitrary expression. A close call between a happier and a less happy
-expression goes to the happier one (happy, then neutral and surprise, then the rest), so a smile
-the SDK also scores as contempt is stamped #happy, not #contempt. Red ink
-marks the four that move the score, teal the rest. It's hidden when no expression scores clearly,
+and a tie never shows an arbitrary expression. Red ink marks the four that move the score, teal
+the rest. It's hidden when no expression scores clearly,
 there's no usable face, or the SDK stops sending new expression readings. It's the raw reading, not compared to the player's normal, so it's for
 show; the score uses the comparison. Logic: [`lib/game/expression_tag.dart`](lib/game/expression_tag.dart).
 
