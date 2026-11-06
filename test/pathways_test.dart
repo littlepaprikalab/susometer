@@ -429,7 +429,7 @@ void main() {
               chip('Looking for a face'),
               chip('Light'),
             ], 'calibrate');
-            // During a warm-up answer the "is talking" chip shows too.
+            // During a warm-up answer the "Talking" indicator shows too.
             await rig.until(
               () =>
                   rig.game.currentWarmup != null &&
@@ -437,7 +437,7 @@ void main() {
               what: 'a warm-up answer',
             );
             await rig.wait(200);
-            expect(find.textContaining('is talking'), findsOneWidget);
+            expect(find.text('Talking'), findsOneWidget);
             expectOvalClear(tester, [
               chip('Face found'),
               chip('Light'),
