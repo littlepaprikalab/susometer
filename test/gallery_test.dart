@@ -184,6 +184,16 @@ void main() {
     await rig.wait(300);
     await shot(tester, key, '07-replay');
 
+    // Only Sam played before the show ended, so that shot is the one-player
+    // name line. Give two more contestants Sam's answers for the tab row.
+    for (final t in rig.game.turns.skip(1).take(2)) {
+      t.results.addAll(rig.game.turns.first.results);
+    }
+    rig.game.backToLeaderboard();
+    rig.game.openReplay();
+    await rig.wait(300);
+    await shot(tester, key, '07b-replay-tabs');
+
     // E2, E5 and solo mode.
     await rig.tap('Play again');
     await rig.wait(300);
