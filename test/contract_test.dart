@@ -171,9 +171,15 @@ void main() {
           'traceTs',
           'traceConf',
           'insightSeen',
+          'insight',
         ],
         presageSwift,
         'PresageBridge snapshot',
+      );
+      expectAllIn(
+        ['count', 'kind', 'chars', 'at', 'analysis', 'empty'],
+        presageSwift,
+        'PresageBridge insight summary',
       );
       expectAllIn(
         ['code', 'hint', 'codeNum', 'message', 'retryable', 'e', 'ts'],

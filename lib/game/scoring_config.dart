@@ -13,10 +13,14 @@ class ScoringConfig {
     this.blinkFreezeMs = 6000,
     this.blinkFreezeMinBaselinePerMin = 12,
     this.blinkFreezeZ = 0.6,
-    this.exprScale = 0.4,
+    this.blinkFreezeChance = 0.05,
+    this.blinkChanceSpreads = 1.0,
+    this.exprScale = 0.3,
     this.exprCategories = const ['surprise', 'fear', 'contempt', 'disgust'],
-    this.exprSmoothMs = 500,
+    this.exprSmile = 'happy',
+    this.exprSmoothMs = 1000,
     this.hesitationScaleS = 3.0,
+    this.hesitationGraceS = 1.0,
     this.defaultBaseLatencyS = 1.0,
     this.pulseConfMin = 0.4,
     this.pulseMinBpm = 30,
@@ -29,7 +33,10 @@ class ScoringConfig {
     this.susFrom = 60,
     this.calibQuietMs = 20000,
     this.calibMinWarmups = 2,
+    this.calibMinChatMs = 15000,
     this.calibMaxWarmups = 3,
+    this.calibWarmupMs = 12000,
+    this.calibWarmupTalkingMs = 25000,
     this.calibMinConfidentPulseMs = 12000,
     this.calibMinFaceFraction = 0.8,
     this.calibHintAfterMs = 45000,
@@ -55,6 +62,7 @@ class ScoringConfig {
     this.shapeSmoothMs = 3000,
     this.shapeDipMs = 6000,
     this.shapeMinRefs = 2,
+    this.shapeZFree = 1.0,
     this.shapeZFull = 2.5,
     this.shapeRiseFloorBpm = 4,
     this.shapeSustainedFloorBpm = 3,
@@ -76,29 +84,49 @@ class ScoringConfig {
   /// shape can't be used (SPEC.md decision 63).
   final double pulseScaleBpm;
 
-  /// zBlink = ((rate − base) / max(base, blinkMinBaselinePerMin)) / this.
+  /// zBlink = (blinks − expected − chance) / (expected · this), where
+  /// expected = base rate × window, never under [blinkMinBaselinePerMin],
+  /// and chance is [blinkChanceSpreads] of the count's own random wobble.
   final double blinkRelativeScale;
   final double blinkMinBaselinePerMin;
 
-  /// A blink "freeze" (no blinks for this long, when the baseline rate is at
-  /// least [blinkFreezeMinBaselinePerMin]) sets zBlink to at least
-  /// [blinkFreezeZ].
+  /// Blinks come at random, so a 15 s window's count wobbles by about its
+  /// square root (Poisson) even when nothing changed. This many of those
+  /// wobbles (also allowing for the baseline's own) are free.
+  final double blinkChanceSpreads;
+
+  /// A blink "freeze" sets zBlink to at least [blinkFreezeZ]: no blinks for
+  /// so long that, at the player's own rate, a gap like it would turn up in
+  /// the window by chance less than [blinkFreezeChance] of the time. Never
+  /// shorter than [blinkFreezeMs], and only when the baseline is at least
+  /// [blinkFreezeMinBaselinePerMin] (below that, long gaps are normal).
   final int blinkFreezeMs;
+  final double blinkFreezeChance;
   final double blinkFreezeMinBaselinePerMin;
   final double blinkFreezeZ;
 
-  /// zExpr = max over the window of (p[cat] − baseExpr[cat]) / this.
+  /// zExpr = max over the window of (x[cat] − warm-up peak of x[cat]) / this,
+  /// where x is the expression's score minus [exprSmile]'s.
   final double exprScale;
 
   /// SDK expression categories that count as a stress reaction.
   final List<String> exprCategories;
 
+  /// A stress expression counts only by how far it's above this one, so a
+  /// smile the SDK also scores as contempt (or a laugh as surprise) cancels
+  /// out, and a tie goes to the smile.
+  final String exprSmile;
+
   /// Moving-average width applied to expressions before taking the max, so a
   /// single noisy frame can't spike the score.
   final int exprSmoothMs;
 
-  /// zHes = (hesitation − baseLatency) / this.
+  /// zHes = (hesitation − baseLatency − grace) / this.
   final double hesitationScaleS;
+
+  /// Real questions take a little longer to think about than warm-ups, so
+  /// this much extra pause is free.
+  final double hesitationGraceS;
   final double defaultBaseLatencyS;
 
   // --- Confidence gating (SPEC.md §5.5) ---
@@ -132,7 +160,19 @@ class ScoringConfig {
   // --- Calibration (SPEC.md §5.2) ---
   final int calibQuietMs;
   final int calibMinWarmups;
+
+  /// Calibration chats through warm-ups for at least this long (one more
+  /// warm-up if the answers were quick). The baseline blink rate and
+  /// expression peaks come from the chat (people blink more talking than
+  /// sitting still); a shorter chat falls back to the whole calibration.
+  final int calibMinChatMs;
   final int calibMaxWarmups;
+
+  /// A warm-up moves on this long after it's asked, unless the player is
+  /// still talking; then it waits up to [calibWarmupTalkingMs]. Warm-ups ask
+  /// for a sentence, so they can be compared with real answers.
+  final int calibWarmupMs;
+  final int calibWarmupTalkingMs;
   final int calibMinConfidentPulseMs;
   final double calibMinFaceFraction;
 
@@ -205,7 +245,11 @@ class ScoringConfig {
   /// Fewest earlier answers (warm-ups and questions) to compare against.
   final int shapeMinRefs;
 
-  /// A feature this many spreads above the player's usual counts in full.
+  /// A feature up to this many spreads above the player's usual is their
+  /// normal wobble and counts for nothing...
+  final double shapeZFree;
+
+  /// ...and one this many spreads above it counts in full.
   final double shapeZFull;
 
   /// Smallest spread (BPM) used for each feature, so a player whose earlier

@@ -43,9 +43,9 @@ class DeckLibrary {
   /// Small built-in fallback so a game can always start.
   static const fallback = DeckLibrary(
     warmup: [
-      'What did you have for breakfast?',
-      "What's the weather like today?",
-      "Name something you can see that's blue.",
+      'Tell me what you had for breakfast today.',
+      'Describe the weather outside right now.',
+      'Describe something blue you can see from here.',
     ],
     mild: [
       'Have you ever re-gifted a present?',

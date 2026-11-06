@@ -17,8 +17,9 @@ final class PresageBridge {
   static let methodChannelName = "sus/presage"
   static let eventChannelName = "sus/presage/stream"
 
-  /// Breathing is deliberately NOT requested (SPEC.md "Decisions made during build"):
-  /// it isn't scored, and Presage's LLM Insights need breathing + cardio active.
+  /// Breathing is deliberately NOT requested: it isn't scored. (This does not
+  /// stop Presage's LLM Insights, which auto-fire once the pulse is stable;
+  /// SPEC.md decision 67.)
   static let requestedMetrics: [MetricType] = [
     .pulseRate, .arterialPressureTrace, .hrv, .blinking, .talking, .expressions,
   ]
@@ -319,10 +320,13 @@ final class PresageBridge {
     state.status = sdk.processingStatus
     state.validation = sdk.validationStatus
     state.error = sdk.error
-    if sdk.insight != nil, !state.insightSeen {
-      // Should never happen with breathing off. Flag it so it shows on screen.
-      state.insightSeen = true
-      NSLog("[Presage] WARNING: an LLM insight was published by the SDK.")
+    if let insight = sdk.insight, state.noteInsight(insight) {
+      // SmartSpectra 3.4.0 auto-fires "vitals check-ins" (pulse and HRV values
+      // sent to Presage, which asks an LLM) and has no switch to turn them off
+      // (SPEC.md decision 67). Record what came back so the Proof Panel shows
+      // it, but never its text.
+      state.dirty = true
+      NSLog("[Presage] LLM insight #\(state.insightCount) from the SDK: \(state.insightKind ?? "?")")
     }
     if previousStatus != state.status {
       state.dirty = true
@@ -584,6 +588,15 @@ struct StreamState {
   var validation: ValidationStatus?
   var error: SmartSpectraError?
   var insightSeen = false
+  /// LLM insights the SDK published since launch, and what the last one was:
+  /// "analysis" (the LLM answered), "error" (with its message, e.g. an HTTP
+  /// status) or "empty". The analysis text itself is never kept.
+  var insightCount = 0
+  var insightKind: String?
+  var insightError: String?
+  var insightChars = 0
+  var insightAt: String?
+  var lastInsightKey: String?
   var dirty = false
 
   var pulse: Double?
@@ -616,6 +629,34 @@ struct StreamState {
   var lastBlinkTs: Int64 = 0
   var lastTalkTs: Int64 = 0
   var lastExprTs: Int64 = 0
+
+  /// Records [insight] if it's a new one; returns true if it was.
+  mutating func noteInsight(_ insight: Insight) -> Bool {
+    let key = "\(insight.requestID)|\(insight.processedAt)"
+    if insightSeen && key == lastInsightKey { return false }
+    lastInsightKey = key
+    insightSeen = true
+    insightCount += 1
+    insightAt = insight.processedAt
+    insightChars = 0
+    insightError = nil
+    guard let result = insight.result else {
+      insightKind = "empty"
+      return true
+    }
+    // OneOf_Result isn't @frozen (the SDK is built with library evolution).
+    switch result {
+    case .analysis(let text):
+      insightKind = "analysis"
+      insightChars = text.count
+    case .error(let message):
+      insightKind = "error"
+      insightError = String(message.prefix(80))
+    @unknown default:
+      insightKind = "other"
+    }
+    return true
+  }
 
   mutating func resetMeasurements() {
     pulse = nil
@@ -673,6 +714,13 @@ struct StreamState {
     }
     if let error {
       out["error"] = PresageBridge.errorMap(error)
+    }
+    if insightCount > 0 {
+      var info: [String: Any] = ["count": insightCount, "chars": insightChars]
+      if let insightKind { info["kind"] = insightKind }
+      if let insightError { info["error"] = insightError }
+      if let insightAt { info["at"] = insightAt }
+      out["insight"] = info
     }
     return out
   }

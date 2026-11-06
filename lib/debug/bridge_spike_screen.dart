@@ -345,9 +345,11 @@ class _BridgeSpikeScreenState extends State<BridgeSpikeScreen> {
                   detail: s?.validation?.hint ?? '',
                 ),
                 _Stat(
-                  label: 'LLM insight seen',
-                  value: s?.insightSeen == true ? 'YES (!)' : 'no',
-                  detail: 'should stay "no"',
+                  label: 'LLM insights',
+                  value: s?.insight != null
+                      ? '${s!.insight!.count}'
+                      : (s?.insightSeen == true ? 'yes' : 'none yet'),
+                  detail: s?.insight?.summary ?? 'SDK auto-fires them',
                 ),
               ],
             ),

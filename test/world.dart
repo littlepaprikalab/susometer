@@ -85,6 +85,10 @@ class World {
   Map<String, double> expr = const {'neutral': 0.8, 'surprise': 0.05};
   bool autoAnswerWarmups = true;
 
+  /// Time to the next blink (ms), asked after each one. Every 4 s unless a
+  /// test says otherwise (e.g. fewer while sitting still than chatting).
+  int Function() blinkEveryMs = () => 4000;
+
   /// Pulse waveform (SPEC.md decision 63). When [heart] is set, each
   /// snapshot carries the waveform since the last one, beating at
   /// `heart(t)` BPM, and the SDK pulse becomes the mean heart rate over 12 s
@@ -191,7 +195,7 @@ class World {
     if (!cameraFrozen || _frameAt == null) _frameAt = t;
     if (t >= _nextBlink) {
       _pendingEvents.add({'e': 'blinkEvent', 't': t});
-      _nextBlink = t + 4000;
+      _nextBlink = t + blinkEveryMs();
     }
     // Answer each warm-up: start talking 0.8 s after it's asked, stop 2 s later.
     final w = game.currentWarmup;

@@ -106,6 +106,34 @@ void main() {
       expect(s.events, isEmpty);
       expect(s.topExpression, isNull);
       expect(s.insightSeen, isFalse);
+      expect(s.insight, isNull);
+    });
+
+    test('parses what the SDK\'s LLM insights were, never their text', () {
+      PresageSample withInsight(Object? info) => PresageSample.fromMap({
+        't': 1,
+        'status': 'running',
+        'insightSeen': true,
+        'insight': info,
+      });
+      final answered = withInsight({
+        'count': 3,
+        'kind': 'analysis',
+        'chars': 412,
+        'at': '2026-11-06T11:05:00Z',
+      }).insight!;
+      expect(answered.count, 3);
+      expect(answered.summary, 'LLM INSIGHT ×3 (answered, 412 chars)');
+      final failed = withInsight({
+        'count': 1,
+        'kind': 'error',
+        'error': 'HTTP 429',
+      }).insight!;
+      expect(failed.summary, 'LLM INSIGHT ×1 (error: HTTP 429)');
+      // Junk from native code never throws.
+      expect(withInsight({'count': 0}).insight, isNull);
+      expect(withInsight('nope').insight, isNull);
+      expect(withInsight({'count': 2, 'kind': 7}).insight!.kind, isNull);
     });
 
     test('parses an SDK error and an unknown status', () {

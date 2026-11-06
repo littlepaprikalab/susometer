@@ -52,7 +52,9 @@ status (face position, lighting, motion).
   present 80% of the time.
 - **Questions:** each window scores four signals against that baseline: pulse rise (45%), blink
   rate change or a blink "freeze" (25%), the peak stress expression (15%), and hesitation before
-  answering (15%). Then `score = 100 × raw^0.8`.
+  answering (15%). Each counts only what's bigger than the player's own normal wobble (blinks
+  beyond chance, expressions above their warm-up peak with smiles taken out, the first second of
+  extra thinking free), so a calm, honest answer scores near 0. Then `score = 100 × raw^0.8`.
 - **Turn-taking without diarization:** SmartSpectra's **talking** flag tells the app who is
   speaking. Mic speech while the hot-seat player isn't talking is the question; speech while they
   are is the answer. The question ends when they start talking or after 1.5 s of silence, and
@@ -104,9 +106,11 @@ physiology most often.
 - **SDK telemetry is off by default** (the SDK's own default is on). Users can opt in in Settings;
   Presage then gets an anonymous per-session diagnostic summary with no video, no vitals values
   and no identifiers ([Presage telemetry docs](https://smartspectra.presagetech.com/docs/telemetry-and-privacy)).
-- **AI services: none.** SmartSpectra's LLM Insights are never used. Presage documents
-  auto-fired insights when breathing and cardio metrics are both active, so the app doesn't
-  request breathing at all and watches the SDK's `insight` property to prove none appear.
+- **LLM Insights: on, from the SDK.** SmartSpectra 3.4.0 auto-fires "vitals check-ins" once the
+  pulse is stable and every 60 s: it sends buffered pulse rate and HRV values (never video) to
+  Presage, which asks an LLM. The SDK has no switch for this. The app never requests an insight
+  and never shows one; the consent screen tells each player, and the Proof Panel shows each
+  insight the SDK publishes (answered or failed), never its text.
 - **Not medical, not a lie detector.** No diagnosis, no treatment claims, no health advice. It
   measures stress reactions for fun, and only with the hot-seat player's consent.
 

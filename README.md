@@ -34,8 +34,11 @@ Built for the DEV [Presage SmartSpectra SDK Challenge](https://dev.to/challenges
    and a Mild or Spicy deck.
 2. **Consent:** the phone goes to the hot-seat player, who reads what the camera measures and
    what happens to the data, then taps *I agree, measure me* or *Skip my turn*.
-3. **Calibrate:** about 20 s of sitting still, then 2–3 easy warm-up questions read by the host.
-   This learns *your* normal pulse, blink rate, expressions and how fast you usually answer.
+3. **Calibrate:** about 20 s of sitting still, then 2–3 easy warm-up questions read by the host,
+   each asking for a sentence ("Tell me what you had for breakfast"), and one more if the answers
+   were quick, so there's at least 15 s of chat. This learns *your* normal pulse, blink rate,
+   expressions and how fast you usually answer, while talking like you will in the real
+   questions. It ends between warm-ups, never while the host is reading one or you're answering.
 4. **Ask:** a friend asks a question out loud; it appears on screen as they speak. In solo mode
    the host reads one from the deck, and it stays on screen until you start answering or tap
    *Ready to answer*.
@@ -51,7 +54,8 @@ Built for the DEV [Presage SmartSpectra SDK Challenge](https://dev.to/challenges
 - An **iPhone on iOS 17+** (the simulator has no camera)
 - **Flutter 3.38+** (tested with 3.47.9, which uses Swift Package Manager; no CocoaPods)
 - A **Presage API key** (free) from [physiology.presagetech.com](https://physiology.presagetech.com)
-- An internet connection when a game starts (the SDK signs in; readings stay on the phone)
+- An internet connection when a game starts (the SDK signs in; video stays on the phone, but the
+  SDK sends pulse and HRV values to Presage, see [Privacy](#privacy-and-data-handling))
 
 ## Setup
 
@@ -114,41 +118,74 @@ servers; it switches to tap-to-advance instead.
 | Data | Where | Retention | Shared? |
 |---|---|---|---|
 | Camera video | Processed on-device by SmartSpectra | Never stored | Never |
-| Vitals and face signals | In-memory game state | Until the game ends or *Wipe everything* | Never |
+| Vitals and face signals | In-memory game state | Until the game ends or *Wipe everything* | Not by the app. The SDK sends pulse and HRV values to Presage (next rows) |
 | Audio | On-device Apple speech recognition (`requiresOnDeviceRecognition = true`) | Never stored | Never |
 | Transcripts (questions and answers) | In memory | Until *Wipe* or the app closes | Never. Not on the share card |
 | Names and scores | In memory | Until *Wipe* or the app closes | Only if you tap *Share results* (an image with names, scores and awards) |
 | SmartSpectra telemetry | SDK | n/a | **Off by default.** Opt in under Settings → SDK telemetry: an anonymous per-session diagnostic summary (no video, no vitals values, no identifiers) |
 | Presage API key | iOS Keychain, this device only | Until *Remove* or the app is deleted | Sent only to Presage to start a session |
 | SmartSpectra sign-in | The SDK contacts Presage with the key to start a session | n/a | Required by the SDK |
-| AI / LLM services | **None used.** SmartSpectra LLM Insights is never requested | n/a | n/a |
+| SmartSpectra LLM Insights | The SDK sends buffered pulse rate and HRV values (no video) to Presage, which asks an LLM for a "vitals check-in" | n/a | **On, and the SDK has no switch for it.** It fires on its own once the pulse is stable (~15 s in) and every 60 s after that. The app never asks for one and never shows the answer |
 
 - **No accounts, no analytics, no backend, no disk persistence.** Game data never touches
   `UserDefaults` or files. The only thing written outside the Keychain is one boolean used to
   detect a fresh install. Settings toggles reset every launch.
 - **Consent** is collected per player, per game, from the person being measured (screen 2).
   *Skip my turn* is always available.
-- **LLM Insights:** Presage documents auto-fired "vitals check-ins" that send pulse/HRV/breathing
-  values to an LLM gateway when breathing and cardio metrics are both active. Sus-o-meter never
-  requests breathing metrics, so that precondition is never met, and the app watches the SDK's
-  `insight` property and shows **LLM insight seen** in the Proof Panel if one ever appears.
+- **LLM Insights (on, and can't be turned off).** SmartSpectra 3.4.0 auto-fires "vitals
+  check-ins": once the pulse has a stable reading (about 15 s in), then when HRV does, then
+  every 60 s, it sends the buffered pulse rate and HRV values, a fixed prompt and a session ID
+  to Presage, which forwards them to an LLM. Video and face images are never sent. The SDK has
+  no setting to turn this off (`enableTelemetry` is a separate thing), so the only way to stop it
+  would be to stop measuring the pulse. An early build assumed leaving out breathing metrics
+  prevented it; on a device it didn't. The consent screen now says so, and the Proof Panel shows
+  each insight the SDK publishes (**LLM INSIGHT ×n**, and whether it was answered or failed),
+  never its text. Sources: Presage's
+  [LLM insights docs](https://github.com/Presage-Security/SmartSpectra/blob/v3.4.0/docs/llm-insights/index.md)
+  and [data types](https://github.com/Presage-Security/SmartSpectra/blob/v3.4.0/docs/data-types.md#insight).
 - See Presage's [telemetry and privacy page](https://smartspectra.presagetech.com/docs/telemetry-and-privacy).
 
 ## How the score works
 
-Everything is relative to **your own baseline** from calibration (median pulse, blink rate,
-expression means, warm-up answer speed). For each question the app measures the window from
-when the question starts until the answer ends (at least 12 s after the question ends) and
-normalizes four signals to 0–1:
+Everything is relative to **your own baseline** from calibration: median pulse, your blink rate
+while chatting through the warm-ups, the strongest each stress expression got in the warm-ups,
+and your warm-up answer speed. For each question the app measures the window from when the
+question starts until the answer ends (at least 12 s after the question ends) and normalizes
+four signals to 0–1. Each one counts **only what's bigger than your own normal wobble**, so a
+calm, honest answer scores near 0:
 
 | Signal | Formula | Weight |
 |---|---|---|
-| Pulse | heartbeat shape compared with your earlier answers ([below](#pulse-from-heartbeats)), or if the beats aren't good enough, (mean confident pulse − your baseline) ÷ 15 BPM | 0.45 |
-| Blinks | ((rate − baseline) ÷ max(baseline, 6/min)) ÷ 0.6, or 0.6 for a 6 s "blink freeze" | 0.25 |
-| Expressions | peak rise in surprise / fear / contempt / disgust above your normal ÷ 0.4 | 0.15 |
-| Hesitation | (time to start answering − your usual) ÷ 3 s | 0.15 |
+| Pulse | heartbeat shape compared with your earlier answers, first spread free ([below](#pulse-from-heartbeats)), or if the beats aren't good enough, (mean confident pulse − your baseline) ÷ 15 BPM | 0.45 |
+| Blinks | (blinks − expected − chance) ÷ (0.6 × expected), where expected = your chat rate × window (at least 6/min) and chance = √expected, widened for how long your baseline was counted. Or 0.6 for a blink "freeze" longer than chance would explain | 0.25 |
+| Expressions | how far surprise / fear / contempt / disgust, minus happy, goes above its warm-up peak, ÷ 0.3 | 0.15 |
+| Hesitation | (time to start answering − your usual − 1 s) ÷ 3 s | 0.15 |
 
 `score = round(100 × (weighted sum)^0.8)`. **Legit** under 35, **Hmm…** 35–59, **Sus!** 60+.
+
+Why each part is built that way:
+
+- **Blinks** come at random, so a 15 s window's count wobbles by about its square root even when
+  nothing changed. Only blinks beyond that count. People also blink more talking than sitting
+  still, so the baseline is the warm-up chat, not the still part. A **freeze** counts only if no
+  blink came for so long that, at your rate, a gap like it would turn up by chance less than 1 time
+  in 20 (at 17 blinks a minute that's longer than a 15 s window, so it can't happen; a fast
+  blinker can freeze in about 8 s). Never under 6 s, and not below 12 blinks a minute.
+- **Expressions:** the highest moment of an answer is always above your *average*, so the
+  comparison is with your *highest* moment in the warm-ups, smoothed over 1 s. SmartSpectra often
+  scores a smile as contempt (or a laugh as surprise) too, so each stress expression counts only
+  by how far it's above happy at that moment: a tie is a smile.
+- **Hesitation:** real questions take a little longer to think about than warm-ups, so the first
+  extra second is free.
+- **Pulse:** beats within one robust spread of your other answers are your normal wobble.
+
+`test/calm_answers_test.dart` checks the zero point by simulation: thousands of made-up players
+answer through the real code. With nothing changed since the warm-ups, about 93% come out Legit
+and none Sus. With an ordinary honest answer (longer to think about, more talking, a smile the SDK
+also scores as contempt), about 84% are Legit and none Sus. A clear stress reaction (pulse up
+12 BPM, a 3 s pause, a blink burst, a burst of surprise) is still about 83% Sus. Before this change
+the honest answer was Sus a third of the time. The noise levels in the simulation are assumptions,
+not measured on a device.
 
 **No fake verdicts:** pulse samples below 40% confidence, or that arrive while SmartSpectra's
 validation isn't OK, are ignored. If less than 60% of the window has a present face and a fresh
@@ -160,7 +197,9 @@ Sam's face for about 5 seconds") and an *Ask it again* button. Every constant li
 its top-right corner as a #tag, in the SDK's own words (#surprise, #happy, #neutral…). SmartSpectra
 gives a score per expression rather than one label, so the tag is the top score, smoothed over
 about 0.6 s and changed only once a new one has clearly led for 0.7 s, so it doesn't flicker
-and a tie never shows an arbitrary expression. Red ink
+and a tie never shows an arbitrary expression. A close call between a happier and a less happy
+expression goes to the happier one (happy, then neutral and surprise, then the rest), so a smile
+the SDK also scores as contempt is stamped #happy, not #contempt. Red ink
 marks the four that move the score, teal the rest. It's hidden when no expression scores clearly,
 there's no usable face, or the SDK stops sending new expression readings. It's the raw reading, not compared to the player's normal, so it's for
 show; the score uses the comparison. Logic: [`lib/game/expression_tag.dart`](lib/game/expression_tag.dart).
@@ -185,8 +224,8 @@ three things from it, compared with your level in the 5 s just before the questi
   heart-rate response that concealed-information studies most often report.
 
 Each one is compared with the same player's **warm-ups and earlier questions**: how far it is above
-their median, in robust spreads (1.4826 × median absolute deviation, at least 4 / 3 / 3 BPM). 2.5
-spreads counts in full. The pulse part is 0.4 × rise + 0.4 × ran high + 0.2 × slowdown. So a
+their median, in robust spreads (1.4826 × median absolute deviation, at least 4 / 3 / 3 BPM). The
+first spread is their normal wobble and counts for nothing; 2.5 spreads counts in full. The pulse part is 0.4 × rise + 0.4 × ran high + 0.2 × slowdown. So a
 question is sus when your heart did something your other answers didn't, and a turn that's tense
 throughout doesn't make every question look sus.
 

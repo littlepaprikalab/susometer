@@ -10,7 +10,10 @@ import 'dart:math' as math;
 /// - smooths each score over about [smoothMs],
 /// - changes the tag only once a new leader has held for [holdMs],
 /// - brings up a tag only when it leads the runner-up by [minMargin], so a
-///   tie never shows an arbitrary expression,
+///   tie never shows an arbitrary expression, except that a close call
+///   between a happier and a less happy expression goes to the happier one
+///   (see [positivity]): the SDK often scores a smile as contempt too, and
+///   a tie there shouldn't stamp the player #contempt,
 /// - hides it when nothing scores at least [minScore], and drops it after
 ///   [lostMs] without a usable face or without a fresh expression sample
 ///   (none for over [staleMs]).
@@ -41,6 +44,15 @@ class ExpressionTagger {
     'sad',
     'surprise',
   ];
+
+  /// How positive each expression is, for close calls: happy, then neutral
+  /// and surprise, then the rest. The score's stress expressions are
+  /// cancelled by a smile the same way (ScoringConfig.exprSmile).
+  static int positivity(String label) => switch (label) {
+    'happy' => 2,
+    'neutral' || 'surprise' => 1,
+    _ => 0,
+  };
 
   final int smoothMs;
   final int holdMs;
@@ -122,13 +134,21 @@ class ExpressionTagger {
     } else if (best - _avg[second] >= minMargin) {
       candidate = labels[lead];
     } else {
-      // A close call: which of the two leads is arbitrary, so it never
-      // brings up a tag. A tag already shown stays while it's one of them,
-      // rather than blinking off and on as the gap hovers at the margin.
-      final shown = _shown;
-      candidate = shown == labels[lead] || shown == labels[second]
-          ? shown
-          : null;
+      final a = positivity(labels[lead]);
+      final b = positivity(labels[second]);
+      if (a != b) {
+        // A close call between a happier and a less happy expression: the
+        // happier one, so a smile also scored as contempt reads as a smile.
+        candidate = a > b ? labels[lead] : labels[second];
+      } else {
+        // Otherwise which of the two leads is arbitrary, so it never brings
+        // up a tag. A tag already shown stays while it's one of them, rather
+        // than blinking off and on as the gap hovers at the margin.
+        final shown = _shown;
+        candidate = shown == labels[lead] || shown == labels[second]
+            ? shown
+            : null;
+      }
     }
 
     if (candidate == _shown) {

@@ -72,7 +72,7 @@ PulseShape shape({
 const base = Baseline(
   pulse: 70,
   blinkRatePerMin: 15,
-  expr: {},
+  exprPeak: {},
   latencyS: 1,
   confidentPulseMs: 20000,
   faceFraction: 1,
@@ -81,6 +81,7 @@ const base = Baseline(
 WindowFeatures featuresWith(PulseShape? s, {double meanPulse = 76}) =>
     WindowFeatures(
       meanPulse: meanPulse,
+      windowMs: 15000,
       blinkRatePerMin: 15,
       blinkFreeze: false,
       exprPeakDelta: 0,
@@ -210,9 +211,9 @@ void main() {
     });
 
     test('each part is distance from the median in spreads', () {
-      // rise: median 3, MAD 1 → spread max(1.48, 4) = 4; +5 BPM is 1.25
-      // spreads, half of the 2.5 for full marks.
-      final r = scoring.rankShape(shape(rise: 8, sustained: 1, dip: 1), refs)!;
+      // rise: median 3, MAD 1 → spread max(1.48, 4) = 4; +7 BPM is 1.75
+      // spreads: the first is free, so it's half way from 1 to 2.5.
+      final r = scoring.rankShape(shape(rise: 10, sustained: 1, dip: 1), refs)!;
       expect(r.rise, closeTo(0.5, 1e-9));
       expect(
         r.zPulse,
@@ -223,8 +224,13 @@ void main() {
 
     test('alike earlier answers don\'t turn a wobble into a spike', () {
       final same = [for (var i = 0; i < 4; i++) shape(rise: 2)];
-      final r = scoring.rankShape(shape(rise: 3), same)!;
-      expect(r.rise, closeTo(1 / cfg.shapeRiseFloorBpm / cfg.shapeZFull, 1e-9));
+      // +1 BPM is a quarter of the 4 BPM floor: inside the free spread.
+      expect(scoring.rankShape(shape(rise: 3), same)!.rise, 0);
+      // +6 BPM is 1.5 floors: a third of the way from 1 to 2.5.
+      expect(
+        scoring.rankShape(shape(rise: 8), same)!.rise,
+        closeTo(1 / 3, 1e-9),
+      );
     });
 
     test('a missing dip counts as none', () {

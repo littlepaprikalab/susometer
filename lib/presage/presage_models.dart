@@ -133,6 +133,7 @@ class PresageSample {
     this.trace = const [],
     this.traceSamples = const [],
     this.insightSeen = false,
+    this.insight,
   });
 
   final int tMs;
@@ -192,9 +193,13 @@ class PresageSample {
   /// don't line up.
   final List<TraceSample> traceSamples;
 
-  /// True if the SDK ever published an LLM insight. Should stay false: the
-  /// app never enables Insights (SPEC.md §8).
+  /// True if the SDK ever published an LLM insight. SmartSpectra 3.4.0
+  /// auto-fires them once the pulse is stable and offers no switch to turn
+  /// them off (SPEC.md decision 67); the app never asks for one.
   final bool insightSeen;
+
+  /// What the SDK's insights were, if it published any.
+  final InsightInfo? insight;
 
   /// The strongest expression, if any.
   MapEntry<String, double>? get topExpression {
@@ -259,7 +264,61 @@ class PresageSample {
       trace: trace,
       traceSamples: traceSamples,
       insightSeen: m['insightSeen'] as bool? ?? false,
+      insight: InsightInfo.fromMap(m['insight']),
     );
+  }
+}
+
+/// The LLM insights SmartSpectra published since launch (SPEC.md decision
+/// 66). The bridge keeps only what kind the last one was, never its text.
+class InsightInfo {
+  const InsightInfo({
+    required this.count,
+    this.kind,
+    this.error,
+    this.chars = 0,
+    this.at,
+  });
+
+  final int count;
+
+  /// "analysis" (the LLM answered), "error", "empty", or "other" for a kind
+  /// newer than SDK 3.4.0.
+  final String? kind;
+
+  /// The error message, e.g. an HTTP status or a transport error. A
+  /// transport error may mean the values never left the phone.
+  final String? error;
+
+  /// Length of the analysis text (the text itself never crosses the bridge).
+  final int chars;
+
+  /// When Presage produced it (ISO time, as the SDK gives it).
+  final String? at;
+
+  static InsightInfo? fromMap(Object? raw) {
+    if (raw is! Map) return null;
+    final count = _int(raw['count']) ?? 0;
+    if (count <= 0) return null;
+    String? text(Object? v) => v is String ? v : null;
+    return InsightInfo(
+      count: count,
+      kind: text(raw['kind']),
+      error: text(raw['error']),
+      chars: _int(raw['chars']) ?? 0,
+      at: text(raw['at']),
+    );
+  }
+
+  /// One line for the Proof Panel.
+  String get summary {
+    final last = switch (kind) {
+      'analysis' => 'answered, $chars chars',
+      'error' => 'error: ${error ?? '?'}',
+      null => 'empty',
+      final other => other,
+    };
+    return 'LLM INSIGHT ×$count ($last)';
   }
 }
 

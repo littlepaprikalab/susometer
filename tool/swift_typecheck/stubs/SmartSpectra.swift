@@ -60,7 +60,17 @@ public struct Hrv: Sendable { public var rmssd: Double = 0; public var meanNn: D
 public struct Face: Sendable { public var blinking: [DetectionStatus] = []; public var talking: [DetectionStatus] = []; public var expression: [Expression] = []; public init() {} }
 public struct Cardio: Sendable { public var pulseRate: [MeasurementWithConfidence] = []; public var arterialPressureTrace: [MeasurementWithConfidence] = []; public var hrv: [Hrv] = []; public init() {} }
 public struct Metrics: @unchecked Sendable { public var cardio = Cardio(); public var face = Face(); public init() {} }
-public struct Insight: Sendable { public var requestID: Int32 = 0; public init() {} }
+public enum InsightType: Sendable, Equatable { case vitals; case speech; case combined; case UNRECOGNIZED(Int) }
+public struct Insight: Sendable {
+  public var requestID: Int32 = 0
+  public var processedAt: String = ""
+  public var result: Insight.OneOf_Result?
+  public var analysis: String { get { "" } set {} }
+  public var error: String { get { "" } set {} }
+  public var type: InsightType = .vitals
+  public enum OneOf_Result: Equatable, Sendable { case analysis(String); case error(String) }
+  public init() {}
+}
 
 @MainActor final public class SmartSpectraConfig {
   final public var imageOutputEnabled: Bool = true

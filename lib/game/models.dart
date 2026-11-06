@@ -40,33 +40,40 @@ class Baseline {
   const Baseline({
     required this.pulse,
     required this.blinkRatePerMin,
-    required this.expr,
+    required this.exprPeak,
     required this.latencyS,
     required this.confidentPulseMs,
     required this.faceFraction,
-    this.talkingBlinkRatePerMin,
+    this.blinkBaseMs = 0,
   });
 
   /// Median confident pulse (BPM).
   final double pulse;
+
+  /// Blinks per minute while chatting through the warm-ups (the whole
+  /// calibration if the chat was too short to count).
   final double blinkRatePerMin;
 
-  /// Mean probability per expression category (0..1), from the chat phase.
-  final Map<String, double> expr;
+  /// How long [blinkRatePerMin] was counted over (ms), so the score knows
+  /// how much it can trust it. 0 means unknown: only the question's own
+  /// chance wobble is allowed for.
+  final int blinkBaseMs;
+
+  /// The strongest each stress expression got during the warm-ups (0..1,
+  /// smoothed, with smiles taken out; see [SignalLog.exprPeaks]).
+  final Map<String, double> exprPeak;
 
   /// Median warm-up answer latency (s).
   final double latencyS;
   final int confidentPulseMs;
   final double faceFraction;
-
-  /// Blink rate while chatting, for the Proof Panel.
-  final double? talkingBlinkRatePerMin;
 }
 
 /// Features of one question window, before weighting.
 class WindowFeatures {
   const WindowFeatures({
     required this.meanPulse,
+    required this.windowMs,
     required this.blinkRatePerMin,
     required this.blinkFreeze,
     required this.exprPeakDelta,
@@ -78,8 +85,15 @@ class WindowFeatures {
   });
 
   final double? meanPulse;
+
+  /// Length of the scored window (ms).
+  final int windowMs;
   final double blinkRatePerMin;
+
+  /// No blinks for longer than chance would explain at the player's rate.
   final bool blinkFreeze;
+
+  /// How far the strongest stress expression went above its warm-up peak.
   final double exprPeakDelta;
   final String? exprPeakCategory;
   final double hesitationS;

@@ -39,11 +39,16 @@ void main() {
         for (var q = 0; q < 7; q++) {
           final voters = w.game.voters.map((v) => v.id).toList();
           expect(voters.length, 7);
+          // Every third answer reacts on two signals (a pulse alone can't
+          // reach Sus), so some verdicts are Sus and votes can match.
+          final stressed = q % 3 == 2;
+          if (stressed) w.expr = const {'neutral': 0.3, 'surprise': 0.6};
           w.askAndAnswer(
             question: 'Question $q for ${names[p]}?',
-            answerPulse: 70.0 + (q * 4) % 25,
+            answerPulse: stressed ? 92 : 70.0 + (q * 4) % 25,
             votesSus: voters.where((id) => id.hashCode.isEven).toList(),
           );
+          w.expr = const {'neutral': 0.8, 'surprise': 0.05};
           maxFrames = maxFrames < w.game.log.frames.length
               ? w.game.log.frames.length
               : maxFrames;

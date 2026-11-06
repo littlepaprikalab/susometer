@@ -77,7 +77,8 @@ void main() {
       expect(base.latencyS, 1.0);
       expect(base.confidentPulseMs, greaterThanOrEqualTo(12000));
       expect(base.faceFraction, 1.0);
-      expect(base.expr['surprise'], closeTo(0.05, 1e-9));
+      expect(base.blinkBaseMs, 20000, reason: 'the warm-up chat');
+      expect(base.exprPeak['surprise'], closeTo(0.05, 1e-9));
       expect(scoring.baselineValid(base), isTrue);
     });
 
@@ -156,7 +157,7 @@ void main() {
       addQuestion(
         log,
         pulse: 90,
-        blinkRate: 32,
+        blinkRate: 40,
         expr: (t) => t >= 55000 && t <= 58000
             ? const {'neutral': 0.3, 'surprise': 0.55, 'fear': 0.1}
             : const {'neutral': 0.85, 'surprise': 0.05, 'fear': 0.02},
@@ -173,8 +174,8 @@ void main() {
 
     test('a moderate reaction lands in Hmm…', () {
       final (log, base) = calmBaseline();
-      addQuestion(log, pulse: 79, blinkRate: 20);
-      final f = scoring.features(log, timing(tA0: 55000), base);
+      addQuestion(log, pulse: 80, blinkRate: 20);
+      final f = scoring.features(log, timing(tA0: 56000), base);
       final s = scoring.score(f, base);
       expect(s.verdict, Verdict.hmm, reason: 'score was ${s.score}');
     });
@@ -183,18 +184,22 @@ void main() {
       final base = const Baseline(
         pulse: 70,
         blinkRatePerMin: 15,
-        expr: {'surprise': 0.1},
+        blinkBaseMs: 30000,
+        exprPeak: {'surprise': 0.1},
         latencyS: 1.0,
         confidentPulseMs: 20000,
         faceFraction: 1,
       );
-      const f = WindowFeatures(
+      final f = WindowFeatures(
         meanPulse: 77.5, // zPulse 0.5
-        blinkRatePerMin: 19.5, // (4.5/15)/0.6 = 0.5
+        windowMs: 60000,
+        // Expected 15 in the minute; chance wobble √(15 · (1 + 1/0.5));
+        // then 0.5 · 15 · 0.6 = 4.5 more.
+        blinkRatePerMin: 15 + math.sqrt(45) + 4.5,
         blinkFreeze: false,
-        exprPeakDelta: 0.2, // 0.2/0.4 = 0.5
+        exprPeakDelta: 0.15, // 0.15/0.3 = 0.5
         exprPeakCategory: 'surprise',
-        hesitationS: 2.5, // (1.5)/3 = 0.5
+        hesitationS: 3.5, // (3.5 − 1 − 1 grace)/3 = 0.5
         cleanFraction: 1,
         confidentPulseSamples: 10,
       );
@@ -212,13 +217,14 @@ void main() {
       final base = const Baseline(
         pulse: 80,
         blinkRatePerMin: 20,
-        expr: {},
+        exprPeak: {},
         latencyS: 2,
         confidentPulseMs: 20000,
         faceFraction: 1,
       );
       const f = WindowFeatures(
         meanPulse: 70,
+        windowMs: 15000,
         blinkRatePerMin: 5,
         blinkFreeze: false,
         exprPeakDelta: 0,
@@ -237,13 +243,14 @@ void main() {
       final base = const Baseline(
         pulse: 70,
         blinkRatePerMin: 20,
-        expr: {},
+        exprPeak: {},
         latencyS: 1,
         confidentPulseMs: 20000,
         faceFraction: 1,
       );
       const f = WindowFeatures(
         meanPulse: 70,
+        windowMs: 15000,
         blinkRatePerMin: 0,
         blinkFreeze: true,
         exprPeakDelta: 0,
@@ -257,7 +264,7 @@ void main() {
       final lowBase = const Baseline(
         pulse: 70,
         blinkRatePerMin: 8,
-        expr: {},
+        exprPeak: {},
         latencyS: 1,
         confidentPulseMs: 20000,
         faceFraction: 1,
@@ -283,6 +290,67 @@ void main() {
       );
     });
 
+    test('a freeze must be longer than chance would explain', () {
+      // At 17 blinks a minute, a 15 s window needs ~15.7 s without one (so
+      // never); a fast blinker's freeze can be shorter; never under 6 s.
+      expect(scoring.blinkFreezeMs(17, 15000), closeTo(15682, 5));
+      expect(scoring.blinkFreezeMs(40, 15000), closeTo(7948, 5));
+      expect(scoring.blinkFreezeMs(200, 15000), cfg.blinkFreezeMs);
+      expect(scoring.blinkFreezeMs(0, 15000), cfg.blinkFreezeMs);
+    });
+
+    test('blinking like you did in the warm-ups is free', () {
+      // Still 10/min, chatting 22/min: the chat rate is the baseline, and a
+      // couple of blinks over it is chance.
+      final log = SignalLog(config: cfg);
+      for (final s in synth(
+        start: 0,
+        end: 40000,
+        pulse: (_) => 70,
+        blinks: [...every(0, 20000, 10), ...every(20000, 40000, 22)],
+      )) {
+        log.add(s);
+      }
+      final base = scoring.baseline(
+        log,
+        start: 0,
+        quietEnd: 20000,
+        end: 40000,
+        warmupLatenciesS: const [1],
+      )!;
+      expect(base.blinkRatePerMin, closeTo(22, 1.5));
+      for (final s in synth(
+        start: 40100,
+        end: 70000,
+        pulse: (_) => 70,
+        blinks: every(40100, 70000, 26),
+      )) {
+        log.add(s);
+      }
+      final f = scoring.features(log, timing(), base);
+      expect(scoring.blinkPart(f, base), 0);
+    });
+
+    test('a short warm-up chat falls back to the whole calibration', () {
+      final log = SignalLog(config: cfg);
+      for (final s in synth(
+        start: 0,
+        end: 30000,
+        pulse: (_) => 70,
+        blinks: every(0, 30000, 12),
+      )) {
+        log.add(s);
+      }
+      final base = scoring.baseline(
+        log,
+        start: 0,
+        quietEnd: 20000,
+        end: 30000,
+        warmupLatenciesS: const [],
+      )!;
+      expect(base.blinkBaseMs, 30000);
+    });
+
     test('custom ScoringConfig weights are honored', () {
       const pulseOnly = Scoring(
         ScoringConfig(
@@ -296,13 +364,14 @@ void main() {
       final base = const Baseline(
         pulse: 70,
         blinkRatePerMin: 15,
-        expr: {},
+        exprPeak: {},
         latencyS: 1,
         confidentPulseMs: 20000,
         faceFraction: 1,
       );
       const f = WindowFeatures(
         meanPulse: 76,
+        windowMs: 15000,
         blinkRatePerMin: 60,
         blinkFreeze: false,
         exprPeakDelta: 1,
@@ -412,6 +481,77 @@ void main() {
     );
     expect(sustained, closeTo(0.95, 1e-9));
     expect(cat, 'surprise');
+  });
+
+  group('expressions (smiles cancel, warm-up peaks are free)', () {
+    SignalLog faceLog(Map<String, double> Function(int t) expr) {
+      final log = SignalLog(config: cfg);
+      for (final s in synth(start: 0, end: 10000, expr: expr)) {
+        log.add(s);
+      }
+      return log;
+    }
+
+    test('contempt scored as high as happy is a smile, not contempt', () {
+      final log = faceLog(
+        (t) => t >= 4000 && t < 7000
+            ? const {'happy': 0.4, 'contempt': 0.4, 'neutral': 0.2}
+            : const {'neutral': 0.9, 'contempt': 0.05},
+      );
+      final (smile, _) = log.exprPeakDelta(
+        0,
+        10000,
+        const {},
+        cfg.exprCategories,
+        cfg.exprSmoothMs,
+        smile: cfg.exprSmile,
+      );
+      expect(smile, closeTo(0.05, 1e-9), reason: 'only the resting 0.05');
+    });
+
+    test('contempt above happy counts by the difference', () {
+      final log = faceLog(
+        (t) => t >= 4000 && t < 7000
+            ? const {'happy': 0.1, 'contempt': 0.5}
+            : const {'neutral': 0.9},
+      );
+      final (delta, cat) = log.exprPeakDelta(
+        0,
+        10000,
+        const {},
+        cfg.exprCategories,
+        cfg.exprSmoothMs,
+        smile: cfg.exprSmile,
+      );
+      expect(delta, closeTo(0.4, 1e-9));
+      expect(cat, 'contempt');
+    });
+
+    test('a face no stronger than in the warm-ups adds nothing', () {
+      Map<String, double> wobble(int t) => {
+        'neutral': 0.7,
+        'surprise': 0.1 + 0.1 * math.sin(t / 700),
+      };
+      final log = SignalLog(config: cfg);
+      for (final s in synth(
+        start: 0,
+        end: 70000,
+        pulse: (_) => 70,
+        expr: wobble,
+      )) {
+        log.add(s);
+      }
+      final base = scoring.baseline(
+        log,
+        start: 0,
+        quietEnd: 20000,
+        end: 40000,
+        warmupLatenciesS: const [1],
+      )!;
+      expect(base.exprPeak['surprise'], closeTo(0.2, 0.01));
+      final f = scoring.features(log, timing(), base);
+      expect(f.exprPeakDelta, lessThan(0.01));
+    });
   });
 
   test('verdict bands: <35 Legit, 35–59 Hmm…, ≥60 Sus!', () {

@@ -45,7 +45,11 @@ class ProofPanel extends StatelessWidget {
           final camAge = s?.frameAgeMs;
           final lines = <String>[
             'SDK ${s?.status.name ?? 'idle'} · telemetry ${telemetry ? 'ON' : 'off'}'
-                '${s?.insightSeen == true ? ' · LLM INSIGHT SEEN' : ''}',
+                '${s?.insight != null
+                    ? ' · ${s!.insight!.summary}'
+                    : s?.insightSeen == true
+                    ? ' · LLM INSIGHT SEEN'
+                    : ''}',
             'pulse ${s?.pulse?.toStringAsFixed(1) ?? '--'} bpm  conf ${pct(s?.pulseConf)}'
                 '${s?.pulseStable == true ? ' stable' : ''}',
             'rmssd ${s?.rmssd?.toStringAsFixed(1) ?? '--'} ms  conf ${pct(s?.hrvConf)}',
