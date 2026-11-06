@@ -53,7 +53,7 @@ status (face position, lighting, motion).
 - **Questions:** each window scores four signals against that baseline: pulse rise (45%), blink
   rate change or a blink "freeze" (25%), the peak stress expression (15%), and hesitation before
   answering (15%). Each counts only what's bigger than the player's own normal wobble (blinks
-  beyond chance, expressions above their warm-up peak with smiles taken out, the first second of
+  beyond chance, expressions above their warm-up peak, the first second of
   extra thinking free), so a calm, honest answer scores near 0. Then `score = 100 × raw^0.8`.
 - **Turn-taking without diarization:** SmartSpectra's **talking** flag tells the app who is
   speaking. Mic speech while the hot-seat player isn't talking is the question; speech while they

@@ -483,7 +483,7 @@ void main() {
     expect(cat, 'surprise');
   });
 
-  group('expressions (smiles cancel, warm-up peaks are free)', () {
+  group('expressions (warm-up peaks are free)', () {
     SignalLog faceLog(Map<String, double> Function(int t) expr) {
       final log = SignalLog(config: cfg);
       for (final s in synth(start: 0, end: 10000, expr: expr)) {
@@ -492,27 +492,11 @@ void main() {
       return log;
     }
 
-    test('contempt scored as high as happy is a smile, not contempt', () {
+    test('each stress expression counts on its own score', () {
+      // Happy alongside it doesn't change it.
       final log = faceLog(
         (t) => t >= 4000 && t < 7000
-            ? const {'happy': 0.4, 'contempt': 0.4, 'neutral': 0.2}
-            : const {'neutral': 0.9, 'contempt': 0.05},
-      );
-      final (smile, _) = log.exprPeakDelta(
-        0,
-        10000,
-        const {},
-        cfg.exprCategories,
-        cfg.exprSmoothMs,
-        smile: cfg.exprSmile,
-      );
-      expect(smile, closeTo(0.05, 1e-9), reason: 'only the resting 0.05');
-    });
-
-    test('contempt above happy counts by the difference', () {
-      final log = faceLog(
-        (t) => t >= 4000 && t < 7000
-            ? const {'happy': 0.1, 'contempt': 0.5}
+            ? const {'happy': 0.4, 'contempt': 0.5}
             : const {'neutral': 0.9},
       );
       final (delta, cat) = log.exprPeakDelta(
@@ -521,10 +505,26 @@ void main() {
         const {},
         cfg.exprCategories,
         cfg.exprSmoothMs,
-        smile: cfg.exprSmile,
       );
-      expect(delta, closeTo(0.4, 1e-9));
+      expect(delta, closeTo(0.5, 1e-9));
       expect(cat, 'contempt');
+    });
+
+    test('a smile alone adds nothing', () {
+      final log = faceLog(
+        (t) => t >= 4000 && t < 7000
+            ? const {'happy': 0.8, 'neutral': 0.2}
+            : const {'neutral': 0.9},
+      );
+      final (delta, cat) = log.exprPeakDelta(
+        0,
+        10000,
+        const {},
+        cfg.exprCategories,
+        cfg.exprSmoothMs,
+      );
+      expect(delta, 0);
+      expect(cat, isNull);
     });
 
     test('a face no stronger than in the warm-ups adds nothing', () {
