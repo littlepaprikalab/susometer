@@ -65,13 +65,16 @@ class _ChunkyButtonState extends State<ChunkyButton> {
         ],
         if (widget.showLabel)
           Flexible(
-            child: Text(
-              widget.label,
-              overflow: TextOverflow.ellipsis,
-              style: SusText.body(
-                widget.fontSize,
-                weight: FontWeight.w700,
-                color: widget.textColor,
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Text(
+                widget.label,
+                maxLines: 1,
+                style: SusText.body(
+                  widget.fontSize,
+                  weight: FontWeight.w700,
+                  color: widget.textColor,
+                ),
               ),
             ),
           ),

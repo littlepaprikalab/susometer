@@ -146,6 +146,30 @@ class Scoring {
     return reasons;
   }
 
+  /// E4 heading for the biggest issue in the window.
+  String noCleanReadTitle(SignalLog log, QuestionTiming timing) {
+    final t1 = timing.windowEnd(config.minWindowAfterQuestionMs);
+    for (final (code, ms, _) in log.validationIssues(timing.tQ0, t1)) {
+      if (ms < 800) continue;
+      switch (code) {
+        case 'EXCESSIVE_MOTION':
+          return 'Too much wiggle on that one';
+        case 'TOO_DARK' || 'TOO_BRIGHT':
+          return 'The light got in the way';
+        case 'NO_FACE_FOUND' || 'MULTIPLE_FACES_FOUND':
+          return 'Lost the face on that one';
+        case 'FACE_TOO_FAR' || 'FACE_TOO_CLOSE' || 'FACE_SIZE_OUT_OF_RANGE':
+          return 'Not quite the right distance';
+        case 'FACE_NOT_CENTERED' ||
+            'FACE_TOO_HIGH' ||
+            'FACE_TOO_LOW' ||
+            'FACE_NOT_FORWARD':
+          return 'The face drifted out of the oval';
+      }
+    }
+    return 'The meter couldn\'t get a read';
+  }
+
   static String? describeIssue(String code, int ms, String name, String hint) {
     final secs = (ms / 1000).round();
     return switch (code) {

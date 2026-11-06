@@ -33,13 +33,14 @@ class CallItScreen extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Flexible(
                 child: HotSeatPill(
                   "${game.currentPlayer.name}'s in the hot seat",
                 ),
               ),
-              const Spacer(),
+              const SizedBox(width: 8),
               Text('Reveal in ${left}s', style: SusText.display(16)),
             ],
           ),
@@ -76,17 +77,25 @@ class CallItScreen extends StatelessWidget {
           const SizedBox(height: 12),
           Expanded(
             child: SingleChildScrollView(
-              child: Wrap(
-                spacing: 10,
-                runSpacing: 10,
-                children: [
-                  for (final p in game.voters)
-                    _VoteChip(
-                      player: p,
-                      vote: game.pendingVotes[p.id],
-                      onTap: () => game.cycleVote(p.id),
-                    ),
-                ],
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  final chipWidth = (constraints.maxWidth - 10) / 2;
+                  return Wrap(
+                    spacing: 10,
+                    runSpacing: 10,
+                    children: [
+                      for (final p in game.voters)
+                        SizedBox(
+                          width: chipWidth,
+                          child: _VoteChip(
+                            player: p,
+                            vote: game.pendingVotes[p.id],
+                            onTap: () => game.cycleVote(p.id),
+                          ),
+                        ),
+                    ],
+                  );
+                },
               ),
             ),
           ),
@@ -135,7 +144,6 @@ class _VoteChip extends StatelessWidget {
         onTap: onTap,
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 120),
-          width: 166,
           height: 76,
           padding: const EdgeInsets.symmetric(horizontal: 12),
           decoration: BoxDecoration(
@@ -269,12 +277,13 @@ class VerdictScreen extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
                 'Question ${game.questionIndex + 1}',
                 style: SusText.display(18),
               ),
-              const Spacer(),
+              const SizedBox(width: 8),
               Flexible(child: HotSeatPill("$name's in the hot seat")),
             ],
           ),

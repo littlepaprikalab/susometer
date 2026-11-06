@@ -153,29 +153,9 @@ class _LobbyScreenState extends State<LobbyScreen> {
                       style: SusText.body(16, weight: FontWeight.w600),
                     ),
                     const SizedBox(height: 14),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: FittedBox(
-                            fit: BoxFit.scaleDown,
-                            alignment: Alignment.centerLeft,
-                            child: Text(
-                              'Contestants',
-                              style: SusText.display(22),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Flexible(
-                          flex: 3,
-                          child: FittedBox(
-                            fit: BoxFit.scaleDown,
-                            alignment: Alignment.centerRight,
-                            child: _ModeToggle(game: game),
-                          ),
-                        ),
-                      ],
-                    ),
+                    Text('Contestants', style: SusText.display(22)),
+                    const SizedBox(height: 8),
+                    _ModeToggle(game: game),
                     const SizedBox(height: 10),
                     for (final p in game.players) ...[
                       _PlayerRow(
@@ -296,10 +276,9 @@ class _ModeToggle extends StatelessWidget {
       ),
       clipBehavior: Clip.antiAlias,
       child: Row(
-        mainAxisSize: MainAxisSize.min,
         children: [
-          option('Party', GameMode.party),
-          option('Solo · host asks', GameMode.solo),
+          Expanded(child: option('Party', GameMode.party)),
+          Expanded(child: option('Solo · host asks', GameMode.solo)),
         ],
       ),
     );

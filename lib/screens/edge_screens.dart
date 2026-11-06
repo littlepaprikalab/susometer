@@ -172,12 +172,13 @@ class RedoScreen extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
                 'Question ${game.questionIndex + 1}',
                 style: SusText.display(18),
               ),
-              const Spacer(),
+              const SizedBox(width: 8),
               Flexible(
                 child: HotSeatPill(
                   "${game.currentPlayer.name}'s in the hot seat",
@@ -212,7 +213,11 @@ class RedoScreen extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Text('Too much wiggle on that one', style: SusText.display(18)),
+                Text(
+                  game.currentResult?.noCleanReadTitle ??
+                      'The meter couldn\'t get a read',
+                  style: SusText.display(18),
+                ),
                 const SizedBox(height: 10),
                 for (final r in reasons) ...[
                   Row(
@@ -285,19 +290,24 @@ class SdkOfflineScreen extends StatelessWidget {
     final game = GameScope.of(context);
     final error = game.sdkError;
     final code = error?.code ?? 'UNKNOWN';
-    final fixes = [
-      'Check Wi-Fi or cellular data is on',
-      'Turn off Low Data Mode or a VPN that blocks it',
-      'Still stuck? Check the Presage API key in Settings, then tap Test',
-    ];
+    final fixes = presageFixes(code);
     return ScreenFrame(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           const SizedBox(height: 12),
-          const Align(
+          Align(
             alignment: Alignment.centerLeft,
-            child: IconBadge(icon: Icons.wifi_off_rounded),
+            child: IconBadge(
+              icon: switch (code) {
+                'inputUnavailable' => Icons.videocam_off_rounded,
+                _
+                    when code == 'NO_KEY' ||
+                        ApiKeyController.keyErrorCodes.contains(code) =>
+                  Icons.key_off_rounded,
+                _ => Icons.wifi_off_rounded,
+              },
+            ),
           ),
           const SizedBox(height: 16),
           Expanded(

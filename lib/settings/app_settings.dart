@@ -157,6 +157,29 @@ class ApiKeyController extends ChangeNotifier {
   };
 }
 
+/// What to try on E5, matched to the error code.
+List<String> presageFixes(String code) {
+  if (code == 'NO_KEY' || ApiKeyController.keyErrorCodes.contains(code)) {
+    return const [
+      'Open Presage key settings below',
+      'Paste the key from physiology.presagetech.com, then tap Test connection',
+      'Check the key still has credits on the Presage portal',
+    ];
+  }
+  if (code == 'inputUnavailable') {
+    return const [
+      'Allow camera access for Sus-o-meter in iOS Settings',
+      'Close other apps that might be using the camera',
+      'Come back and tap Try again',
+    ];
+  }
+  return const [
+    'Check Wi-Fi or cellular data is on',
+    'Turn off Low Data Mode or a VPN that blocks it',
+    'Still stuck? Check the Presage API key in Settings, then tap Test',
+  ];
+}
+
 /// Plain-language explanation for a bridge/SDK error code.
 String describePresageCode(String code, String fallback) => switch (code) {
   'authenticationFailed' => "Presage didn't accept this key.",

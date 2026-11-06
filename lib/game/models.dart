@@ -137,6 +137,7 @@ class QuestionResult {
     this.features,
     this.breakdown,
     this.noCleanReadReasons = const [],
+    this.noCleanReadTitle,
     this.pulseSpark = const [],
     this.basePulse,
     this.baseBlinkRate,
@@ -150,6 +151,9 @@ class QuestionResult {
   final WindowFeatures? features;
   final ScoreBreakdown? breakdown;
   final List<String> noCleanReadReasons;
+
+  /// E4 heading, e.g. "Too much wiggle on that one".
+  final String? noCleanReadTitle;
 
   /// Confident pulse samples across the window, for the Replay sparkline.
   final List<double> pulseSpark;

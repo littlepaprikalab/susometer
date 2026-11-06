@@ -777,6 +777,7 @@ class GameController extends ChangeNotifier {
           timing,
           currentPlayer.name,
         ),
+        noCleanReadTitle: scoring.noCleanReadTitle(log, timing),
         pulseSpark: spark,
         basePulse: base.pulse,
         baseBlinkRate: base.blinkRatePerMin,

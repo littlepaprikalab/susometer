@@ -20,6 +20,7 @@ class _Header extends StatelessWidget {
   Widget build(BuildContext context) {
     final name = game.currentPlayer.name;
     return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
         Flexible(
           child: HotSeatPill(

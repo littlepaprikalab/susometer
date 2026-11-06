@@ -497,25 +497,26 @@ class _ToggleRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      constraints: const BoxConstraints(minHeight: 52),
-      padding: const EdgeInsets.symmetric(vertical: 6),
-      decoration: BoxDecoration(
-        border: last
-            ? null
-            : const Border(
-                bottom: BorderSide(color: SusColors.ink, width: 1.5),
-              ),
-      ),
-      child: Semantics(
-        toggled: value,
-        label: title,
-        hint: subtitle,
-        excludeSemantics: true,
+    // The whole 52 pt row is the tap target (≥ 44 pt).
+    return Semantics(
+      toggled: value,
+      label: title,
+      hint: subtitle,
+      excludeSemantics: true,
+      onTap: () => onChanged(!value),
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
         onTap: () => onChanged(!value),
-        child: GestureDetector(
-          behavior: HitTestBehavior.opaque,
-          onTap: () => onChanged(!value),
+        child: Container(
+          constraints: const BoxConstraints(minHeight: 52),
+          padding: const EdgeInsets.symmetric(vertical: 6),
+          decoration: BoxDecoration(
+            border: last
+                ? null
+                : const Border(
+                    bottom: BorderSide(color: SusColors.ink, width: 1.5),
+                  ),
+          ),
           child: Row(
             children: [
               Expanded(
