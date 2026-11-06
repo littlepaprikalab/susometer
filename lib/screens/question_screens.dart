@@ -10,6 +10,7 @@ import '../theme/game_widgets.dart';
 import '../theme/sparkline.dart';
 import '../theme/tokens.dart';
 import '../theme/widgets.dart';
+import 'intro_screens.dart';
 
 class _Header extends StatelessWidget {
   const _Header({required this.game, this.solo = false});
@@ -156,42 +157,21 @@ class _MeasuringCamera extends StatelessWidget {
                       child: CameraStampSlot(
                         tag: issue == null ? game.live.expression.tag : null,
                         stressTags: game.config.exprCategories,
-                        issue: issue == null
-                            ? null
-                            : IssueStamp(
-                                text: issue.stamp,
-                                semanticsLabel: '${issue.title}. ${issue.fix}',
-                              ),
+                        issue: issue == null ? null : issueStampFor(issue),
                       ),
                     ),
                   ],
                 ),
               ),
-              // While the reading is paused its numbers are frozen, so the
-              // cards' row says how to fix it instead. Same row, so nothing
-              // runs into the face oval. VoiceOver hears the fix with the
-              // stamp.
+              // While the reading is paused, the cards' row says how to fix
+              // it instead.
               Positioned(
                 left: LiveStatCard.inset,
                 right: LiveStatCard.inset,
                 bottom: LiveStatCard.inset,
                 child: issue == null
                     ? _LiveStats(game: game)
-                    : SizedBox(
-                        height: LiveStatCard.height,
-                        child: Center(
-                          child: FittedBox(
-                            fit: BoxFit.scaleDown,
-                            child: ExcludeSemantics(
-                              child: DotChip(
-                                label: issue.fix,
-                                dot: SusColors.mustard,
-                                fontSize: 13,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
+                    : PausedFixRow(issue.fix),
               ),
             ],
           ),

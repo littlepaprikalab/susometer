@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../app_scope.dart';
 import '../game/game_controller.dart';
+import '../game/scoring.dart';
 import '../presage/camera_preview.dart';
 import '../theme/expression_stamp.dart';
 import '../theme/game_widgets.dart';
@@ -377,10 +378,6 @@ class CalibrateScreen extends StatelessWidget {
           const SizedBox(height: 6),
           HostBubble(text: bubble),
           const SizedBox(height: 12),
-          if (game.calibHint != null) ...[
-            SignalBannerCard(title: 'Still calibrating', body: game.calibHint!),
-            const SizedBox(height: 12),
-          ],
           const Expanded(child: _CalibCamera()),
           const SizedBox(height: 12),
           ChunkyButton.light(
@@ -500,6 +497,12 @@ class _CalibCamera extends StatelessWidget {
         final code = s?.validation?.code;
         final faceOk = s?.validation != null && !(s!.validation!.faceMissing);
         final lightBad = code == 'TOO_DARK' || code == 'TOO_BRIGHT';
+        // A camera problem is stamped on the picture as on Ask and Answer
+        // (SPEC.md decision 69), and so is the hint once a clean baseline is
+        // slow to come. Only a live problem pauses the reading, so only it
+        // takes the pulse card's place with its fix.
+        final paused = game.visibleIssue;
+        final issue = paused ?? game.calibIssue;
         return CameraWindow(
           guideClear: cameraGuideClear(context),
           overlay: Stack(
@@ -538,8 +541,8 @@ class _CalibCamera extends StatelessWidget {
                   ],
                 ),
               ),
-              // The expression stamp, in the same corner and width as on
-              // Ask and Answer, just under the chips.
+              // The expression or problem stamp, in the same corner and width
+              // as on Ask and Answer, just under the chips.
               Positioned(
                 top: cameraGuideClear(context).top,
                 left: 12,
@@ -547,13 +550,18 @@ class _CalibCamera extends StatelessWidget {
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Spacer(flex: 100 - stampRowFlex),
+                    Spacer(
+                      flex:
+                          100 -
+                          (issue == null ? stampRowFlex : issueStampRowFlex),
+                    ),
                     const SizedBox(width: 8),
                     Expanded(
-                      flex: stampRowFlex,
+                      flex: issue == null ? stampRowFlex : issueStampRowFlex,
                       child: CameraStampSlot(
-                        tag: game.live.expression.tag,
+                        tag: issue == null ? game.live.expression.tag : null,
                         stressTags: game.config.exprCategories,
+                        issue: issue == null ? null : issueStampFor(issue),
                       ),
                     ),
                   ],
@@ -564,29 +572,33 @@ class _CalibCamera extends StatelessWidget {
                 left: LiveStatCard.inset,
                 right: LiveStatCard.inset,
                 bottom: LiveStatCard.inset,
-                child: LiveStatCard(
-                  label: 'Pulse · live',
-                  value: s?.pulse == null ? '--' : '${s!.pulse!.round()} BPM',
-                  trend: Waveform(samples: game.live.trace),
-                  // The SDK's talking signal, inside the card so nothing
-                  // sits in the face oval's space. No name: the title
-                  // already says who's warming up.
-                  trailing: (s?.talking ?? false)
-                      ? Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            const LevelBars(
-                              level: 0.8,
-                              count: 5,
-                              maxHeight: 14,
-                              barWidth: 3,
-                            ),
-                            const SizedBox(width: 4),
-                            Text('Talking', style: SusText.label(11)),
-                          ],
-                        )
-                      : null,
-                ),
+                child: paused != null
+                    ? PausedFixRow(paused.fix)
+                    : LiveStatCard(
+                        label: 'Pulse · live',
+                        value: s?.pulse == null
+                            ? '--'
+                            : '${s!.pulse!.round()} BPM',
+                        trend: Waveform(samples: game.live.trace),
+                        // The SDK's talking signal, inside the card so nothing
+                        // sits in the face oval's space. No name: the title
+                        // already says who's warming up.
+                        trailing: (s?.talking ?? false)
+                            ? Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const LevelBars(
+                                    level: 0.8,
+                                    count: 5,
+                                    maxHeight: 14,
+                                    barWidth: 3,
+                                  ),
+                                  const SizedBox(width: 4),
+                                  Text('Talking', style: SusText.label(11)),
+                                ],
+                              )
+                            : null,
+                      ),
               ),
             ],
           ),
@@ -596,58 +608,9 @@ class _CalibCamera extends StatelessWidget {
   }
 }
 
-/// A hint card over the camera (mock: Edge-SignalIssue.dc.html), now only
-/// for calibration's "Still calibrating". E3 on Ask and Answer is a stamp on
-/// the camera (SPEC.md decision 69).
-class SignalBannerCard extends StatelessWidget {
-  const SignalBannerCard({super.key, required this.title, required this.body});
-
-  final String title;
-  final String body;
-
-  @override
-  Widget build(BuildContext context) {
-    return Semantics(
-      liveRegion: true,
-      child: Container(
-        padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
-        decoration: BoxDecoration(
-          color: SusColors.cream,
-          borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: SusColors.ink, width: SusShape.borderWidth),
-          boxShadow: const [
-            BoxShadow(color: SusColors.ink, offset: Offset(0, 5)),
-          ],
-        ),
-        child: Row(
-          children: [
-            Container(
-              width: 44,
-              height: 44,
-              decoration: BoxDecoration(
-                color: SusColors.tomato,
-                shape: BoxShape.circle,
-                border: Border.all(color: SusColors.ink, width: 2.5),
-              ),
-              child: const Icon(
-                Icons.wb_incandescent_outlined,
-                color: SusColors.cream,
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(title, style: SusText.display(19)),
-                  const SizedBox(height: 2),
-                  Text(body, style: SusText.body(14, weight: FontWeight.w600)),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
+/// A camera problem as a stamp on the camera (SPEC.md decision 69).
+/// VoiceOver reads the whole problem and its fix when it lands.
+IssueStamp issueStampFor(SignalIssue issue) => IssueStamp(
+  text: issue.stamp,
+  semanticsLabel: '${issue.title}. ${issue.fix}',
+);

@@ -441,7 +441,11 @@ class GameController extends ChangeNotifier {
   int? quietStartMs;
   int? chatStartMs;
   final List<Warmup> warmups = [];
-  String? calibHint;
+
+  /// Stamped on the calibration camera once a clean baseline is slow to come
+  /// (after [ScoringConfig.calibHintAfterMs]): the most common recent
+  /// problem, or a general nudge. Null until then.
+  SignalIssue? calibIssue;
   Baseline? _calibBaseline;
   int _lastBaselineCheck = 0;
   bool _calibrationStarting = false;
@@ -479,7 +483,7 @@ class GameController extends ChangeNotifier {
     live.resetBeats();
     _calibTalk.reset();
     warmups.clear();
-    calibHint = null;
+    calibIssue = null;
     _calibBaseline = null;
     calibStage = CalibStage.starting;
     calibStartMs = nowMs;
@@ -638,20 +642,15 @@ class GameController extends ChangeNotifier {
         _finishCalibration();
         return;
       }
-      if (!valid && now - calibStartMs >= config.calibHintAfterMs) {
-        calibHint = _calibrationHintText(now);
-      }
+      // The hint goes once the baseline is good, even while calibration
+      // waits for the warm-ups to finish.
+      calibIssue = !valid && now - calibStartMs >= config.calibHintAfterMs
+          ? SignalIssue.forSlowCalibration(
+              log.validationIssues(now - 5000, now),
+            )
+          : null;
     }
     notifyListeners();
-  }
-
-  String _calibrationHintText(int now) {
-    final issues = log.validationIssues(now - 5000, now);
-    for (final (code, _, _) in issues) {
-      final issue = SignalIssue.fromCode(code);
-      if (issue != null) return '${issue.title}. ${issue.fix}';
-    }
-    return 'Still warming up. Keep your face in the oval and hold the phone steady.';
   }
 
   void _onCalibTalk(bool talking, int t) {
@@ -717,7 +716,7 @@ class GameController extends ChangeNotifier {
           ),
       ]
       ..warmupShapes = null;
-    calibHint = null;
+    calibIssue = null;
     // Normally 0; after a mid-turn recalibration, carry on where we were.
     questionIndex = currentTurn.results.length;
     if (questionIndex >= questionsPerTurn) {

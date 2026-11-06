@@ -415,6 +415,30 @@ void main() {
       }
     });
 
+    test('slow calibration stamps the commonest recent problem', () {
+      expect(
+        SignalIssue.forSlowCalibration(const [
+          ('OK', 3000, ''),
+          ('EXCESSIVE_MOTION', 1500, ''),
+          ('TOO_DARK', 500, ''),
+        ]).stamp,
+        'Hold still',
+      );
+      // CHEST_NOT_VISIBLE isn't something to fix; skip to the next.
+      expect(
+        SignalIssue.forSlowCalibration(const [
+          ('CHEST_NOT_VISIBLE', 3000, ''),
+          ('TOO_DARK', 500, ''),
+        ]).stamp,
+        'Too dark',
+      );
+      expect(
+        SignalIssue.forSlowCalibration(const []),
+        same(SignalIssue.stillCalibrating),
+      );
+      expect(SignalIssue.stillCalibrating.stamp.length, lessThanOrEqualTo(14));
+    });
+
     test('each tag keeps its own tilt and worn pattern', () {
       expect(ExpressionStamp.tiltDegrees('surprise'), isNot(0));
       expect(ExpressionStamp.seedFor('fear'), ExpressionStamp.seedFor('fear'));

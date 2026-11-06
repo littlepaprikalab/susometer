@@ -526,6 +526,36 @@ void main() {
               chip('Light'),
               find.byType(LiveStatCard),
             ], 'calibrate');
+            // A camera problem is stamped here too, with its fix in the
+            // pulse card's place, and nothing moves.
+            final calibCamera = tester.getRect(find.byType(CameraPreview));
+            rig.presage.code = 'MULTIPLE_FACES_FOUND'; // the longest stamp
+            await rig.wait(2000);
+            expect(find.text('Too many faces'), findsOneWidget);
+            expect(find.byType(ExpressionStamp), findsNothing);
+            expect(find.byType(LiveStatCard), findsNothing);
+            expect(
+              tester.getRect(find.byType(CameraPreview)),
+              calibCamera,
+              reason: 'the calibration camera moved',
+            );
+            final calibChips = [
+              chip('Face found'),
+              chip('Looking for a face'),
+              chip('Light'),
+              chip('Only the hot seat'),
+            ];
+            expectOvalClear(tester, calibChips, 'calibrate, bad signal');
+            expectStampPlaced(
+              tester,
+              calibChips,
+              'calibrate, bad signal',
+              type: IssueStamp,
+            );
+            rig.presage.code = 'OK';
+            await rig.wait(1500);
+            expect(find.byType(IssueStamp), findsNothing);
+            expect(find.byType(LiveStatCard), findsOneWidget);
             // During a warm-up answer the "Talking" indicator shows too.
             await rig.until(
               () =>
@@ -703,6 +733,80 @@ void main() {
       }
     }
   }
+
+  testWidgets('slow calibration: problems and the hint are stamped on the '
+      'camera, and nothing moves', (tester) async {
+    final rig = Rig(tester);
+    await rig.pumpApp();
+    await rig.startParty(['Sam', 'Alex']);
+    rig.presage.code = 'FACE_NOT_CENTERED';
+    await rig.tap('I agree, measure me');
+    await rig.until(() => rig.game.phase == GamePhase.calibrate);
+    await rig.wait(2500);
+    final camera = find.byType(CameraPreview);
+    final bottom = tester.getRect(find.byType(CameraWindow)).bottom;
+    final view = tester.element(camera);
+    // Nothing comes between the host and the camera any more (the old
+    // "Still calibrating" card did), and the camera's view is kept. (The
+    // host's line still grows when the warm-up questions start.)
+    void same(String when) {
+      final window = tester.getRect(find.byType(CameraWindow));
+      expect(
+        window.top,
+        closeTo(tester.getRect(find.byType(HostBubble)).bottom + 12, 0.01),
+        reason: '$when: something sits between the host and the camera',
+      );
+      expect(window.bottom, closeTo(bottom, 0.01), reason: '$when: moved');
+      expect(
+        identical(tester.element(camera), view),
+        isTrue,
+        reason: '$when: the camera view was rebuilt',
+      );
+    }
+
+    // Live, from the start, as on Ask and Answer.
+    expect(find.text('Off center'), findsOneWidget);
+    expect(find.text('Line your face up with the oval.'), findsOneWidget);
+    expect(rig.game.calibIssue, isNull, reason: 'no hint before 45 s');
+    await checkScreen(tester, 'calibrate, bad signal');
+    await rig.wait(45000);
+    expect(rig.game.calibIssue?.stamp, 'Off center');
+    same('the hint comes');
+
+    // Fixed: the reading runs again, so the pulse card is back, but the
+    // hint stays stamped while the baseline is still short.
+    rig.presage.code = 'OK';
+    await rig.wait(1000);
+    expect(rig.game.visibleIssue, isNull);
+    expect(find.text('Off center'), findsOneWidget);
+    expect(find.byType(LiveStatCard), findsOneWidget);
+    expect(find.byType(PausedFixRow), findsNothing);
+    await rig.wait(5500);
+    expect(find.text('Hold steady'), findsOneWidget, reason: 'no recent issue');
+    final handle = tester.ensureSemantics();
+    expect(
+      tester.getSemantics(find.byType(IssueStamp)),
+      matchesSemantics(
+        label:
+            'Still calibrating. Keep your face in the oval and hold the '
+            'phone steady.',
+        isLiveRegion: true,
+      ),
+    );
+    handle.dispose();
+    await checkScreen(tester, 'calibrate, slow');
+    same('the hint changes');
+
+    // The stamp goes once the baseline is good.
+    await rig.until(
+      () => rig.game.calibIssue == null,
+      what: 'a clean baseline',
+    );
+    await rig.wait(300);
+    expect(find.byType(IssueStamp), findsNothing);
+    same('the hint goes');
+    await rig.finish();
+  });
 
   testWidgets('a double tap never carries into the next screen', (
     tester,

@@ -75,7 +75,8 @@ The spec wins where the two disagree (see SPEC.md, "Decisions made during build"
 - **E3 in the camera:** there's no banner. The problem is stamped on the camera in the expression
   #tag's corner (mustard ink: "Hold still", "Too dark"), and its fix ("Rest your elbows or prop
   the phone up.") takes the live cards' place while the reading is paused, so nothing on screen
-  moves. The mock's banner pushed the camera down and shrank the oval mid-answer.
+  moves. The mock's banner pushed the camera down and shrank the oval mid-answer. Calibration
+  does the same, and its slow-calibration hint is a stamp too instead of a "Still calibrating" card.
 - **Leaderboard footnote:** "Scores are wiped when you leave this screen" conflicts with going on to
   the Replay. The app says scores are wiped when a new game starts or on Wipe.
 - **Replay tabs:** the mock always has four tabs. With one contestant the app shows the name line

@@ -442,6 +442,27 @@ class SignalIssue {
   bool get isLight => code == 'TOO_DARK' || code == 'TOO_BRIGHT';
   bool get isFace => code == 'NO_FACE_FOUND' || code == 'MULTIPLE_FACES_FOUND';
 
+  /// Stamped when calibration is slow and no single problem stands out.
+  static const stillCalibrating = SignalIssue(
+    'STILL_CALIBRATING',
+    'Hold steady',
+    'Still calibrating',
+    'Keep your face in the oval and hold the phone steady.',
+  );
+
+  /// Calibration's hint once a clean baseline is slow to come: the most
+  /// common recent problem ([recent] as from `SignalLog.validationIssues`,
+  /// commonest first), or [stillCalibrating].
+  static SignalIssue forSlowCalibration(
+    Iterable<(String, int, String)> recent,
+  ) {
+    for (final (code, _, _) in recent) {
+      final issue = fromCode(code);
+      if (issue != null) return issue;
+    }
+    return stillCalibrating;
+  }
+
   static SignalIssue? fromCode(String? code) => switch (code) {
     null || 'OK' || 'CAMERA_TUNING' => null,
     'TOO_DARK' => const SignalIssue(

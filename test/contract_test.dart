@@ -334,8 +334,14 @@ void main() {
       }
     });
     test('every code string Dart matches on is one Swift sends', () {
-      // Codes Dart makes up itself: off-iPhone, engine paused, watchdog.
-      const dartMade = {'UNAVAILABLE', 'NOT_RUNNING', 'NO_SIGNAL'};
+      // Codes Dart makes up itself: off-iPhone, engine paused, watchdog,
+      // slow calibration's hint (SPEC.md decision 69).
+      const dartMade = {
+        'UNAVAILABLE',
+        'NOT_RUNNING',
+        'NO_SIGNAL',
+        'STILL_CALIBRATING',
+      };
       final swift = [presageSwift, speechSwift, deviceSwift].join('\n');
       final pattern = RegExp(r"'([A-Z][A-Z0-9]*(?:_[A-Z0-9]+)+|BUSY|OK)'");
       final codes = <String, String>{};

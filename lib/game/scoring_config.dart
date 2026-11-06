@@ -176,7 +176,8 @@ class ScoringConfig {
   final int calibMinConfidentPulseMs;
   final double calibMinFaceFraction;
 
-  /// After this long without a valid baseline, show the E3-style hints.
+  /// After this long without a valid baseline, stamp a hint on the camera
+  /// (SPEC.md decision 69).
   final int calibHintAfterMs;
 
   // --- Heartbeats from the pulse waveform (SPEC.md decision 63) ---

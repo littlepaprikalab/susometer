@@ -43,7 +43,7 @@ Settings → **Signal check** → **Start both**. Allow microphone and speech re
 ## 4. A party game (2 players, 3 questions)
 
 - [ ] Lobby → Start the show → How to play → Consent → calibration completes on its own in about
-  30–60 s. (If it says "Still calibrating", note the hint.)
+  30–60 s. (If a mustard stamp stays on the camera, note what it says.)
 - [ ] A friend asks a question: it appears as they speak. Stop talking and wait: after ~1.5 s
   the host asks "{name}, your answer?"
 - [ ] Next question: answer **immediately** after it's asked. The question should end the moment
