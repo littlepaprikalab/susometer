@@ -76,7 +76,8 @@ Settings → **Signal check** → **Start both**. Allow microphone and speech re
 - [ ] Do the verdicts feel plausible? A calm answer should usually be Legit, and a jump-and-shout
   should be higher. **Note a few scores.**
 - [ ] Leaderboard → **Share results** opens the share sheet with an image (names and scores only,
-  no question text) → **Watch the replay** shows each Q and A with a sparkline.
+  no question text) → **Watch the replay** shows each Q and A with a sparkline, its normal and its
+  peak BPM.
 
 ## 4b. Solo (1 player, 3 questions)
 
