@@ -58,6 +58,9 @@ The spec wins where the two disagree (see SPEC.md, "Decisions made during build"
   pulse and blink cards sit over the bottom of the camera, the question is pinned inside the
   answer card, Pause stays bottom-left (the SPEC §4 state machine has Pause on 4b too), and *Final answer* fills
   the rest of the bottom row. Ask and Answer both show "Q 1 / 5" instead of dots.
+- **Pulse card:** adds a small trend line for the current question, against a dashed line at the
+  player's calibrated normal. The same Pulse and Blinks cards replace the Ask mock's "84 BPM" chip,
+  so the camera overlay doesn't change between Ask and Answer.
 - **Leaderboard footnote:** "Scores are wiped when you leave this screen" conflicts with going on to
   the Replay. The app says scores are wiped when a new game starts or on Wipe.
 

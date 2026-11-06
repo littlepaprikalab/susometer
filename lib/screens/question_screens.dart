@@ -6,6 +6,7 @@ import '../game/models.dart';
 import '../presage/camera_preview.dart';
 import '../theme/fit_text.dart';
 import '../theme/game_widgets.dart';
+import '../theme/sparkline.dart';
 import '../theme/tokens.dart';
 import '../theme/widgets.dart';
 import 'intro_screens.dart';
@@ -108,9 +109,7 @@ class HotSeatScreen extends StatelessWidget {
                 : _AskerCard(game: game),
           ),
           const SizedBox(height: 14),
-          Expanded(
-            child: _MeasuringCamera(game: game, answering: answering),
-          ),
+          Expanded(child: _MeasuringCamera(game: game)),
           const SizedBox(height: 12),
           SizedBox(
             height: _actionsHeight,
@@ -123,10 +122,9 @@ class HotSeatScreen extends StatelessWidget {
 }
 
 class _MeasuringCamera extends StatelessWidget {
-  const _MeasuringCamera({required this.game, required this.answering});
+  const _MeasuringCamera({required this.game});
 
   final GameController game;
-  final bool answering;
 
   @override
   Widget build(BuildContext context) {
@@ -134,8 +132,9 @@ class _MeasuringCamera extends StatelessWidget {
     return ListenableBuilder(
       listenable: game.live,
       builder: (context, _) {
-        final pulse = game.live.sample?.pulse;
         final issue = game.visibleIssue;
+        // The same overlay on Ask, Answer and Settle, so nothing over the
+        // face changes between them.
         return CameraWindow(
           overlay: Stack(
             children: [
@@ -147,33 +146,17 @@ class _MeasuringCamera extends StatelessWidget {
                   dot: SusColors.tomato,
                 ),
               ),
-              if (answering)
-                Positioned(
-                  left: 10,
-                  right: 10,
-                  bottom: 10,
-                  child: _LiveStats(game: game),
-                )
-              else
-                Positioned(
-                  bottom: 12,
-                  right: 12,
-                  child: DotChip(
-                    label: '${pulse == null ? '--' : pulse.round()} BPM',
-                    dot: SusColors.tomato,
-                    fontSize: 13,
-                    leading: const Icon(
-                      Icons.monitor_heart_rounded,
-                      size: 15,
-                      color: SusColors.tomato,
-                    ),
-                  ),
-                ),
+              Positioned(
+                left: 10,
+                right: 10,
+                bottom: 10,
+                child: _LiveStats(game: game),
+              ),
               if (issue != null)
-                Positioned(
-                  bottom: answering ? 68 : 12,
+                const Positioned(
+                  bottom: 68,
                   left: 12,
-                  child: const DotChip(
+                  child: DotChip(
                     label: "Picks up again when it's clear",
                     dot: SusColors.bulb,
                     fontSize: 12,
@@ -187,7 +170,8 @@ class _MeasuringCamera extends StatelessWidget {
   }
 }
 
-/// Live pulse and blinks against the baseline, over the bottom of the camera.
+/// Live pulse (with its trend) and blinks against the baseline, over the
+/// bottom of the camera.
 class _LiveStats extends StatelessWidget {
   const _LiveStats({required this.game});
 
@@ -196,19 +180,31 @@ class _LiveStats extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final base = game.currentTurn.baseline;
-    final pulse = game.live.questionMeanPulse ?? game.live.sample?.pulse;
+    final readings = game.live.questionPulse;
+    // The latest confident reading, so the number matches the line's end.
+    final pulse = readings.isNotEmpty
+        ? readings.last.bpm
+        : game.live.sample?.pulse;
     final blinks = game.live.questionBlinkRate;
     return Row(
       children: [
         Expanded(
+          flex: 3,
           child: _StatChip(
             label: 'Pulse',
             value: pulse == null ? '--' : '${pulse.round()} BPM',
             delta: pulse == null || base == null ? null : pulse - base.pulse,
+            trend: PulseSparkline(
+              points: [for (final p in readings) (p.tMs, p.bpm)],
+              baseline: base?.pulse,
+              fromMs: game.detector?.tQ0 ?? game.questionStartMs,
+              nowMs: game.nowMs,
+            ),
           ),
         ),
         const SizedBox(width: 8),
         Expanded(
+          flex: 2,
           child: _StatChip(
             label: 'Blinks',
             value: blinks == null ? '--' : '${blinks.round()} / min',
@@ -223,15 +219,47 @@ class _LiveStats extends StatelessWidget {
 }
 
 class _StatChip extends StatelessWidget {
-  const _StatChip({required this.label, required this.value, this.delta});
+  const _StatChip({
+    required this.label,
+    required this.value,
+    this.delta,
+    this.trend,
+  });
 
   final String label;
   final String value;
   final double? delta;
 
+  /// Optional small chart between the number and the arrow.
+  final Widget? trend;
+
   @override
   Widget build(BuildContext context) {
     final d = delta;
+    final text = Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Flexible(
+          child: FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Text(
+              label,
+              style: SusText.body(11, weight: FontWeight.w600),
+            ),
+          ),
+        ),
+        Flexible(
+          child: FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Text(
+              value,
+              style: SusText.body(16, weight: FontWeight.w700),
+            ),
+          ),
+        ),
+      ],
+    );
     return Container(
       height: 48,
       padding: const EdgeInsets.symmetric(horizontal: 10),
@@ -242,32 +270,15 @@ class _StatChip extends StatelessWidget {
       ),
       child: Row(
         children: [
-          Expanded(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Flexible(
-                  child: FittedBox(
-                    fit: BoxFit.scaleDown,
-                    child: Text(
-                      label,
-                      style: SusText.body(11, weight: FontWeight.w600),
-                    ),
-                  ),
-                ),
-                Flexible(
-                  child: FittedBox(
-                    fit: BoxFit.scaleDown,
-                    child: Text(
-                      value,
-                      style: SusText.body(16, weight: FontWeight.w700),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
+          if (trend == null)
+            Expanded(child: text)
+          else ...[
+            // The number and the trend split the space; a long number
+            // shrinks rather than squeezing the trend out.
+            Flexible(child: text),
+            const SizedBox(width: 8),
+            Expanded(child: SizedBox(height: 30, child: trend)),
+          ],
           if (d != null && d.round() != 0) ...[
             Icon(
               d > 0

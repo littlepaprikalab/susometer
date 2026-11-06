@@ -52,6 +52,9 @@ Settings → **Signal check** → **Start both**. Allow microphone and speech re
   reading…".
 - [ ] From *Ask your question!* to *{name}, your answer?* to *Locking in the reading…*, the camera
   card doesn't move, resize or flash black.
+- [ ] The Pulse card's trend line: roughly flat around the dashed line while you sit calmly, rising
+  after a few seconds if you hold your breath or do 10 squats first. **Does it look jumpy?** The
+  number should match where the line ends.
 - [ ] Call it! → tap your friend's chip (Legit/Sus) → Reveal → countdown → verdict.
 - [ ] Do the verdicts feel plausible? A calm answer should usually be Legit, and a jump-and-shout
   should be higher. **Note a few scores.**

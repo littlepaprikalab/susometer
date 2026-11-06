@@ -74,6 +74,9 @@ class LiveState extends ChangeNotifier {
   double? questionBlinkRate;
   double? questionMeanPulse;
 
+  /// Confident pulse readings since the question started, for the trend line.
+  List<PulsePoint> questionPulse = const [];
+
   void notify() => notifyListeners();
 
   void resetQuestion() {
@@ -82,6 +85,7 @@ class LiveState extends ChangeNotifier {
     hesitationS = null;
     questionBlinkRate = null;
     questionMeanPulse = null;
+    questionPulse = const [];
   }
 }
 
@@ -1206,13 +1210,17 @@ class GameController extends ChangeNotifier {
       }
     }
 
-    if (phase == GamePhase.answer || phase == GamePhase.settle) {
+    // Live cards over the camera, from the question's start, on Ask too.
+    if (phase == GamePhase.ask ||
+        phase == GamePhase.answer ||
+        phase == GamePhase.settle) {
       final d = detector;
       final from = d?.tQ0 ?? questionStartMs;
       live.questionBlinkRate = nowMs - from > 3000
           ? log.blinkRatePerMin(from, nowMs)
           : null;
       final pulses = log.confidentPulse(from, nowMs);
+      live.questionPulse = pulses;
       live.questionMeanPulse = pulses.isEmpty
           ? null
           : pulses.map((p) => p.bpm).reduce((a, b) => a + b) / pulses.length;
