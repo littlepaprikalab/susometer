@@ -149,6 +149,10 @@ class _MeasuringCamera extends StatelessWidget {
         // The same overlay on Ask, Answer and Settle, so nothing over the
         // face changes between them.
         return CameraWindow(
+          guideClear: const EdgeInsets.only(
+            top: 42,
+            bottom: _liveCardInset + _liveCardHeight + 4,
+          ),
           overlay: Stack(
             children: [
               Positioned(

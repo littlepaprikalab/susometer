@@ -503,6 +503,7 @@ class _CalibCamera extends StatelessWidget {
         final faceOk = s?.validation != null && !(s!.validation!.faceMissing);
         final lightBad = code == 'TOO_DARK' || code == 'TOO_BRIGHT';
         return CameraWindow(
+          guideClear: const EdgeInsets.only(top: 42, bottom: 42),
           overlay: Stack(
             children: [
               Positioned(

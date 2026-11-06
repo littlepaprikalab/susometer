@@ -59,6 +59,9 @@ Settings → **Signal check** → **Start both**. Allow microphone and speech re
   tap lands where *Final answer* appears). Same with *Got it, let's play*: you should still see the
   consent screen.
 - [ ] Verdict: the pulse chart's shaded stretch lines up with when you were talking.
+- [ ] The camera card has a visible dark border around the video, with rounded corners.
+- [ ] Sit so your face fills the oval: no "move closer" or "move back" banner. **If there's a
+  small iPhone (SE/mini) around, try it there too, and with Larger Text on.**
 - [ ] Call it! → tap your friend's chip (Legit/Sus) → Reveal → countdown → verdict.
 - [ ] Do the verdicts feel plausible? A calm answer should usually be Legit, and a jump-and-shout
   should be higher. **Note a few scores.**
