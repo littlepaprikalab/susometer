@@ -282,7 +282,8 @@ class InsightInfo {
 
   final int count;
 
-  /// "analysis" (the LLM answered), "error" or "empty".
+  /// "analysis" (the LLM answered), "error", "empty", or "other" for a kind
+  /// newer than SDK 3.4.0.
   final String? kind;
 
   /// The error message, e.g. an HTTP status or a transport error. A
@@ -314,7 +315,8 @@ class InsightInfo {
     final last = switch (kind) {
       'analysis' => 'answered, $chars chars',
       'error' => 'error: ${error ?? '?'}',
-      _ => 'empty',
+      null => 'empty',
+      final other => other,
     };
     return 'LLM INSIGHT ×$count ($last)';
   }

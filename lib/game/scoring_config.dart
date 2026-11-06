@@ -15,7 +15,6 @@ class ScoringConfig {
     this.blinkFreezeZ = 0.6,
     this.blinkFreezeChance = 0.05,
     this.blinkChanceSpreads = 1.0,
-    this.blinkMinChatMs = 15000,
     this.exprScale = 0.3,
     this.exprCategories = const ['surprise', 'fear', 'contempt', 'disgust'],
     this.exprSmile = 'happy',
@@ -34,6 +33,7 @@ class ScoringConfig {
     this.susFrom = 60,
     this.calibQuietMs = 20000,
     this.calibMinWarmups = 2,
+    this.calibMinChatMs = 15000,
     this.calibMaxWarmups = 3,
     this.calibWarmupMs = 12000,
     this.calibWarmupTalkingMs = 25000,
@@ -94,11 +94,6 @@ class ScoringConfig {
   /// square root (Poisson) even when nothing changed. This many of those
   /// wobbles (also allowing for the baseline's own) are free.
   final double blinkChanceSpreads;
-
-  /// The baseline blink rate comes from the warm-up chat when it lasted at
-  /// least this long (people blink more talking than sitting still), and
-  /// from the whole calibration otherwise.
-  final int blinkMinChatMs;
 
   /// A blink "freeze" sets zBlink to at least [blinkFreezeZ]: no blinks for
   /// so long that, at the player's own rate, a gap like it would turn up in
@@ -165,6 +160,12 @@ class ScoringConfig {
   // --- Calibration (SPEC.md §5.2) ---
   final int calibQuietMs;
   final int calibMinWarmups;
+
+  /// Calibration chats through warm-ups for at least this long (one more
+  /// warm-up if the answers were quick). The baseline blink rate and
+  /// expression peaks come from the chat (people blink more talking than
+  /// sitting still); a shorter chat falls back to the whole calibration.
+  final int calibMinChatMs;
   final int calibMaxWarmups;
 
   /// A warm-up moves on this long after it's asked, unless the player is

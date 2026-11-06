@@ -638,19 +638,22 @@ struct StreamState {
     insightSeen = true
     insightCount += 1
     insightAt = insight.processedAt
-    switch insight.result {
-    case .analysis(let text)?:
+    insightChars = 0
+    insightError = nil
+    guard let result = insight.result else {
+      insightKind = "empty"
+      return true
+    }
+    // OneOf_Result isn't @frozen (the SDK is built with library evolution).
+    switch result {
+    case .analysis(let text):
       insightKind = "analysis"
       insightChars = text.count
-      insightError = nil
-    case .error(let message)?:
+    case .error(let message):
       insightKind = "error"
-      insightChars = 0
       insightError = String(message.prefix(80))
-    case nil:
-      insightKind = "empty"
-      insightChars = 0
-      insightError = nil
+    @unknown default:
+      insightKind = "other"
     }
     return true
   }

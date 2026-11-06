@@ -630,18 +630,11 @@ class GameController extends ChangeNotifier {
 
     if (now - _lastBaselineCheck >= 500) {
       _lastBaselineCheck = now;
-      _calibBaseline = scoring.baseline(
-        log,
-        start: quietStartMs!,
-        quietEnd: chatStartMs ?? now,
-        end: now,
-        warmupLatenciesS: [
-          for (final w in warmups)
-            if (w.latencyS != null) w.latencyS!,
-        ],
-      );
+      _calibBaseline = _baselineAt(now);
       final valid = scoring.baselineValid(_calibBaseline);
-      if (valid && warmupsDone >= config.calibMinWarmups) {
+      // Only between warm-ups: never while the host reads one or the player
+      // is answering it, or question 1 would start on top of it.
+      if (currentWarmup == null && _calibrationReady(now)) {
         _finishCalibration();
         return;
       }
@@ -680,13 +673,36 @@ class GameController extends ChangeNotifier {
 
   void _afterWarmup() {
     if (phase != GamePhase.calibrate) return;
-    final valid = scoring.baselineValid(_calibBaseline);
-    if (valid && warmupsDone >= config.calibMinWarmups) {
+    _calibBaseline = _baselineAt(nowMs);
+    if (_calibrationReady(nowMs)) {
       _finishCalibration();
       return;
     }
-    // Keep chatting until the baseline is valid (SPEC.md §4: stay / hints).
+    // Keep chatting until the baseline is valid and the chat long enough
+    // (SPEC.md §4: stay / hints; decision 65).
     unawaited(_askWarmup());
+  }
+
+  Baseline? _baselineAt(int now) => scoring.baseline(
+    log,
+    start: quietStartMs!,
+    quietEnd: chatStartMs ?? now,
+    end: now,
+    warmupLatenciesS: [
+      for (final w in warmups)
+        if (w.latencyS != null) w.latencyS!,
+    ],
+  );
+
+  /// Calibration can end once the baseline is valid, enough warm-ups are
+  /// done, and the chat has run long enough that its blink rate and
+  /// expression peaks are the player's normal (SPEC.md decision 65).
+  bool _calibrationReady(int now) {
+    final chat = chatStartMs;
+    return scoring.baselineValid(_calibBaseline) &&
+        warmupsDone >= config.calibMinWarmups &&
+        chat != null &&
+        now - chat >= config.calibMinChatMs;
   }
 
   void _finishCalibration() {

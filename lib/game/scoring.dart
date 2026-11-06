@@ -35,7 +35,7 @@ class Scoring {
     if (pulses.isEmpty) return null;
     // Questions are mostly listening and talking, so compare them with the
     // warm-up chat rather than the still part: people blink more talking.
-    final blinkFrom = end - quietEnd >= c.blinkMinChatMs ? quietEnd : start;
+    final blinkFrom = end - quietEnd >= c.calibMinChatMs ? quietEnd : start;
     Map<String, double> peaks(int from) => log.exprPeaks(
       from,
       end,

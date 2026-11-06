@@ -35,9 +35,10 @@ Built for the DEV [Presage SmartSpectra SDK Challenge](https://dev.to/challenges
 2. **Consent:** the phone goes to the hot-seat player, who reads what the camera measures and
    what happens to the data, then taps *I agree, measure me* or *Skip my turn*.
 3. **Calibrate:** about 20 s of sitting still, then 2–3 easy warm-up questions read by the host,
-   each asking for a sentence ("Tell me what you had for breakfast"). This learns *your* normal
-   pulse, blink rate, expressions and how fast you usually answer, while talking like you will
-   in the real questions.
+   each asking for a sentence ("Tell me what you had for breakfast"), and one more if the answers
+   were quick, so there's at least 15 s of chat. This learns *your* normal pulse, blink rate,
+   expressions and how fast you usually answer, while talking like you will in the real
+   questions. It ends between warm-ups, never while the host is reading one or you're answering.
 4. **Ask:** a friend asks a question out loud; it appears on screen as they speak. In solo mode
    the host reads one from the deck, and it stays on screen until you start answering or tap
    *Ready to answer*.
