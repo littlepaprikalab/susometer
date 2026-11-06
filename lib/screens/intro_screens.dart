@@ -380,7 +380,7 @@ class CalibrateScreen extends StatelessWidget {
             SignalBannerCard(title: 'Still calibrating', body: game.calibHint!),
             const SizedBox(height: 12),
           ],
-          Expanded(child: _CalibCamera(name: name)),
+          const Expanded(child: _CalibCamera()),
           const SizedBox(height: 12),
           ChunkyButton.light(
             label: "Doesn't apply? Next one",
@@ -487,9 +487,7 @@ class _CalibProgress extends StatelessWidget {
 }
 
 class _CalibCamera extends StatelessWidget {
-  const _CalibCamera({required this.name});
-
-  final String name;
+  const _CalibCamera();
 
   @override
   Widget build(BuildContext context) {
@@ -570,7 +568,8 @@ class _CalibCamera extends StatelessWidget {
                   value: s?.pulse == null ? '--' : '${s!.pulse!.round()} BPM',
                   trend: Waveform(samples: game.live.trace),
                   // The SDK's talking signal, inside the card so nothing
-                  // sits in the face oval's space.
+                  // sits in the face oval's space. No name: the title
+                  // already says who's warming up.
                   trailing: (s?.talking ?? false)
                       ? Row(
                           mainAxisSize: MainAxisSize.min,
@@ -582,7 +581,7 @@ class _CalibCamera extends StatelessWidget {
                               barWidth: 3,
                             ),
                             const SizedBox(width: 4),
-                            Text('$name is talking', style: SusText.label(11)),
+                            Text('Talking', style: SusText.label(11)),
                           ],
                         )
                       : null,

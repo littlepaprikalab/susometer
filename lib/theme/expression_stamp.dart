@@ -6,8 +6,8 @@ import 'package:flutter/rendering.dart';
 import 'tokens.dart';
 
 /// Share of the camera's top row, out of 100, that the expression stamp may
-/// take. The chips get the rest, so a long name shrinks instead of running
-/// under the stamp.
+/// take. The chips get the rest, so at large text sizes they shrink instead
+/// of running under the stamp.
 const stampRowFlex = 42;
 
 /// The player's strongest expression as a rubber-stamped #tag on the camera

@@ -141,7 +141,6 @@ class _MeasuringCamera extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final name = game.currentPlayer.name;
     return ListenableBuilder(
       listenable: game.live,
       builder: (context, _) {
@@ -152,9 +151,11 @@ class _MeasuringCamera extends StatelessWidget {
           guideClear: cameraGuideClear(context),
           overlay: Stack(
             children: [
-              // The chip shrinks to fit a long name rather than run under
-              // the expression stamp, which hangs from the same row and may
-              // run over the oval's edge.
+              // No name: the header pill already says whose turn it is, and
+              // it's their face in the frame. The chip shrinks to fit at
+              // large text sizes rather than run under the expression stamp,
+              // which hangs from the same row and may run over the oval's
+              // edge.
               Positioned(
                 top: 12,
                 left: 12,
@@ -170,7 +171,7 @@ class _MeasuringCamera extends StatelessWidget {
                           fit: BoxFit.scaleDown,
                           child: DotChip(
                             label: issue == null
-                                ? 'Measuring $name'
+                                ? 'Measuring'
                                 : 'Reading paused',
                             dot: SusColors.tomato,
                           ),
@@ -516,7 +517,6 @@ class _AnswerCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final name = game.currentPlayer.name;
     final solo = game.mode == GameMode.solo;
     return ListenableBuilder(
       listenable: game.live,
@@ -534,7 +534,9 @@ class _AnswerCard extends StatelessWidget {
                 const SizedBox(width: 6),
                 Expanded(
                   child: Text(
-                    talking ? '$name · talking' : '$name · listening',
+                    // By role, like "Asker · listening" in this slot on
+                    // Ask; the header pill already names the player.
+                    talking ? 'Hot seat · talking' : 'Hot seat · listening',
                     style: SusText.label(13),
                   ),
                 ),
