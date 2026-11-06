@@ -4,6 +4,7 @@ import '../app_scope.dart';
 import '../game/game_controller.dart';
 import '../game/models.dart';
 import '../presage/camera_preview.dart';
+import '../theme/expression_stamp.dart';
 import '../theme/fit_text.dart';
 import '../theme/game_widgets.dart';
 import '../theme/sparkline.dart';
@@ -151,22 +152,40 @@ class _MeasuringCamera extends StatelessWidget {
           guideClear: cameraGuideClear(context),
           overlay: Stack(
             children: [
-              // Shrinks to fit a long name rather than run off the edge.
+              // The chip shrinks to fit a long name rather than run under
+              // the expression stamp, which hangs from the same row and may
+              // run over the oval's edge.
               Positioned(
                 top: 12,
                 left: 12,
                 right: 12,
-                child: Align(
-                  alignment: Alignment.centerLeft,
-                  child: FittedBox(
-                    fit: BoxFit.scaleDown,
-                    child: DotChip(
-                      label: issue == null
-                          ? 'Measuring $name'
-                          : 'Reading paused',
-                      dot: SusColors.tomato,
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      flex: 100 - stampRowFlex,
+                      child: Align(
+                        alignment: Alignment.topLeft,
+                        child: FittedBox(
+                          fit: BoxFit.scaleDown,
+                          child: DotChip(
+                            label: issue == null
+                                ? 'Measuring $name'
+                                : 'Reading paused',
+                            dot: SusColors.tomato,
+                          ),
+                        ),
+                      ),
                     ),
-                  ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      flex: stampRowFlex,
+                      child: ExpressionStampSlot(
+                        tag: issue == null ? game.live.expression.tag : null,
+                        stressTags: game.config.exprCategories,
+                      ),
+                    ),
+                  ],
                 ),
               ),
               // While the reading is paused its numbers are frozen, so the

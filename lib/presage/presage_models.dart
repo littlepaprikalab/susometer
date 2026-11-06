@@ -110,6 +110,7 @@ class PresageSample {
     this.blink = false,
     this.talking = false,
     this.expr = const {},
+    this.exprAtMs,
     this.validation,
     this.error,
     this.events = const [],
@@ -142,6 +143,10 @@ class PresageSample {
   /// Expression probabilities 0..1, keyed by lowercase SDK category
   /// (angry, contempt, disgust, fear, happy, neutral, sad, surprise).
   final Map<String, double> expr;
+
+  /// When the bridge received the current [expr] sample (the bridge keeps
+  /// the last scores between SDK updates), or null if it hasn't said.
+  final int? exprAtMs;
   final ValidationInfo? validation;
   final PresageErrorInfo? error;
 
@@ -197,6 +202,7 @@ class PresageSample {
       blink: m['blink'] as bool? ?? false,
       talking: m['talking'] as bool? ?? false,
       expr: expr,
+      exprAtMs: _int(m['exprAt']),
       validation: ValidationInfo.fromMap(m['validation']),
       error: PresageErrorInfo.fromMap(m['error']),
       events: events,

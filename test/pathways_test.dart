@@ -6,13 +6,16 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:susometer/game/game_controller.dart';
 import 'package:susometer/game/models.dart';
 import 'package:susometer/presage/camera_preview.dart';
 import 'package:susometer/presage/presage_models.dart';
 import 'package:susometer/settings/app_settings.dart';
+import 'package:susometer/theme/expression_stamp.dart';
 import 'package:susometer/theme/game_widgets.dart';
+import 'package:susometer/theme/tokens.dart';
 
 import 'rig.dart';
 
@@ -64,6 +67,37 @@ void expectOvalClear(WidgetTester tester, List<Finder> overlays, String when) {
           reason: '$when: the oval runs under $f',
         );
       }
+    }
+  }
+}
+
+/// The expression stamp shows inside the camera, clear of its chips and
+/// cards. (It may run over the oval: it's stamped on the picture.)
+void expectStampPlaced(WidgetTester tester, List<Finder> others, String when) {
+  final stamp = find.byType(ExpressionStamp);
+  expect(stamp, findsOneWidget, reason: '$when: no expression stamp');
+  final r = tester.getRect(stamp);
+  final window = tester
+      .getRect(find.byType(CameraWindow))
+      .deflate(SusShape.borderWidth - 0.01);
+  expect(
+    window.contains(r.topLeft) && window.contains(r.bottomRight),
+    isTrue,
+    reason: '$when: the stamp $r runs off the camera $window',
+  );
+  for (final f in others) {
+    for (final el in f.evaluate()) {
+      // Both corners, through any FittedBox scaling the chip down.
+      final box = el.renderObject! as RenderBox;
+      final o = Rect.fromPoints(
+        box.localToGlobal(Offset.zero),
+        box.localToGlobal(box.size.bottomRight(Offset.zero)),
+      );
+      expect(
+        r.overlaps(o.deflate(1)),
+        isFalse,
+        reason: '$when: the stamp covers $f',
+      );
     }
   }
 }
@@ -298,13 +332,38 @@ void main() {
     final rig = Rig(tester);
     await rig.pumpApp();
     await rig.startParty(['Sam', 'Alex'], questions: 3);
+    rig.presage.expr = const {'fear': 0.6, 'neutral': 0.3};
     await rig.tap('I agree, measure me');
     await rig.until(() => rig.game.phase == GamePhase.ask);
+    await rig.wait(1000);
+    expect(find.text('#fear'), findsOneWidget);
+    // Performance: the overlay rebuilds at 10 Hz, but an unchanged stamp
+    // keeps its picture (its worn-ink layer is the costly part).
+    final stampLayer = tester.renderObject<RenderRepaintBoundary>(
+      find
+          .descendant(
+            of: find.byType(ExpressionStamp),
+            matching: find.byType(RepaintBoundary),
+          )
+          .first,
+    );
+    int paints() =>
+        stampLayer.debugSymmetricPaintCount +
+        stampLayer.debugAsymmetricPaintCount;
+    final before = paints();
+    expect(before, greaterThan(0), reason: 'paint counts are tracked');
+    await rig.wait(1000);
+    expect(paints(), before, reason: 'the stamp repainted while unchanged');
     await checkScreen(tester, 'ask');
     rig.game.doneAsking();
     rig.presage.code = 'NO_FACE_FOUND';
     await rig.wait(2000);
     expect(find.text("Picks up again when it's clear"), findsOneWidget);
+    expect(
+      find.byType(ExpressionStamp),
+      findsNothing,
+      reason: 'no expression without a face',
+    );
     expectOvalClear(tester, [
       chip('Reading paused'),
       chip('Picks up again'),
@@ -421,6 +480,8 @@ void main() {
             await rig.startParty(
               mode == GameMode.solo ? ['Christopher'] : ['Christopher', 'Alex'],
             );
+            // One of the longest tags.
+            rig.presage.expr = const {'contempt': 0.6, 'neutral': 0.3};
             await rig.tap('I agree, measure me');
             await rig.until(() => rig.game.phase == GamePhase.calibrate);
             await rig.wait(1500);
@@ -428,6 +489,11 @@ void main() {
               chip('Face found'),
               chip('Looking for a face'),
               chip('Light'),
+            ], 'calibrate');
+            expectStampPlaced(tester, [
+              chip('Face found'),
+              chip('Light'),
+              find.byType(LiveStatCard),
             ], 'calibrate');
             // During a warm-up answer the "is talking" chip shows too.
             await rig.until(
@@ -454,6 +520,10 @@ void main() {
             expectOvalClear(tester, [
               chip('Measuring'),
               liveCards.first,
+            ], 'ask');
+            expectStampPlaced(tester, [
+              chip('Measuring'),
+              find.byType(LiveStatCard),
             ], 'ask');
             final rect = tester.getRect(camera);
             final element = tester.element(camera);
@@ -511,6 +581,14 @@ void main() {
                   )
                   .first,
             ], 'answer');
+            expectStampPlaced(tester, [
+              chip('Measuring'),
+              find.byType(LiveStatCard),
+            ], 'answer');
+            rig.presage.expr = const {'surprise': 0.7, 'neutral': 0.2};
+            await rig.wait(1500);
+            expect(find.text('#surprise'), findsOneWidget);
+            same('the expression changes');
             rig.presage.talk(false);
             await rig.wait(400);
             await rig.tap('Final answer');

@@ -13,6 +13,7 @@ import '../voice/speech_service.dart';
 import '../voice/turn_detector.dart';
 import 'awards.dart';
 import 'decks.dart';
+import 'expression_tag.dart';
 import 'models.dart';
 import 'scoring.dart';
 import 'scoring_config.dart';
@@ -76,6 +77,9 @@ class LiveState extends ChangeNotifier {
 
   /// Confident pulse readings since the question started, for the trend line.
   List<PulsePoint> questionPulse = const [];
+
+  /// The #tag stamped on the camera: the player's strongest expression.
+  final ExpressionTagger expression = ExpressionTagger();
 
   void notify() => notifyListeners();
 
@@ -268,6 +272,9 @@ class GameController extends ChangeNotifier {
 
   void _setPhase(GamePhase p) {
     phase = p;
+    // No camera, no expression: covers every way out of a turn (E5, the
+    // lobby, the next player's consent), stopped cleanly or not.
+    if (!_sdkShouldRun) live.expression.reset();
     notifyListeners();
   }
 
@@ -470,6 +477,9 @@ class GameController extends ChangeNotifier {
       }
       await presage.configure(telemetry: settings.telemetry);
       await presage.start();
+      // A new session: nothing carries over from the last player or the
+      // last attempt.
+      live.expression.reset();
       if (epoch != _epoch || !(_sdkShouldRun || fromOffline)) {
         await _safeStopSdk();
         return false;
@@ -1034,6 +1044,7 @@ class GameController extends ChangeNotifier {
   Future<void> _stopMeasuring() async {
     _stopTicker();
     detector = null;
+    live.expression.reset();
     if (micEnabled) {
       await speech.stop().catchError((Object _) {});
     }
@@ -1209,6 +1220,7 @@ class GameController extends ChangeNotifier {
     paused = true;
     _needsRestart = true;
     _stopTicker();
+    live.expression.reset();
     if (micEnabled) await speech.stop().catchError((Object _) {});
     await host.stopSpeaking().catchError((Object _) {});
     try {
@@ -1239,10 +1251,18 @@ class GameController extends ChangeNotifier {
       }
     }
     if (!_sdkShouldRun) {
+      live.expression.reset();
       live.notify();
       return;
     }
     log.add(s);
+    live.expression.add(
+      s.tMs,
+      s.expr,
+      faceOk:
+          s.status == PresageStatus.running && (s.validation?.isOk ?? false),
+      exprAtMs: s.exprAtMs,
+    );
 
     // E3: a validation problem that lasts more than 1.5 s.
     final issue = SignalIssue.fromCode(s.validation?.code);

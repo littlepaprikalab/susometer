@@ -375,6 +375,7 @@ final class PresageBridge {
         expr[Self.expressionName(score.type)] = Double(score.confidence) / 100.0
       }
       state.expr = expr
+      state.exprAt = now
       state.dirty = true
     }
   }
@@ -561,6 +562,9 @@ struct StreamState {
   var blink = false
   var talking = false
   var expr: [String: Double] = [:]
+  /// When the latest expression sample arrived, so Dart can tell fresh
+  /// scores from ones the SDK stopped updating.
+  var exprAt: Int64?
   var faceSamples = 0
 
   var events: [[String: Any]] = []
@@ -584,6 +588,7 @@ struct StreamState {
     blink = false
     talking = false
     expr = [:]
+    exprAt = nil
     faceSamples = 0
     events.removeAll()
     trace.removeAll()
@@ -612,6 +617,7 @@ struct StreamState {
     if let pulse { out["pulse"] = pulse }
     if let pulseConf { out["pulseConf"] = pulseConf }
     if let pulseAt { out["pulseAt"] = pulseAt }
+    if let exprAt { out["exprAt"] = exprAt }
     if let rmssd { out["rmssd"] = rmssd }
     if let hrvConf { out["hrvConf"] = hrvConf }
     if let validation {
