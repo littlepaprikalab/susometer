@@ -111,14 +111,12 @@ ThemeData buildSusTheme() {
     ),
     switchTheme: SwitchThemeData(
       thumbColor: WidgetStateProperty.resolveWith(
-        (s) => s.contains(WidgetState.selected)
-            ? SusColors.cream
-            : SusColors.ink,
+        (s) =>
+            s.contains(WidgetState.selected) ? SusColors.cream : SusColors.ink,
       ),
       trackColor: WidgetStateProperty.resolveWith(
-        (s) => s.contains(WidgetState.selected)
-            ? SusColors.teal
-            : SusColors.unlit,
+        (s) =>
+            s.contains(WidgetState.selected) ? SusColors.teal : SusColors.unlit,
       ),
       trackOutlineColor: const WidgetStatePropertyAll(SusColors.ink),
     ),

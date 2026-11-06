@@ -350,9 +350,34 @@ Add unit tests for scoring and turn detection with synthetic streams. They're ru
 ## 16. Open items to verify on the device
 
 - [ ] The camera (SmartSpectra) and mic (speech recognition) run together without audio session errors.
-- [ ] The confidence field name on `MeasurementWithConfidence`, and the expression category names (Data Types reference).
+- [x] The confidence field name on `MeasurementWithConfidence`, and the expression category names (Data Types reference). *`confidence`, a percentage 0–100; expressions: angry, contempt, disgust, fear, happy, neutral, sad, surprise. See Decisions.*
 - [ ] Whether the SDK needs network access to start, and its behavior offline.
 - [ ] Whether `speech_to_text` on-device mode really avoids server recognition; if unsure, use native `SFSpeechRecognizer`.
 - [ ] How best to implement **Test connection**: does auth happen at `start()` with no frames?
 - [ ] How a handheld phone affects `EXCESSIVE_MOTION` frequency; adjust the copy that says "hold with both hands".
 - [ ] Tune the `ScoringConfig` constants after 3–4 play-test games.
+
+---
+
+## Decisions made during build
+
+Choices made once the real APIs were in hand. Where these differ from the sections above, these win.
+
+### Milestone 0–1
+
+1. **SmartSpectra SDK version and packaging.** SmartSpectra-Swift **3.4.0** (latest stable tag), added to the Runner target as a Swift Package with an exact-version pin. Flutter 3.47 uses Swift Package Manager by default, so there is no CocoaPods/Podfile. The SDK binary was built with Swift 6.2.4, so building needs **Xcode 26 or later**.
+2. **Breathing metrics are not requested** (changes §5.1). Requested: `.pulseRate, .arterialPressureTrace, .hrv, .blinking, .talking, .expressions`. Breathing isn't scored anyway. More importantly, the SDK docs say LLM Insights auto-fire "once a session is running" and send buffered pulse/HRV/breathing values to Presage's LLM gateway, there is no documented switch to turn that off, and the docs say Insights need **breathing + cardio** active. Leaving breathing out removes that precondition. As a check, the bridge watches `sdk.insight` and reports `insightSeen` in the stream; the spike screen and Proof Panel show "LLM insight seen". It must stay "no" on the device before §8 can claim no vitals leave the phone.
+3. **`.arterialPressureTrace` is requested** to draw the live pulse waveform on Calibrate (§2 "live BPM and waveform"). It's part of the SDK's cardio bundle and is never scored.
+4. **SDK telemetry.** The SDK default is `enableTelemetry = true`. The bridge sets it to `false` when it registers at app launch, before any session can start, and `configure()` applies the Settings toggle (off by default).
+5. **Confidence units.** The SDK reports confidence as a percentage (0–100) on `MeasurementWithConfidence.confidence`, `Hrv.confidence` and `ExpressionScore.confidence`. The bridge normalizes all of these to 0–1 (`pulseConf`, `hrvConf`, `expr`), so `ScoringConfig` thresholds are 0–1.
+6. **Validation codes.** The SDK has more codes than §6 lists. All are sent as SCREAMING_SNAKE: `OK, NO_FACE_FOUND, MULTIPLE_FACES_FOUND, FACE_NOT_CENTERED, FACE_SIZE_OUT_OF_RANGE (deprecated), TOO_DARK, TOO_BRIGHT, CHEST_NOT_VISIBLE, CAMERA_TUNING, FRAME_RATE_TOO_LOW, EXCESSIVE_MOTION, FACE_TOO_CLOSE, FACE_TOO_FAR, FACE_TOO_HIGH, FACE_TOO_LOW, FACE_NOT_FORWARD`.
+7. **Stream shape** (extends §6). One snapshot map every ~100 ms while a session is active. Edges come inside it as `events: [{e: blinkEvent|talkStart|talkEnd, t, ts}]` instead of separate messages. Extra keys: `pulseAt` (when the current pulse sample arrived; a new value means a fresh sample), `pulseStable`/`hrvStable` (SDK `stable` flags), `trace` (waveform samples since the last snapshot), `insightSeen`. Missing keys mean null.
+8. **One time base.** `t` values are wall-clock milliseconds taken when the bridge observed the sample or edge, so they line up with speech-recognition timestamps for turn detection. Raw SDK timestamps (µs) ride along as `ts` for the Proof Panel.
+9. **Speech recognition is native** (`SFSpeechRecognizer` in `ios/Runner/Voice/SpeechBridge.swift`), not the `speech_to_text` plugin, for full control of on-device mode and the audio session. Every request sets `requiresOnDeviceRecognition = true`. If on-device recognition isn't supported for the language, listening fails with `ON_DEVICE_UNAVAILABLE`; there is no server fallback. Audio session: `.playAndRecord`, mode `.default`, `.defaultToSpeaker`. Recognition runs in segments that restart after silence; Dart joins them (`TranscriptBuffer`). `pause()`/`resume()` implement the half-duplex gate for milestone 3.
+10. **Settings live in memory only.** Toggles reset to their defaults on every launch (telemetry off), because nothing is written to disk (§8). Only the API key persists, in the Keychain.
+11. **Keychain and app deletion.** iOS keeps Keychain items after an app is deleted, so the §8 claim "until the app is deleted" wouldn't hold on its own. On the first launch after an install, the app deletes any leftover key. It detects a fresh install with a single `UserDefaults` boolean (`sus.installMarker.v1`), which iOS does delete with the app. That flag is the only thing written outside the Keychain, and it holds no game data.
+12. **Test connection** configures, starts a real SDK camera session, and passes when the pipeline reaches `running` and stays there for 2 s without a connection error (`authenticationFailed`, `creditExhausted`, `networkError`, `serverError`, `configurationFailed`). It needs camera permission. The result reports where auth was decided (`start` or `running`) and how long it took, to settle §16 on the device. Only auth-type codes show **Key rejected**; camera, network or timeout failures keep **Key saved** and show the reason.
+13. **Keep-awake** uses `UIApplication.isIdleTimerDisabled` directly (a `setKeepAwake` call on the Presage channel) instead of a plugin.
+14. **Portal link.** Until `url_launcher` is added, Settings offers "Copy portal link" for physiology.presagetech.com.
+15. **Home screen during milestone 1** is a bare "Bridge spike" screen (camera preview, live signals, transcript). The Lobby replaces it in milestone 2.
+
