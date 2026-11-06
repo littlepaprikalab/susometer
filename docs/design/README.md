@@ -76,6 +76,8 @@ The spec wins where the two disagree (see SPEC.md, "Decisions made during build"
   reading is paused, instead of floating over the face.
 - **Leaderboard footnote:** "Scores are wiped when you leave this screen" conflicts with going on to
   the Replay. The app says scores are wiped when a new game starts or on Wipe.
+- **Replay tabs:** the mock always has four tabs. With one contestant the app shows the name line
+  (initial, name, question count) instead of a lone tab, and each tab carries the player's initial.
 
 ## Design tokens
 

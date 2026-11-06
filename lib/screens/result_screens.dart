@@ -845,45 +845,29 @@ class _ReplayScreenState extends State<ReplayScreen> {
             ],
           ),
           const SizedBox(height: 14),
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: Row(
-              children: [
-                for (var i = 0; i < turns.length; i++) ...[
-                  if (i > 0) const SizedBox(width: 6),
-                  Semantics(
-                    button: true,
-                    selected: i == tab,
-                    label: turns[i].player.name,
-                    excludeSemantics: true,
-                    onTap: () => setState(() => _tab = i),
-                    child: GestureDetector(
+          // One contestant gets a name line: a lone tab has nothing to
+          // switch to and reads as a stray button.
+          if (turns.length == 1) ...[
+            _ReplayName(turn: turns.first),
+            const SizedBox(height: 14),
+          ] else if (turns.length > 1) ...[
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: [
+                  for (var i = 0; i < turns.length; i++) ...[
+                    if (i > 0) const SizedBox(width: 6),
+                    _ReplayTab(
+                      player: turns[i].player,
+                      selected: i == tab,
                       onTap: () => setState(() => _tab = i),
-                      child: Container(
-                        height: 44,
-                        padding: const EdgeInsets.symmetric(horizontal: 14),
-                        alignment: Alignment.center,
-                        decoration: BoxDecoration(
-                          color: i == tab ? SusColors.ink : SusColors.cream,
-                          borderRadius: BorderRadius.circular(22),
-                          border: Border.all(color: SusColors.ink, width: 2.5),
-                        ),
-                        child: Text(
-                          turns[i].player.name,
-                          style: SusText.body(
-                            14,
-                            weight: FontWeight.w700,
-                            color: i == tab ? SusColors.mustard : SusColors.ink,
-                          ),
-                        ),
-                      ),
                     ),
-                  ),
+                  ],
                 ],
-              ],
+              ),
             ),
-          ),
-          const SizedBox(height: 14),
+            const SizedBox(height: 14),
+          ],
           Expanded(
             child: turns.isEmpty
                 ? Text(
@@ -929,6 +913,97 @@ class _ReplayScreenState extends State<ReplayScreen> {
             ],
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// The Replay's heading when only one contestant played: avatar and name, set
+/// like the Lobby's player rows, and how many questions are below.
+class _ReplayName extends StatelessWidget {
+  const _ReplayName({required this.turn});
+
+  final PlayerTurn turn;
+
+  @override
+  Widget build(BuildContext context) {
+    final count = turn.results.length;
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 2),
+      child: Row(
+        children: [
+          Avatar(initial: turn.player.initial),
+          const SizedBox(width: 10),
+          // Long names shrink to fit rather than lose letters to "…".
+          Expanded(
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: Alignment.centerLeft,
+              child: Text(
+                turn.player.name,
+                maxLines: 1,
+                style: SusText.display(22),
+              ),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Text(
+            count == 1 ? '1 question' : '$count questions',
+            style: SusText.body(14, weight: FontWeight.w600),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// A contestant tab on the Replay. Ink when picked, like the Lobby pickers,
+/// with the same teal initial as the player's Lobby row.
+class _ReplayTab extends StatelessWidget {
+  const _ReplayTab({
+    required this.player,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final Player player;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      button: true,
+      selected: selected,
+      label: player.name,
+      excludeSemantics: true,
+      onTap: onTap,
+      child: GestureDetector(
+        onTap: onTap,
+        child: Container(
+          height: 44,
+          padding: const EdgeInsets.fromLTRB(4, 0, 14, 0),
+          decoration: BoxDecoration(
+            color: selected ? SusColors.ink : SusColors.cream,
+            borderRadius: BorderRadius.circular(22),
+            border: Border.all(color: SusColors.ink, width: 2.5),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Avatar(initial: player.initial, size: 32),
+              const SizedBox(width: 8),
+              Text(
+                player.name,
+                style: SusText.body(
+                  15,
+                  weight: FontWeight.w700,
+                  color: selected ? SusColors.mustard : SusColors.ink,
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
