@@ -155,7 +155,14 @@ class _LobbyScreenState extends State<LobbyScreen> {
                     const SizedBox(height: 14),
                     Text('Contestants', style: SusText.display(22)),
                     const SizedBox(height: 8),
-                    _ModeToggle(game: game),
+                    _Choices<GameMode>(
+                      values: const [GameMode.party, GameMode.solo],
+                      selected: game.mode,
+                      label: (m) =>
+                          m == GameMode.party ? 'Party' : 'Solo · host asks',
+                      pill: true,
+                      onSelected: game.setMode,
+                    ),
                     const SizedBox(height: 10),
                     for (final p in game.players) ...[
                       _PlayerRow(
@@ -173,7 +180,7 @@ class _LobbyScreenState extends State<LobbyScreen> {
                     const SizedBox(height: 14),
                     Text('Questions per turn', style: SusText.label(14)),
                     const SizedBox(height: 8),
-                    _Segmented<int>(
+                    _Choices<int>(
                       values: const [3, 5, 7],
                       selected: game.questionsPerTurn,
                       label: (v) => '$v',
@@ -188,7 +195,7 @@ class _LobbyScreenState extends State<LobbyScreen> {
                       style: SusText.label(14),
                     ),
                     const SizedBox(height: 8),
-                    _Segmented<DeckKind>(
+                    _Choices<DeckKind>(
                       values: DeckKind.values,
                       selected: game.deck,
                       label: (d) => d == DeckKind.mild ? 'Mild' : 'Spicy',
@@ -233,62 +240,6 @@ class _LobbyScreenState extends State<LobbyScreen> {
   }
 }
 
-class _ModeToggle extends StatelessWidget {
-  const _ModeToggle({required this.game});
-
-  final GameController game;
-
-  @override
-  Widget build(BuildContext context) {
-    Widget option(String label, GameMode mode) {
-      final on = game.mode == mode;
-      return Semantics(
-        button: true,
-        selected: on,
-        label: label,
-        excludeSemantics: true,
-        onTap: () => game.setMode(mode),
-        child: GestureDetector(
-          onTap: () => game.setMode(mode),
-          child: Container(
-            height: 44,
-            padding: const EdgeInsets.symmetric(horizontal: 10),
-            alignment: Alignment.center,
-            color: on ? SusColors.ink : Colors.transparent,
-            child: FittedBox(
-              fit: BoxFit.scaleDown,
-              child: Text(
-                label,
-                maxLines: 1,
-                style: SusText.body(
-                  14,
-                  weight: FontWeight.w700,
-                  color: on ? SusColors.mustard : SusColors.ink,
-                ),
-              ),
-            ),
-          ),
-        ),
-      );
-    }
-
-    return Container(
-      decoration: BoxDecoration(
-        color: SusColors.cream,
-        borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: SusColors.ink, width: 2.5),
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: Row(
-        children: [
-          Expanded(child: option('Party', GameMode.party)),
-          Expanded(child: option('Solo · host asks', GameMode.solo)),
-        ],
-      ),
-    );
-  }
-}
-
 class _PlayerRow extends StatelessWidget {
   const _PlayerRow({required this.player, required this.onRemove});
 
@@ -308,11 +259,16 @@ class _PlayerRow extends StatelessWidget {
         children: [
           Avatar(initial: player.initial),
           const SizedBox(width: 12),
+          // Long names shrink to fit rather than lose letters to "…".
           Expanded(
-            child: Text(
-              player.name,
-              overflow: TextOverflow.ellipsis,
-              style: SusText.body(17, weight: FontWeight.w700),
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: Alignment.centerLeft,
+              child: Text(
+                player.name,
+                maxLines: 1,
+                style: SusText.display(21),
+              ),
             ),
           ),
           IconButton(
@@ -354,7 +310,8 @@ class _AddRow extends StatelessWidget {
             textInputAction: TextInputAction.done,
             maxLength: 20,
             onSubmitted: (_) => onAdd(),
-            style: SusText.body(16, weight: FontWeight.w600),
+            // Typed names use the same face and size as the contestant rows.
+            style: SusText.display(21),
             decoration: InputDecoration(
               counterText: '',
               hintText: enabled ? 'Add a contestant' : 'Eight is the max',
@@ -397,69 +354,106 @@ class _AddRow extends StatelessWidget {
       );
 }
 
-class _Segmented<T> extends StatelessWidget {
-  const _Segmented({
+/// A row of choice tiles (mode, questions per turn, deck). The picked tile is
+/// wider, taller and set in larger type than the others, so the choice reads
+/// at a glance by size as well as by color.
+class _Choices<T> extends StatelessWidget {
+  const _Choices({
     required this.values,
     required this.selected,
     required this.label,
     required this.onSelected,
     this.display = false,
+    this.pill = false,
   });
 
   final List<T> values;
   final T selected;
   final String Function(T) label;
   final ValueChanged<T> onSelected;
+
+  /// Labels in the display face (numbers) instead of bold body text.
   final bool display;
+
+  /// Fully rounded tiles (the Party / Solo switch).
+  final bool pill;
+
+  static const _gap = 8.0;
+  static const _height = 46.0;
+  static const _pickedHeight = 56.0;
+
+  /// The picked tile's width relative to the others.
+  static const _pickedGrow = 1.3;
+
+  TextStyle _style(bool on) {
+    final color = on ? SusColors.mustard : SusColors.ink;
+    if (display) return SusText.display(on ? 24 : 18, color: color);
+    return SusText.body(on ? 18 : 15, weight: FontWeight.w700, color: color);
+  }
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      children: [
-        for (var i = 0; i < values.length; i++) ...[
-          if (i > 0) const SizedBox(width: 8),
-          Expanded(
-            child: Semantics(
-              button: true,
-              selected: values[i] == selected,
-              label: label(values[i]),
-              excludeSemantics: true,
-              onTap: () => onSelected(values[i]),
-              child: GestureDetector(
-                onTap: () => onSelected(values[i]),
-                child: Container(
-                  height: 46,
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(
-                    color: values[i] == selected
-                        ? SusColors.ink
-                        : SusColors.cream,
-                    borderRadius: BorderRadius.circular(14),
-                    border: Border.all(color: SusColors.ink, width: 2.5),
-                  ),
-                  child: Text(
-                    label(values[i]),
-                    style: display
-                        ? SusText.display(
-                            18,
-                            color: values[i] == selected
-                                ? SusColors.mustard
-                                : SusColors.ink,
-                          )
-                        : SusText.body(
-                            15,
-                            weight: FontWeight.w700,
-                            color: values[i] == selected
-                                ? SusColors.mustard
-                                : SusColors.ink,
-                          ),
-                  ),
+    final duration = MediaQuery.disableAnimationsOf(context)
+        ? Duration.zero
+        : const Duration(milliseconds: 180);
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final room = constraints.maxWidth - _gap * (values.length - 1);
+        final unit = room / (values.length - 1 + _pickedGrow);
+        return Row(
+          children: [
+            for (var i = 0; i < values.length; i++) ...[
+              if (i > 0) const SizedBox(width: _gap),
+              _tile(values[i], unit, duration),
+            ],
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _tile(T value, double unit, Duration duration) {
+    final on = value == selected;
+    final height = on ? _pickedHeight : _height;
+    return Semantics(
+      button: true,
+      selected: on,
+      label: label(value),
+      excludeSemantics: true,
+      onTap: () => onSelected(value),
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: () => onSelected(value),
+        // The tap area keeps the picked tile's height, so the smaller tiles
+        // are just as easy to hit.
+        child: SizedBox(
+          height: _pickedHeight,
+          child: Center(
+            child: AnimatedContainer(
+              duration: duration,
+              curve: Curves.easeOutCubic,
+              width: on ? unit * _pickedGrow : unit,
+              height: height,
+              padding: const EdgeInsets.symmetric(horizontal: 10),
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: on ? SusColors.ink : SusColors.cream,
+                borderRadius: BorderRadius.circular(pill ? height / 2 : 14),
+                border: Border.all(color: SusColors.ink, width: 2.5),
+              ),
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                child: AnimatedDefaultTextStyle(
+                  duration: duration,
+                  curve: Curves.easeOutCubic,
+                  style: _style(on),
+                  child: Text(label(value), maxLines: 1),
                 ),
               ),
             ),
           ),
-        ],
-      ],
+        ),
+      ),
     );
   }
 }
