@@ -60,6 +60,8 @@ Settings → **Signal check** → **Start both**. Allow microphone and speech re
   consent screen.
 - [ ] Verdict: the pulse chart's shaded stretch lines up with when you were talking.
 - [ ] The camera card has a visible dark border around the video, with rounded corners.
+- [ ] The preview is still mirrored like a selfie (raise your right hand: it's on the right of the
+  screen), and still fills its box after the "Too dark in here" banner slides in and out.
 - [ ] Sit so your face fills the oval: no "move closer" or "move back" banner. **If there's a
   small iPhone (SE/mini) around, try it there too, and with Larger Text on.**
 - [ ] Call it! → tap your friend's chip (Legit/Sus) → Reveal → countdown → verdict.

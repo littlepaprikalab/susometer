@@ -15,6 +15,7 @@ public struct CGAffineTransform: Sendable {
 }
 
 @preconcurrency @MainActor open class UIImage: NSObject {
+  open func withHorizontallyFlippedOrientation() -> UIImage { self }
   public override init() {}
   public init?(data: Data) {}
 }

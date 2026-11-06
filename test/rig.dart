@@ -32,8 +32,15 @@ class StreamingPresage extends FakePresage {
 
   int get now => clock.now().millisecondsSinceEpoch;
 
-  void talk(bool on) =>
+  /// Like the Swift bridge: an edge only when the state changes, and the
+  /// current state in every snapshot.
+  bool talking = false;
+  void talk(bool on) {
+    if (on != talking) {
       pending.add({'e': on ? 'talkStart' : 'talkEnd', 't': now});
+    }
+    talking = on;
+  }
 
   void _emit() {
     if (!running || !emitting) return;
@@ -51,6 +58,7 @@ class StreamingPresage extends FakePresage {
         'pulseConf': 0.9,
         'pulseAt': _pulseAt,
         'validation': {'code': code, 'hint': ''},
+        'talking': talking,
         'events': List.of(pending),
       }),
     );
@@ -96,9 +104,7 @@ class Rig {
     ),
     Size size = const Size(390, 844),
   }) async {
-    tester.view.physicalSize = size * 3;
-    tester.view.devicePixelRatio = 3;
-    addTearDown(tester.view.reset);
+    useRealPhone(tester, size);
     services = AppServices(
       presage: presage,
       speech: speech,
@@ -186,4 +192,19 @@ Future<void> waitOutTapGuard(WidgetTester tester) async {
   for (var i = 0; i < 10 && guarded(); i++) {
     await tester.pump(const Duration(milliseconds: 50));
   }
+}
+
+/// A real iPhone's screen in the test view: size, 3x pixels, and the safe
+/// areas (status bar, home indicator) that real layouts lose. iPhone 14:
+/// 47 pt top, 34 pt bottom. iPhone SE: 20 pt top, none at the bottom.
+void useRealPhone(WidgetTester tester, Size size) {
+  final notched = size.height >= 800;
+  tester.view.physicalSize = size * 3;
+  tester.view.devicePixelRatio = 3;
+  tester.view.padding = FakeViewPadding(
+    top: (notched ? 47 : 20) * 3,
+    bottom: (notched ? 34 : 0) * 3,
+  );
+  tester.view.viewPadding = tester.view.padding;
+  addTearDown(tester.view.reset);
 }

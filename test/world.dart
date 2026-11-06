@@ -77,8 +77,15 @@ class World {
   int _nextBlink = 0;
   Warmup? _answered;
 
-  void talk(bool on) =>
+  /// Like the Swift bridge: an edge only when the state changes, and the
+  /// current state in every snapshot.
+  bool talking = false;
+  void talk(bool on) {
+    if (on != talking) {
       _pendingEvents.add({'e': on ? 'talkStart' : 'talkEnd', 't': now});
+    }
+    talking = on;
+  }
 
   void say(String text, {bool isFinal = false}) => speech.controller.add(
     SpeechText(text: text, segment: speech.segment, isFinal: isFinal, tMs: now),
@@ -111,6 +118,7 @@ class World {
         'pulseAt': _pulseAt,
         'expr': const {'neutral': 0.8, 'surprise': 0.05},
         'validation': {'code': code, 'hint': code == 'OK' ? '' : 'hint'},
+        'talking': talking,
         'events': List.of(_pendingEvents),
       }),
     );

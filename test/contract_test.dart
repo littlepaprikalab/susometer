@@ -71,6 +71,11 @@ void main() {
         contains("'sus/camera_preview'"),
       );
       expect(previewSwift, contains('params["mirror"]'));
+      // The preview resizes with its box, so it must follow its container
+      // and must not mirror with a view transform (frame undefined).
+      expect(previewSwift, contains('.flexibleWidth, .flexibleHeight'));
+      expect(previewSwift, contains('withHorizontallyFlippedOrientation'));
+      expect(previewSwift, isNot(contains('.transform =')));
     });
     test('all bridges are registered at launch', () {
       for (final b in ['PresageBridge', 'SpeechBridge', 'DeviceBridge']) {
@@ -251,6 +256,19 @@ void main() {
         'thermalState',
       );
     });
+  });
+
+  test('the test fakes send the same snapshot keys as the Swift bridge', () {
+    for (final fake in ['test/rig.dart', 'test/world.dart']) {
+      final src = read(fake);
+      for (final key in ['t', 'status', 'pulse', 'pulseConf', 'pulseAt']) {
+        expect(src, contains("'$key':"), reason: '$fake: $key');
+      }
+      for (final key in ['talking', 'validation', 'events']) {
+        expect(presageSwift, contains('"$key"'));
+        expect(src, contains("'$key':"), reason: '$fake: $key');
+      }
+    }
   });
 
   group('codes Dart reacts to are codes Swift sends', () {

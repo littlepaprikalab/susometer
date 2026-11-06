@@ -3,6 +3,8 @@
 // targets (iOS), labelled tap targets, and WCAG text contrast measured on
 // the rendered pixels.
 
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:susometer/game/game_controller.dart';
@@ -10,6 +12,7 @@ import 'package:susometer/game/models.dart';
 import 'package:susometer/presage/camera_preview.dart';
 import 'package:susometer/presage/presage_models.dart';
 import 'package:susometer/settings/app_settings.dart';
+import 'package:susometer/theme/game_widgets.dart';
 
 import 'rig.dart';
 
@@ -36,6 +39,41 @@ Future<void> checkScreen(WidgetTester tester, String name) async {
   );
   handle.dispose();
 }
+
+/// The face oval never runs under the camera's chips or cards: checks
+/// points along the oval against each widget's box.
+void expectOvalClear(WidgetTester tester, List<Finder> overlays, String when) {
+  final video = tester.getRect(find.byType(CameraPreview));
+  final clear = tester
+      .widget<CameraWindow>(find.byType(CameraWindow))
+      .guideClear;
+  final oval = faceOvalRect(video.size, clear).shift(video.topLeft);
+  expect(oval.height, greaterThan(60), reason: '$when: oval too small');
+  for (final f in overlays) {
+    for (final el in f.evaluate()) {
+      final box = (el.renderObject! as RenderBox);
+      final r = box.localToGlobal(Offset.zero) & box.size;
+      for (var i = 0; i < 72; i++) {
+        final a = i * math.pi / 36;
+        final p =
+            oval.center +
+            Offset(math.cos(a) * oval.width / 2, math.sin(a) * oval.height / 2);
+        expect(
+          r.deflate(1).contains(p),
+          isFalse,
+          reason: '$when: the oval runs under $f',
+        );
+      }
+    }
+  }
+}
+
+DotChipFinder chip(String text) => find.ancestor(
+  of: find.textContaining(text),
+  matching: find.byType(DotChip),
+);
+
+typedef DotChipFinder = Finder;
 
 extension on Rig {
   Future<void> startParty(List<String> names, {int questions = 3}) async {
@@ -259,6 +297,11 @@ void main() {
     rig.game.doneAsking();
     rig.presage.code = 'NO_FACE_FOUND';
     await rig.wait(2000);
+    expect(find.text("Picks up again when it's clear"), findsOneWidget);
+    expectOvalClear(tester, [
+      chip('Reading paused'),
+      chip('Picks up again'),
+    ], 'bad signal');
     await rig.tap('Final answer');
     await rig.until(() => rig.game.phase == GamePhase.redo);
     await checkScreen(tester, 'redo');
@@ -372,10 +415,39 @@ void main() {
               mode == GameMode.solo ? ['Christopher'] : ['Christopher', 'Alex'],
             );
             await rig.tap('I agree, measure me');
+            await rig.until(() => rig.game.phase == GamePhase.calibrate);
+            await rig.wait(1500);
+            expectOvalClear(tester, [
+              chip('Face found'),
+              chip('Looking for a face'),
+              chip('Light'),
+            ], 'calibrate');
+            // During a warm-up answer the "is talking" chip shows too.
+            await rig.until(
+              () =>
+                  rig.game.currentWarmup != null &&
+                  (rig.game.live.sample?.talking ?? false),
+              what: 'a warm-up answer',
+            );
+            await rig.wait(200);
+            expect(find.textContaining('is talking'), findsOneWidget);
+            expectOvalClear(tester, [
+              chip('Face found'),
+              chip('Light'),
+              find.byType(LiveStatCard),
+            ], 'calibrate, talking');
             await rig.until(() => rig.game.phase == GamePhase.ask);
             await rig.wait(200);
 
             final camera = find.byType(CameraPreview);
+            final liveCards = find.ancestor(
+              of: find.text('Pulse'),
+              matching: find.byType(Container),
+            );
+            expectOvalClear(tester, [
+              chip('Measuring'),
+              liveCards.first,
+            ], 'ask');
             final rect = tester.getRect(camera);
             final element = tester.element(camera);
             void same(String when) {
@@ -414,6 +486,16 @@ void main() {
             await rig.wait(800);
             expect(find.textContaining('to start answering'), findsOneWidget);
             same('a long answer with the hesitation chip');
+            expectOvalClear(tester, [
+              chip('Measuring'),
+              liveCards.first,
+              find
+                  .ancestor(
+                    of: find.text('Blinks'),
+                    matching: find.byType(Container),
+                  )
+                  .first,
+            ], 'answer');
             rig.presage.talk(false);
             await rig.wait(400);
             await rig.tap('Final answer');

@@ -381,8 +381,6 @@ class CalibrateScreen extends StatelessWidget {
           ],
           Expanded(child: _CalibCamera(name: name)),
           const SizedBox(height: 12),
-          const _LiveBpmCard(),
-          const SizedBox(height: 12),
           ChunkyButton.light(
             label: "Doesn't apply? Next one",
             icon: Icons.skip_next_rounded,
@@ -503,87 +501,69 @@ class _CalibCamera extends StatelessWidget {
         final faceOk = s?.validation != null && !(s!.validation!.faceMissing);
         final lightBad = code == 'TOO_DARK' || code == 'TOO_BRIGHT';
         return CameraWindow(
-          guideClear: const EdgeInsets.only(top: 42, bottom: 42),
+          guideClear: cameraGuideClear(context),
           overlay: Stack(
             children: [
+              // One row that shrinks to fit, never wraps, so the oval
+              // below knows how tall it is.
               Positioned(
                 top: 12,
                 left: 12,
                 right: 12,
-                child: Wrap(
-                  spacing: 6,
-                  runSpacing: 6,
+                child: Row(
                   children: [
-                    DotChip(
-                      label: faceOk ? 'Face found' : 'Looking for a face',
-                      dot: faceOk ? SusColors.teal : SusColors.tomato,
+                    Flexible(
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: DotChip(
+                          label: faceOk ? 'Face found' : 'Looking for a face',
+                          dot: faceOk ? SusColors.teal : SusColors.tomato,
+                        ),
+                      ),
                     ),
-                    DotChip(
-                      label: lightBad
-                          ? (code == 'TOO_DARK'
-                                ? 'Light too low'
-                                : 'Too bright')
-                          : 'Light good',
-                      dot: lightBad ? SusColors.tomato : SusColors.teal,
+                    const SizedBox(width: 6),
+                    Flexible(
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: DotChip(
+                          label: lightBad
+                              ? (code == 'TOO_DARK'
+                                    ? 'Light too low'
+                                    : 'Too bright')
+                              : 'Light good',
+                          dot: lightBad ? SusColors.tomato : SusColors.teal,
+                        ),
+                      ),
                     ),
                   ],
                 ),
               ),
-              if (s?.talking ?? false)
-                Positioned(
-                  bottom: 12,
-                  left: 12,
-                  child: DotChip(
-                    label: '$name is talking',
-                    dot: SusColors.teal,
-                    leading: const LevelBars(
-                      level: 0.8,
-                      count: 5,
-                      maxHeight: 14,
-                      barWidth: 3,
-                    ),
-                  ),
-                ),
-            ],
-          ),
-        );
-      },
-    );
-  }
-}
-
-class _LiveBpmCard extends StatelessWidget {
-  const _LiveBpmCard();
-
-  @override
-  Widget build(BuildContext context) {
-    final game = GameScope.of(context);
-    return ListenableBuilder(
-      listenable: game.live,
-      builder: (context, _) {
-        final pulse = game.live.sample?.pulse;
-        return SusCard(
-          padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
-          child: Row(
-            children: [
-              SizedBox(
-                width: 76,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      pulse == null ? '--' : pulse.round().toString(),
-                      style: SusText.display(38, color: SusColors.tomato),
-                    ),
-                    Text('BPM · live', style: SusText.label(12)),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: SizedBox(
-                  height: 44,
-                  child: Waveform(samples: game.live.trace),
+              // The same live card as on Ask and Answer, in the same place.
+              Positioned(
+                left: LiveStatCard.inset,
+                right: LiveStatCard.inset,
+                bottom: LiveStatCard.inset,
+                child: LiveStatCard(
+                  label: 'Pulse · live',
+                  value: s?.pulse == null ? '--' : '${s!.pulse!.round()} BPM',
+                  trend: Waveform(samples: game.live.trace),
+                  // The SDK's talking signal, inside the card so nothing
+                  // sits in the face oval's space.
+                  trailing: (s?.talking ?? false)
+                      ? Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const LevelBars(
+                              level: 0.8,
+                              count: 5,
+                              maxHeight: 14,
+                              barWidth: 3,
+                            ),
+                            const SizedBox(width: 4),
+                            Text('$name is talking', style: SusText.label(11)),
+                          ],
+                        )
+                      : null,
                 ),
               ),
             ],

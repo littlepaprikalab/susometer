@@ -64,8 +64,6 @@ class _IssueBanner extends StatelessWidget {
 /// place from "Ask your question!" through "Locking in the reading…".
 const _cardHeight = 160.0;
 const _actionsHeight = 92.0;
-const _liveCardHeight = 48.0;
-const _liveCardInset = 10.0;
 
 /// Distance from the bottom of the safe area to just above the camera's
 /// live Pulse/Blinks cards, so overlays (the Proof Panel) never cover them:
@@ -74,8 +72,8 @@ const hotSeatOverlayBottom =
     ScreenFrame.defaultBottomPadding +
     _actionsHeight +
     12 +
-    _liveCardInset +
-    _liveCardHeight +
+    LiveStatCard.inset +
+    LiveStatCard.height +
     8;
 
 /// 4a and 4b in one layout (mocks: Question.dc.html, Question-Solo.dc.html,
@@ -149,48 +147,50 @@ class _MeasuringCamera extends StatelessWidget {
         // The same overlay on Ask, Answer and Settle, so nothing over the
         // face changes between them.
         return CameraWindow(
-          guideClear: const EdgeInsets.only(
-            top: 42,
-            bottom: _liveCardInset + _liveCardHeight + 4,
-          ),
+          guideClear: cameraGuideClear(context),
           overlay: Stack(
             children: [
+              // Shrinks to fit a long name rather than run off the edge.
               Positioned(
                 top: 12,
                 left: 12,
-                child: DotChip(
-                  label: issue == null ? 'Measuring $name' : 'Reading paused',
-                  dot: SusColors.tomato,
-                ),
-              ),
-              Positioned(
-                left: _liveCardInset,
-                right: _liveCardInset,
-                bottom: _liveCardInset,
-                child: _LiveStats(game: game),
-              ),
-              // On a short camera (small phone plus the E3 banner) this
-              // chip would cover "Reading paused"; the banner says it too.
-              if (issue != null)
-                Positioned.fill(
-                  child: LayoutBuilder(
-                    builder: (context, c) => c.maxHeight < 200
-                        ? const SizedBox.shrink()
-                        : const Stack(
-                            children: [
-                              Positioned(
-                                bottom: 68,
-                                left: 12,
-                                child: DotChip(
-                                  label: "Picks up again when it's clear",
-                                  dot: SusColors.bulb,
-                                  fontSize: 12,
-                                ),
-                              ),
-                            ],
-                          ),
+                right: 12,
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: DotChip(
+                      label: issue == null
+                          ? 'Measuring $name'
+                          : 'Reading paused',
+                      dot: SusColors.tomato,
+                    ),
                   ),
                 ),
+              ),
+              // While the reading is paused its numbers are frozen, so the
+              // cards' row says when it comes back instead. Same row, so
+              // nothing runs into the face oval.
+              Positioned(
+                left: LiveStatCard.inset,
+                right: LiveStatCard.inset,
+                bottom: LiveStatCard.inset,
+                child: issue == null
+                    ? _LiveStats(game: game)
+                    : SizedBox(
+                        height: LiveStatCard.height,
+                        child: Center(
+                          child: FittedBox(
+                            fit: BoxFit.scaleDown,
+                            child: DotChip(
+                              label: "Picks up again when it's clear",
+                              dot: SusColors.bulb,
+                              fontSize: 13,
+                            ),
+                          ),
+                        ),
+                      ),
+              ),
             ],
           ),
         );
@@ -219,7 +219,7 @@ class _LiveStats extends StatelessWidget {
       children: [
         Expanded(
           flex: 3,
-          child: _StatChip(
+          child: LiveStatCard(
             label: 'Pulse',
             value: pulse == null ? '--' : '${pulse.round()} BPM',
             delta: pulse == null || base == null ? null : pulse - base.pulse,
@@ -234,7 +234,7 @@ class _LiveStats extends StatelessWidget {
         const SizedBox(width: 8),
         Expanded(
           flex: 2,
-          child: _StatChip(
+          child: LiveStatCard(
             label: 'Blinks',
             value: blinks == null ? '--' : '${blinks.round()} / min',
             delta: blinks == null || base == null
@@ -243,86 +243,6 @@ class _LiveStats extends StatelessWidget {
           ),
         ),
       ],
-    );
-  }
-}
-
-class _StatChip extends StatelessWidget {
-  const _StatChip({
-    required this.label,
-    required this.value,
-    this.delta,
-    this.trend,
-  });
-
-  final String label;
-  final String value;
-  final double? delta;
-
-  /// Optional small chart between the number and the arrow.
-  final Widget? trend;
-
-  @override
-  Widget build(BuildContext context) {
-    final d = delta;
-    final text = Column(
-      mainAxisAlignment: MainAxisAlignment.center,
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Flexible(
-          child: FittedBox(
-            fit: BoxFit.scaleDown,
-            child: Text(
-              label,
-              style: SusText.body(11, weight: FontWeight.w600),
-            ),
-          ),
-        ),
-        Flexible(
-          child: FittedBox(
-            fit: BoxFit.scaleDown,
-            child: Text(
-              value,
-              style: SusText.body(16, weight: FontWeight.w700),
-            ),
-          ),
-        ),
-      ],
-    );
-    return Container(
-      height: _liveCardHeight,
-      padding: const EdgeInsets.symmetric(horizontal: 10),
-      decoration: BoxDecoration(
-        color: SusColors.cream,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: SusColors.ink, width: 2.5),
-      ),
-      child: Row(
-        children: [
-          if (trend == null)
-            Expanded(child: text)
-          else ...[
-            // The number and the trend split the space; a long number
-            // shrinks rather than squeezing the trend out.
-            Flexible(child: text),
-            const SizedBox(width: 8),
-            Expanded(child: SizedBox(height: 30, child: trend)),
-          ],
-          if (d != null && d.round() != 0) ...[
-            Icon(
-              d > 0
-                  ? Icons.arrow_drop_up_rounded
-                  : Icons.arrow_drop_down_rounded,
-              color: d > 0 ? SusColors.tomato : SusColors.teal,
-              size: 22,
-            ),
-            Text(
-              '${d.abs().round()}',
-              style: SusText.body(14, weight: FontWeight.w700),
-            ),
-          ],
-        ],
-      ),
     );
   }
 }

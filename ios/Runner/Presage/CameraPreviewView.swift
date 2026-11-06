@@ -41,13 +41,12 @@ final class CameraPreviewPlatformView: NSObject, FlutterPlatformView {
       imageView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
       imageView.contentMode = .scaleAspectFill
       imageView.clipsToBounds = true
-      if mirror {
-        // Selfie-style preview for the front camera.
-        imageView.transform = CGAffineTransform(scaleX: -1, y: 1)
-      }
+      // Mirroring flips each image's orientation rather than transforming
+      // the view: a transformed view's frame is undefined, and this view
+      // resizes with its container (side bars, the bad-signal banner).
       container.addSubview(imageView)
 
-      let observer = PreviewObserver(imageView: imageView)
+      let observer = PreviewObserver(imageView: imageView, mirror: mirror)
       observer.start()
       madeContainer = container
       madeObserver = observer
@@ -67,9 +66,11 @@ final class CameraPreviewPlatformView: NSObject, FlutterPlatformView {
 @MainActor
 final class PreviewObserver {
   private weak var imageView: UIImageView?
+  private let mirror: Bool
 
-  init(imageView: UIImageView) {
+  init(imageView: UIImageView, mirror: Bool) {
     self.imageView = imageView
+    self.mirror = mirror
   }
 
   func start() {
@@ -85,6 +86,8 @@ final class PreviewObserver {
         self?.observe()
       }
     }
-    imageView.image = image
+    // Selfie-style for the front camera. Only the orientation flag changes;
+    // no pixels are copied.
+    imageView.image = mirror ? image?.withHorizontallyFlippedOrientation() : image
   }
 }

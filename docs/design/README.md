@@ -63,6 +63,11 @@ The spec wins where the two disagree (see SPEC.md, "Decisions made during build"
   so the camera overlay doesn't change between Ask and Answer.
 - **Verdict:** adds a "Pulse through the question" chart under the three tiles (answer shaded,
   normal dashed). Replay rows use the same chart.
+- **Calibrate:** the live pulse card (number and waveform) sits on the bottom of the camera, like
+  the Ask/Answer cards, instead of under it, and "{name} is talking" is inside it. This gives the
+  face more room on small phones.
+- **E3 in the camera:** "Picks up again when it's clear" takes the live cards' place while the
+  reading is paused, instead of floating over the face.
 - **Leaderboard footnote:** "Scores are wiped when you leave this screen" conflicts with going on to
   the Replay. The app says scores are wiped when a new game starts or on Wipe.
 

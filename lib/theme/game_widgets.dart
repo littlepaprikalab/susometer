@@ -307,6 +307,34 @@ class DotChip extends StatelessWidget {
   final double fontSize;
   final Widget? leading;
 
+  /// Height of a chip at the current text size, for layouts that must keep
+  /// clear of it (the face oval).
+  static double heightFor(BuildContext context, {double fontSize = 12}) {
+    // Called on every camera update; it only changes with the text size.
+    final scaler = MediaQuery.textScalerOf(context);
+    final key = (scaler.scale(100), fontSize);
+    return _heights[key] ??= _measure(context, fontSize);
+  }
+
+  static final _heights = <(double, double), double>{};
+
+  static double _measure(BuildContext context, double fontSize) {
+    final ambient = DefaultTextStyle.of(context);
+    final painter = TextPainter(
+      text: TextSpan(
+        text: 'Ag',
+        style: ambient.style.merge(SusText.label(fontSize)),
+      ),
+      textHeightBehavior: ambient.textHeightBehavior,
+      textDirection: Directionality.of(context),
+      textScaler: MediaQuery.textScalerOf(context),
+      maxLines: 1,
+    )..layout();
+    final h = math.max(painter.height, 14.0) + 10;
+    painter.dispose();
+    return h;
+  }
+
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -648,3 +676,109 @@ class WaveformLinePainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant WaveformLinePainter oldDelegate) => true;
 }
+
+/// Live reading card along the bottom of the camera (Calibrate, Ask,
+/// Answer): label and value, an optional small chart, and an optional change
+/// against the player's normal.
+class LiveStatCard extends StatelessWidget {
+  const LiveStatCard({
+    super.key,
+    required this.label,
+    required this.value,
+    this.delta,
+    this.trend,
+    this.trailing,
+  });
+
+  static const height = 48.0;
+
+  /// Inset from the camera's edges.
+  static const inset = 10.0;
+
+  final String label;
+  final String value;
+  final double? delta;
+
+  /// Optional small chart between the number and the arrow.
+  final Widget? trend;
+
+  /// Optional status at the right end, e.g. "Sam talking".
+  final Widget? trailing;
+
+  @override
+  Widget build(BuildContext context) {
+    final d = delta;
+    final text = Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Flexible(
+          child: FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Text(
+              label,
+              style: SusText.body(11, weight: FontWeight.w600),
+            ),
+          ),
+        ),
+        Flexible(
+          child: FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Text(
+              value,
+              style: SusText.body(16, weight: FontWeight.w700),
+            ),
+          ),
+        ),
+      ],
+    );
+    return Container(
+      height: height,
+      padding: const EdgeInsets.symmetric(horizontal: 10),
+      decoration: BoxDecoration(
+        color: SusColors.cream,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: SusColors.ink, width: 2.5),
+      ),
+      child: Row(
+        children: [
+          if (trend == null)
+            Expanded(child: text)
+          else ...[
+            // The number and the chart split the space; a long number
+            // shrinks rather than squeezing the chart out.
+            Flexible(child: text),
+            const SizedBox(width: 8),
+            Expanded(child: SizedBox(height: 30, child: trend)),
+          ],
+          if (d != null && d.round() != 0) ...[
+            Icon(
+              d > 0
+                  ? Icons.arrow_drop_up_rounded
+                  : Icons.arrow_drop_down_rounded,
+              color: d > 0 ? SusColors.tomato : SusColors.teal,
+              size: 22,
+            ),
+            Text(
+              '${d.abs().round()}',
+              style: SusText.body(14, weight: FontWeight.w700),
+            ),
+          ],
+          if (trailing != null) ...[
+            const SizedBox(width: 6),
+            Flexible(
+              child: FittedBox(fit: BoxFit.scaleDown, child: trailing),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+/// Where the face oval must stay clear of: chips along the top (at 12 pt)
+/// and live cards along the bottom.
+EdgeInsets cameraGuideClear(BuildContext context) => EdgeInsets.only(
+  top: 12 + DotChip.heightFor(context) + 4,
+  bottom: LiveStatCard.inset + LiveStatCard.height + 4,
+);

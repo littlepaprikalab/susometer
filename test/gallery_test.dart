@@ -38,9 +38,7 @@ void main() {
   testWidgets('screen gallery', skip: out == null, (tester) async {
     final rig = Rig(tester);
     final key = GlobalKey();
-    tester.view.physicalSize = const Size(390 * 3, 844 * 3);
-    tester.view.devicePixelRatio = 3;
-    addTearDown(tester.view.reset);
+    useRealPhone(tester, const Size(390, 844));
     rig.services = AppServices(
       presage: rig.presage,
       speech: rig.speech,
