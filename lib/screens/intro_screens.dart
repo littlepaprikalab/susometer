@@ -127,8 +127,9 @@ class ConsentScreen extends StatelessWidget {
     final name = game.currentPlayer.name;
     final telemetryOn = services.settings.telemetry;
     final promises = [
-      'Processed on this phone by the Presage SDK',
+      'Video is processed on this phone by the Presage SDK',
       'No video is ever saved or sent',
+      'Your pulse numbers (not video) go to Presage for an AI check-in',
       'Scores are wiped when the show ends',
       telemetryOn
           ? 'SDK telemetry is on (anonymous diagnostics, no video or vitals)'

@@ -22,5 +22,5 @@ handheld shot of the players. Good, even light on the hot seat.
 | 11 | 2:35–2:45 | Wipe | *Wipe everything* back to an empty lobby. Close on "It reads stress, not truth." |
 
 **Voice-over lines (optional):** "Sus-o-meter reads your pulse, blinks and face with Presage
-SmartSpectra, all on the phone." · "It compares you with your own baseline, so a naturally fast
+SmartSpectra; the video never leaves the phone." · "It compares you with your own baseline, so a naturally fast
 heart doesn't make you guilty." · "Shaky readings never get a score." · "It reads stress, not truth."

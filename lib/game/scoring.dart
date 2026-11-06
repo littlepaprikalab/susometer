@@ -30,22 +30,29 @@ class Scoring {
     required int end,
     required List<double> warmupLatenciesS,
   }) {
+    final c = config;
     final pulses = log.confidentPulse(start, end);
     if (pulses.isEmpty) return null;
-    final chatExpr = log.exprMean(quietEnd, end);
+    // Questions are mostly listening and talking, so compare them with the
+    // warm-up chat rather than the still part: people blink more talking.
+    final blinkFrom = end - quietEnd >= c.blinkMinChatMs ? quietEnd : start;
+    Map<String, double> peaks(int from) => log.exprPeaks(
+      from,
+      end,
+      c.exprCategories,
+      c.exprSmoothMs,
+      smile: c.exprSmile,
+    );
+    final chatPeaks = peaks(quietEnd);
     final latencies = warmupLatenciesS.where((l) => l >= 0).toList();
     return Baseline(
       pulse: median(pulses.map((p) => p.bpm).toList()),
-      blinkRatePerMin: log.blinkRatePerMin(start, end),
-      expr: chatExpr.isNotEmpty ? chatExpr : log.exprMean(start, end),
-      latencyS: latencies.isEmpty
-          ? config.defaultBaseLatencyS
-          : median(latencies),
+      blinkRatePerMin: log.blinkRatePerMin(blinkFrom, end),
+      blinkBaseMs: end - blinkFrom,
+      exprPeak: chatPeaks.isNotEmpty ? chatPeaks : peaks(start),
+      latencyS: latencies.isEmpty ? c.defaultBaseLatencyS : median(latencies),
       confidentPulseMs: log.confidentCoverageMs(start, end),
       faceFraction: log.faceFraction(start, end),
-      talkingBlinkRatePerMin: end > quietEnd
-          ? log.blinkRatePerMin(quietEnd, end)
-          : null,
     );
   }
 
@@ -153,7 +160,9 @@ class Scoring {
   /// Ranks [q] against the player's earlier answers [refs] (warm-ups and
   /// earlier questions): each feature's distance from their median, in robust
   /// spreads (1.4826 × median absolute deviation, never under the feature's
-  /// floor). Null with fewer than [ScoringConfig.shapeMinRefs] references.
+  /// floor). The first [ScoringConfig.shapeZFree] spreads are free, and
+  /// [ScoringConfig.shapeZFull] counts in full. Null with fewer than
+  /// [ScoringConfig.shapeMinRefs] references.
   ShapeScore? rankShape(PulseShape q, List<PulseShape> refs) {
     final c = config;
     if (refs.length < c.shapeMinRefs) return null;
@@ -163,7 +172,9 @@ class Scoring {
       final mid = median(r);
       final mad = median([for (final v in r) (v - mid).abs()]);
       final spread = math.max(1.4826 * mad, floor);
-      return _clamp01((x - mid) / spread / c.shapeZFull);
+      return _clamp01(
+        ((x - mid) / spread - c.shapeZFree) / (c.shapeZFull - c.shapeZFree),
+      );
     }
 
     final rise = part(q.rise, refs.map((r) => r.rise), c.shapeRiseFloorBpm);
@@ -203,17 +214,23 @@ class Scoring {
     final (peak, cat) = log.exprPeakDelta(
       t0,
       t1,
-      base.expr,
+      base.exprPeak,
       config.exprCategories,
       config.exprSmoothMs,
+      smile: config.exprSmile,
     );
     final answerStart = timing.tA0 ?? timing.tA1;
     final hesitation =
         math.max(0, answerStart - timing.hesitationFromMs) / 1000;
     return WindowFeatures(
       meanPulse: meanPulse,
+      windowMs: t1 - t0,
       blinkRatePerMin: log.blinkRatePerMin(t0, t1),
-      blinkFreeze: log.blinkFreeze(t0, t1, config.blinkFreezeMs),
+      blinkFreeze: log.blinkFreeze(
+        t0,
+        t1,
+        blinkFreezeMs(base.blinkRatePerMin, t1 - t0),
+      ),
       exprPeakDelta: peak,
       exprPeakCategory: cat,
       hesitationS: hesitation.toDouble(),
@@ -221,6 +238,46 @@ class Scoring {
       confidentPulseSamples: pulses.length,
       pulseShape: beats == null ? null : pulseShape(log, beats, timing),
     );
+  }
+
+  /// How long a gap without blinks must be to count as a freeze in a window
+  /// of [windowMs], at [ratePerMin]: blinks come at random, about
+  /// rate × window of them, and the chance that any gap between them is at
+  /// least g long is about rate × window × e^(−rate × g). This is the g where
+  /// that chance is [ScoringConfig.blinkFreezeChance], and never less than
+  /// [ScoringConfig.blinkFreezeMs].
+  int blinkFreezeMs(double ratePerMin, int windowMs) {
+    final c = config;
+    final perMs = ratePerMin / 60000;
+    if (perMs <= 0 || windowMs <= 0) return c.blinkFreezeMs;
+    final g = math.log(perMs * windowMs / c.blinkFreezeChance) / perMs;
+    return g.isFinite ? math.max(c.blinkFreezeMs, g.round()) : c.blinkFreezeMs;
+  }
+
+  /// The blink part (0..1): blinks beyond what the baseline rate plus chance
+  /// would give. Blinks are random, so a count of about n wobbles by about
+  /// √n on its own, and the baseline, counted over [Baseline.blinkBaseMs],
+  /// adds its own wobble. [ScoringConfig.blinkChanceSpreads] of that is free.
+  double blinkPart(WindowFeatures f, Baseline base) {
+    final c = config;
+    final mins = f.windowMs / 60000;
+    if (mins <= 0) return 0;
+    final rate = math.max(base.blinkRatePerMin, c.blinkMinBaselinePerMin);
+    final expected = rate * mins;
+    final baseMins = base.blinkBaseMs / 60000;
+    final wobble = math.sqrt(
+      expected * (1 + (baseMins > 0 ? mins / baseMins : 0)),
+    );
+    final excess =
+        f.blinkRatePerMin * mins -
+        base.blinkRatePerMin * mins -
+        c.blinkChanceSpreads * wobble;
+    var z = _clamp01(excess / (expected * c.blinkRelativeScale));
+    if (f.blinkFreeze &&
+        base.blinkRatePerMin >= c.blinkFreezeMinBaselinePerMin) {
+      z = math.max(z, c.blinkFreezeZ);
+    }
+    return z;
   }
 
   /// Confidence gate (SPEC.md §5.5): never fake a verdict.
@@ -268,17 +325,11 @@ class Scoring {
         (f.meanPulse == null
             ? 0.0
             : _clamp01((f.meanPulse! - base.pulse) / c.pulseScaleBpm));
-    final blinkBase = math.max(base.blinkRatePerMin, c.blinkMinBaselinePerMin);
-    var zBlink = _clamp01(
-      ((f.blinkRatePerMin - base.blinkRatePerMin) / blinkBase) /
-          c.blinkRelativeScale,
-    );
-    if (f.blinkFreeze &&
-        base.blinkRatePerMin >= c.blinkFreezeMinBaselinePerMin) {
-      zBlink = math.max(zBlink, c.blinkFreezeZ);
-    }
+    final zBlink = blinkPart(f, base);
     final zExpr = _clamp01(f.exprPeakDelta / c.exprScale);
-    final zHes = _clamp01((f.hesitationS - base.latencyS) / c.hesitationScaleS);
+    final zHes = _clamp01(
+      (f.hesitationS - base.latencyS - c.hesitationGraceS) / c.hesitationScaleS,
+    );
     final raw = _clamp01(
       c.wPulse * zPulse +
           c.wBlink * zBlink +

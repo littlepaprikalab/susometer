@@ -319,51 +319,82 @@ class SignalLog {
     return t1 - prev >= freezeMs;
   }
 
-  Map<String, double> exprMean(int t0, int t1) {
-    final sums = <String, double>{};
-    var n = 0;
-    for (final e in expr) {
-      if (e.tMs < t0 || e.tMs > t1) continue;
-      n++;
-      e.p.forEach((k, v) => sums[k] = (sums[k] ?? 0) + v);
-    }
-    if (n == 0) return {};
-    return sums.map((k, v) => MapEntry(k, v / n));
-  }
-
-  /// Largest smoothed rise of any category above the baseline mean.
-  (double, String?) exprPeakDelta(
+  /// The strongest each of [categories] got in [t0, t1]: the peak of its
+  /// [smoothMs] moving average, after subtracting [smile] frame by frame (so
+  /// a smile the SDK also scores as contempt doesn't count). Categories with
+  /// no samples are left out.
+  Map<String, double> exprPeaks(
     int t0,
     int t1,
-    Map<String, double> base,
     List<String> categories,
-    int smoothMs,
-  ) {
+    int smoothMs, {
+    String? smile,
+  }) {
     final points = [
       for (final e in expr)
         if (e.tMs >= t0 && e.tMs <= t1) e,
     ];
+    if (points.isEmpty) return {};
+    return {
+      for (final cat in categories)
+        cat: _smoothedPeak(points, cat, smile, smoothMs),
+    };
+  }
+
+  /// Largest rise of any category's smoothed, smile-free score in [t0, t1]
+  /// above [basePeak] (its peak during the warm-ups, see [exprPeaks]), and
+  /// which category it was.
+  (double, String?) exprPeakDelta(
+    int t0,
+    int t1,
+    Map<String, double> basePeak,
+    List<String> categories,
+    int smoothMs, {
+    String? smile,
+  }) {
+    final peaks = exprPeaks(t0, t1, categories, smoothMs, smile: smile);
     var best = 0.0;
     String? bestCat;
     for (final cat in categories) {
-      final baseline = base[cat] ?? 0;
-      var start = 0;
-      var sum = 0.0;
-      for (var i = 0; i < points.length; i++) {
-        sum += points[i].p[cat] ?? 0;
-        while (points[i].tMs - points[start].tMs > smoothMs) {
-          sum -= points[start].p[cat] ?? 0;
-          start++;
-        }
-        final avg = sum / (i - start + 1);
-        final delta = avg - baseline;
-        if (delta > best) {
-          best = delta;
-          bestCat = cat;
-        }
+      final peak = peaks[cat];
+      if (peak == null) continue;
+      final delta = peak - (basePeak[cat] ?? 0);
+      if (delta > best) {
+        best = delta;
+        bestCat = cat;
       }
     }
     return (best, bestCat);
+  }
+
+  static double _net(ExprPoint e, String cat, String? smile) {
+    final v = (e.p[cat] ?? 0) - (smile == null ? 0 : e.p[smile] ?? 0);
+    return v > 0 ? v : 0;
+  }
+
+  static double _smoothedPeak(
+    List<ExprPoint> points,
+    String cat,
+    String? smile,
+    int smoothMs,
+  ) {
+    var best = 0.0;
+    var start = 0;
+    var sum = 0.0;
+    for (var i = 0; i < points.length; i++) {
+      sum += _net(points[i], cat, smile);
+      while (points[i].tMs - points[start].tMs > smoothMs) {
+        sum -= _net(points[start], cat, smile);
+        start++;
+      }
+      // The first few averages hold only a frame or two, so one noisy frame
+      // would count in full. Wait for a whole span (or use the only one).
+      final full = points[i].tMs - points.first.tMs >= smoothMs;
+      if (!full && i < points.length - 1) continue;
+      final avg = sum / (i - start + 1);
+      if (avg > best) best = avg;
+    }
+    return best;
   }
 
   /// Non-OK validation codes seen in the window, with how long each lasted

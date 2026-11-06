@@ -318,8 +318,8 @@ class SdkOfflineScreen extends StatelessWidget {
                   Text("The meter won't warm up", style: SusText.display(32)),
                   const SizedBox(height: 6),
                   Text(
-                    'The Presage vitals engine signs in when a game starts. Readings still '
-                    'happen on this phone, but it needs a connection to begin.',
+                    'The Presage vitals engine signs in when a game starts. Video is still '
+                    'processed on this phone, but it needs a connection to begin.',
                     style: SusText.body(15),
                   ),
                   const SizedBox(height: 16),

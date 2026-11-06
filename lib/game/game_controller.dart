@@ -615,7 +615,10 @@ class GameController extends ChangeNotifier {
           !_calibTalk.talking &&
           lastEnd != null &&
           now - lastEnd >= 1500;
-      if (answered || now - w.askedAtMs >= 12000) {
+      final limit = _calibTalk.talking
+          ? config.calibWarmupTalkingMs
+          : config.calibWarmupMs;
+      if (answered || now - w.askedAtMs >= limit) {
         w
           ..done = true
           ..doneAtMs = answered ? lastEnd : now;
