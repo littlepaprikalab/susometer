@@ -9,6 +9,8 @@ import 'dart:math' as math;
 ///
 /// - smooths each score over about [smoothMs],
 /// - changes the tag only once a new leader has held for [holdMs],
+/// - brings up a tag only when it leads the runner-up by [minMargin], so a
+///   tie never shows an arbitrary expression,
 /// - hides it when nothing scores at least [minScore], and drops it after
 ///   [lostMs] without a usable face or without a fresh expression sample
 ///   (none for over [staleMs]).
@@ -21,6 +23,7 @@ class ExpressionTagger {
     this.smoothMs = 600,
     this.holdMs = 700,
     this.minScore = 0.3,
+    this.minMargin = 0.05,
     this.lostMs = 1000,
     this.staleMs = 3000,
   });
@@ -42,6 +45,7 @@ class ExpressionTagger {
   final int smoothMs;
   final int holdMs;
   final double minScore;
+  final double minMargin;
   final int lostMs;
   final int staleMs;
 
@@ -102,14 +106,30 @@ class ExpressionTagger {
     }
 
     var lead = -1;
-    var best = 0.0;
+    var second = -1;
     for (var i = 0; i < labels.length; i++) {
-      if (_avg[i] > best) {
-        best = _avg[i];
+      if (lead < 0 || _avg[i] > _avg[lead]) {
+        second = lead;
         lead = i;
+      } else if (second < 0 || _avg[i] > _avg[second]) {
+        second = i;
       }
     }
-    final candidate = lead >= 0 && best >= minScore ? labels[lead] : null;
+    final best = _avg[lead];
+    final String? candidate;
+    if (best < minScore) {
+      candidate = null;
+    } else if (best - _avg[second] >= minMargin) {
+      candidate = labels[lead];
+    } else {
+      // A close call: which of the two leads is arbitrary, so it never
+      // brings up a tag. A tag already shown stays while it's one of them,
+      // rather than blinking off and on as the gap hovers at the margin.
+      final shown = _shown;
+      candidate = shown == labels[lead] || shown == labels[second]
+          ? shown
+          : null;
+    }
 
     if (candidate == _shown) {
       _hasPending = false;

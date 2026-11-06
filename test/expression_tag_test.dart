@@ -50,14 +50,49 @@ void main() {
       final changes = <String?>[];
       var at = 0;
       for (var i = 0; i < 100; i++) {
-        // The raw top expression flips every frame; happy leads on average.
+        // The raw top expression flips every frame; happy leads on average,
+        // clearly (0.47 vs 0.41).
         final expr = i.isEven
-            ? const {'happy': 0.47, 'neutral': 0.38}
-            : const {'happy': 0.42, 'neutral': 0.43};
+            ? const {'happy': 0.50, 'neutral': 0.36}
+            : const {'happy': 0.44, 'neutral': 0.46};
         if (t.add(at, expr, faceOk: true)) changes.add(t.tag);
         at += 100;
       }
       expect(changes, ['happy'], reason: 'one change, from none to a tag');
+    });
+
+    test('a tie, exact or near, never brings up a tag', () {
+      // Without a margin, the first label alphabetically would win a tie.
+      for (final tie in const [
+        {'happy': 0.45, 'neutral': 0.45},
+        {'neutral': 0.45, 'happy': 0.43},
+        {'sad': 0.4, 'angry': 0.4, 'neutral': 0.1},
+      ]) {
+        final t = ExpressionTagger();
+        feed(t, 0, 50, (_) => tie);
+        expect(t.tag, isNull, reason: '$tie');
+      }
+    });
+
+    test('a close call keeps the tag already shown, without blinking', () {
+      final t = ExpressionTagger();
+      final changes = <String?>[];
+      var at = 0;
+      void run(int frames, Map<String, double> expr) {
+        for (var i = 0; i < frames; i++, at += 100) {
+          if (t.add(at, expr, faceOk: true)) changes.add(t.tag);
+        }
+      }
+
+      run(20, calm);
+      expect(t.tag, 'neutral');
+      // Happy creeps up to within a hair of neutral and stays there.
+      run(50, const {'neutral': 0.44, 'happy': 0.42});
+      expect(t.tag, 'neutral');
+      // Then clearly overtakes.
+      run(30, const {'happy': 0.55, 'neutral': 0.35});
+      expect(t.tag, 'happy');
+      expect(changes, ['neutral', 'happy']);
     });
 
     test('a sustained change switches the tag after the hold', () {
