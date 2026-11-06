@@ -154,6 +154,24 @@ class GameController extends ChangeNotifier {
   void setDecks(DeckLibrary decks) => _decks = decks;
 
   // ---------------------------------------------------------------------------
+  // Double-tap guard: the same action twice within 600 ms counts once, so a
+  // fast double tap can't skip two players or two questions.
+
+  final Map<String, int> _lastAction = {};
+
+  /// Bumped whenever a game starts or is reset; async flows compare it
+  /// after each await so they can't act on a game that no longer exists.
+  int _epoch = 0;
+
+  bool _once(String action) {
+    final now = nowMs;
+    final last = _lastAction[action];
+    if (last != null && now - last < 600) return false;
+    _lastAction[action] = now;
+    return true;
+  }
+
+  // ---------------------------------------------------------------------------
   // Lobby state
 
   final List<Player> players = [];
@@ -244,11 +262,15 @@ class GameController extends ChangeNotifier {
   /// Lobby "Start the show". Returns a reason if the game can't start yet;
   /// the Lobby opens Settings for [StartBlock.needKey] (SPEC.md §2).
   Future<StartBlock?> startShow() async {
+    if (phase != GamePhase.lobby || !_once('start')) return null;
     if (!canStart) return StartBlock.needPlayers;
+    final e = _epoch;
     await apiKey.refresh();
+    if (e != _epoch || phase != GamePhase.lobby) return null;
     if (!apiKey.hasKey) return StartBlock.needKey;
 
     final report = await _checkPermissions(request: true);
+    if (e != _epoch || phase != GamePhase.lobby) return null;
     permissions = report;
     if (!report.cameraOk || !report.voiceOk) {
       _setPhase(GamePhase.permissions);
@@ -285,6 +307,7 @@ class GameController extends ChangeNotifier {
   Future<void> recheckPermissions() async {
     if (phase != GamePhase.permissions) return;
     final report = await _checkPermissions(request: false);
+    if (phase != GamePhase.permissions) return;
     permissions = report;
     if (report.cameraOk && report.voiceOk) {
       micEnabled = true;
@@ -296,6 +319,7 @@ class GameController extends ChangeNotifier {
 
   /// E2 "Play without voice": no transcripts, tap-to-advance (SPEC.md §7).
   void playWithoutVoice() {
+    if (phase != GamePhase.permissions) return;
     if (!(permissions?.cameraOk ?? false)) return;
     micEnabled = false;
     _beginGame();
@@ -304,6 +328,7 @@ class GameController extends ChangeNotifier {
   Future<void> openAppSettings() => device.openAppSettings();
 
   void _beginGame() {
+    _epoch++;
     turns
       ..clear()
       ..addAll(players.map(PlayerTurn.new));
@@ -320,6 +345,7 @@ class GameController extends ChangeNotifier {
 
   /// E1 "Got it, let's play".
   void dismissHowToPlay() {
+    if (phase != GamePhase.howToPlay) return;
     hasSeenHowToPlay = true;
     _setPhase(GamePhase.consent);
   }
@@ -329,14 +355,17 @@ class GameController extends ChangeNotifier {
 
   /// "I agree, measure me".
   Future<void> agreeToMeasure() async {
-    if (phase != GamePhase.consent) return;
+    if (phase != GamePhase.consent || !_once('agree')) return;
     await _beginCalibration();
   }
 
   /// "Skip my turn" (consent), or Pause "Skip my turn" while calibrating.
   Future<void> skipTurn() async {
     if (phase != GamePhase.consent && phase != GamePhase.calibrate) return;
+    if (!_once('skipTurn')) return;
+    final e = _epoch;
     if (phase == GamePhase.calibrate) await _stopMeasuring();
+    if (e != _epoch) return;
     paused = false;
     currentTurn.skipped = currentTurn.results.isEmpty;
     await _nextPlayer();
@@ -393,15 +422,21 @@ class GameController extends ChangeNotifier {
     sdkError = null;
     _recoveries = 0;
     _setPhase(GamePhase.calibrate);
+    final e = _epoch;
     try {
       final ok = await _startSdk();
-      if (!ok) return;
+      if (!ok || e != _epoch) return;
       calibStartMs = nowMs;
       _lastSampleMs = nowMs;
       _startTicker();
       await _startListening();
+      if (e != _epoch) {
+        await _stopMeasuring();
+        return;
+      }
       // The turn-start jingle ends before the host speaks (SPEC.md §12).
       if (settings.soundEffects) await host.play(Sfx.jingle);
+      if (e != _epoch) return;
       await _say('${currentPlayer.name}, sit still and look at the camera.');
     } finally {
       _calibrationStarting = false;
@@ -410,7 +445,11 @@ class GameController extends ChangeNotifier {
 
   /// Starts the SmartSpectra session. `reset()` before each player's
   /// calibration (SPEC.md §4). On failure shows E5 and returns false.
-  Future<bool> _startSdk() async {
+  ///
+  /// If the game was reset while this was starting, the session is stopped
+  /// again so the camera never runs outside a turn.
+  Future<bool> _startSdk({bool fromOffline = false}) async {
+    final epoch = _epoch;
     try {
       try {
         await presage.reset();
@@ -419,12 +458,25 @@ class GameController extends ChangeNotifier {
       }
       await presage.configure(telemetry: settings.telemetry);
       await presage.start();
+      if (epoch != _epoch || !(_sdkShouldRun || fromOffline)) {
+        await _safeStopSdk();
+        return false;
+      }
       return true;
     } on PresageException catch (e) {
+      if (epoch != _epoch) return false;
       sdkError = PresageErrorInfo(code: e.code, message: e.message);
       _stopTicker();
       _setPhase(GamePhase.sdkOffline);
       return false;
+    }
+  }
+
+  Future<void> _safeStopSdk() async {
+    try {
+      await presage.stop();
+    } on PresageException {
+      // Already stopped.
     }
   }
 
@@ -449,6 +501,7 @@ class GameController extends ChangeNotifier {
 
   /// "Doesn't apply? Next one".
   void skipWarmup() {
+    if (phase != GamePhase.calibrate) return;
     final w = currentWarmup;
     if (w == null) return;
     w
@@ -566,7 +619,12 @@ class GameController extends ChangeNotifier {
     calibStage = CalibStage.done;
     currentTurn.baseline = _calibBaseline;
     calibHint = null;
-    questionIndex = 0;
+    // Normally 0; after a mid-turn recalibration, carry on where we were.
+    questionIndex = currentTurn.results.length;
+    if (questionIndex >= questionsPerTurn) {
+      unawaited(_endTurn());
+      return;
+    }
     _beginQuestion();
   }
 
@@ -748,13 +806,19 @@ class GameController extends ChangeNotifier {
 
   /// E4 "Ask it again".
   void askAgain() {
-    if (phase != GamePhase.redo) return;
+    if (phase != GamePhase.redo || !_once('askAgain')) return;
     _beginQuestion(repeat: mode == GameMode.solo ? questionText : null);
   }
 
   /// E4 "Skip it", Pause "Skip question", E3 "Skip question".
   Future<void> skipQuestion() async {
-    if (!inGame) return;
+    const allowed = {
+      GamePhase.ask,
+      GamePhase.answer,
+      GamePhase.settle,
+      GamePhase.redo,
+    };
+    if (!inGame || !allowed.contains(phase) || !_once('skipQuestion')) return;
     final q = mode == GameMode.solo
         ? questionText
         : (_askerTranscript.text.isEmpty
@@ -864,13 +928,13 @@ class GameController extends ChangeNotifier {
 
   /// Verdict "Next question".
   Future<void> nextQuestion() async {
-    if (phase != GamePhase.verdict) return;
+    if (phase != GamePhase.verdict || !_once('next')) return;
     await _afterQuestion();
   }
 
   /// Verdict "End turn".
   Future<void> endTurn() async {
-    if (!inGame) return;
+    if (phase != GamePhase.verdict || !_once('next')) return;
     await _endTurn();
   }
 
@@ -884,13 +948,19 @@ class GameController extends ChangeNotifier {
   }
 
   Future<void> _endTurn() async {
+    final e = _epoch;
     await _stopMeasuring();
     final thermal = await device.thermalState();
+    if (e != _epoch) return;
     thermalWarning = thermal == 'serious' || thermal == 'critical';
     await _nextPlayer();
   }
 
   Future<void> _nextPlayer() async {
+    if (turns.isEmpty) {
+      _setPhase(GamePhase.lobby);
+      return;
+    }
     if (playerIndex < turns.length - 1) {
       playerIndex++;
       questionIndex = 0;
@@ -915,6 +985,10 @@ class GameController extends ChangeNotifier {
   }
 
   void _showLeaderboard() {
+    if (turns.isEmpty) {
+      _setPhase(GamePhase.lobby);
+      return;
+    }
     awards = Awards.compute(turns, mode: mode);
     unawaited(device.setKeepAwake(false));
     _setPhase(GamePhase.leaderboard);
@@ -946,7 +1020,10 @@ class GameController extends ChangeNotifier {
   }
 
   Future<void> _resetGame({required bool keepPlayers}) async {
-    if (_sdkShouldRun) await _stopMeasuring();
+    // Any async flow still in flight for the old game sees the new epoch
+    // and bails out.
+    _epoch++;
+    await _stopMeasuring();
     turns.clear();
     awards = null;
     currentResult = null;
@@ -966,7 +1043,9 @@ class GameController extends ChangeNotifier {
   /// E6 "End and see scores". Crowns winners from what's been played.
   Future<void> endShowEarly() async {
     if (!inGame) return;
+    final e = _epoch;
     if (_sdkShouldRun) await _stopMeasuring();
+    if (e != _epoch) return;
     paused = false;
     final anyPlayed = turns.any((t) => t.results.isNotEmpty);
     if (anyPlayed) {
@@ -977,9 +1056,30 @@ class GameController extends ChangeNotifier {
   }
 
   /// E5 "Try again".
+  /// E5 "Try again". If the player was already calibrated, the SDK restarts
+  /// and the interrupted question is asked again; otherwise calibration
+  /// starts over.
   Future<void> retrySdk() async {
-    if (phase != GamePhase.sdkOffline) return;
-    await _beginCalibration();
+    if (phase != GamePhase.sdkOffline || !_once('retry')) return;
+    if (currentTurn.baseline == null) {
+      await _beginCalibration();
+      return;
+    }
+    sdkError = null;
+    _recoveries = 0;
+    final e = _epoch;
+    if (!await _startSdk(fromOffline: true) || e != _epoch) return;
+    _lastSampleMs = nowMs;
+    live.sample = null;
+    _startTicker();
+    await _startListening();
+    if (e != _epoch) return;
+    if (currentTurn.results.length >= questionsPerTurn) {
+      await _endTurn();
+    } else {
+      questionIndex = currentTurn.results.length;
+      _beginQuestion(repeat: mode == GameMode.solo ? questionText : null);
+    }
   }
 
   /// E5 "Back to lobby" and the consent back button.
@@ -1009,7 +1109,7 @@ class GameController extends ChangeNotifier {
   bool _needsRestart = false;
 
   void pause() {
-    if (!inGame) return;
+    if (!inGame || !isMeasuring) return;
     paused = true;
     unawaited(host.stopSpeaking().catchError((Object _) {}));
     notifyListeners();
@@ -1027,10 +1127,12 @@ class GameController extends ChangeNotifier {
         await _beginCalibration();
         return;
       }
-      if (!await _startSdk()) return;
+      final e = _epoch;
+      if (!await _startSdk() || e != _epoch) return;
       _lastSampleMs = nowMs;
       _startTicker();
       await _startListening();
+      if (e != _epoch) return;
     }
     if (phase == GamePhase.ask ||
         phase == GamePhase.answer ||
@@ -1224,12 +1326,27 @@ class GameController extends ChangeNotifier {
     if (!isMeasuring || paused || _recovering) return;
     final status = live.sample?.status;
     final silent = now - _lastSampleMs > 6000;
-    if (silent || status == PresageStatus.error) {
-      _recoverSdk(silent ? 'no signal for 6 seconds' : 'SDK error');
+    if (status != _watchStatus) {
+      _watchStatus = status;
+      _watchStatusSince = now;
+    }
+    final stuck =
+        (status == PresageStatus.starting ||
+            status == PresageStatus.stopping) &&
+        now - _watchStatusSince > 15000 &&
+        !(phase == GamePhase.calibrate && calibStage == CalibStage.starting);
+    if (silent || status == PresageStatus.error || stuck) {
+      _recoverSdk(
+        silent
+            ? 'no signal for 6 seconds'
+            : (stuck ? 'stuck while ${status!.name}' : 'SDK error'),
+      );
     }
   }
 
   bool _recovering = false;
+  PresageStatus? _watchStatus;
+  int _watchStatusSince = 0;
 
   Future<void> _recoverSdk(String why) async {
     if (_recovering) return;
@@ -1255,12 +1372,10 @@ class GameController extends ChangeNotifier {
         _setPhase(GamePhase.sdkOffline);
         return;
       }
-      try {
-        await presage.stop();
-      } on PresageException {
-        // Already stopped.
-      }
-      if (!await _startSdk()) return;
+      final e = _epoch;
+      await _safeStopSdk();
+      if (e != _epoch || !_sdkShouldRun) return;
+      if (!await _startSdk() || e != _epoch) return;
       _lastSampleMs = nowMs;
       live.sample = null;
       if (phase == GamePhase.calibrate && calibStage == CalibStage.starting) {
