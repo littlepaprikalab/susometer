@@ -37,7 +37,8 @@ Built for the DEV [Presage SmartSpectra SDK Challenge](https://dev.to/challenges
 3. **Calibrate:** about 20 s of sitting still, then 2–3 easy warm-up questions read by the host.
    This learns *your* normal pulse, blink rate, expressions and how fast you usually answer.
 4. **Ask:** a friend asks a question out loud; it appears on screen as they speak. In solo mode
-   the host reads one from the deck.
+   the host reads one from the deck, and it stays on screen until you start answering or tap
+   *Ready to answer*.
 5. **Answer:** the player answers out loud and smashes *Final answer* (or just stops talking).
 6. **Call it!:** everyone else votes Legit or Sus *before* the reveal.
 7. **Countdown → Verdict:** drumroll, 3-2-1, then the scoreboard, applause meter and what moved.

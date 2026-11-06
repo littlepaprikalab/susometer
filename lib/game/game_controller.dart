@@ -653,6 +653,21 @@ class GameController extends ChangeNotifier {
   int? settleUntilMs;
   QuestionResult? currentResult;
   int _soloReadEndsAt = 0;
+  bool _soloReady = false;
+
+  /// Solo: after the host reads the question, it stays on screen until the
+  /// player starts answering (talks or is heard) or taps "Ready to answer".
+  /// Only the screen waits: hesitation still counts from when the host
+  /// finished reading (SPEC.md §5.3).
+  bool get soloHoldsQuestion =>
+      mode == GameMode.solo &&
+      phase == GamePhase.answer &&
+      !_soloReady &&
+      detector?.tA0 == null &&
+      live.answerText.isEmpty;
+
+  /// The phase the screen shows: Ask while solo holds the question.
+  GamePhase get shownPhase => soloHoldsQuestion ? GamePhase.ask : phase;
 
   /// The player in the hot seat starts answering; question text for display.
   String get displayQuestion => mode == GameMode.solo
@@ -673,6 +688,7 @@ class GameController extends ChangeNotifier {
     _answerTranscript.clear();
     _askerFromSeg = null;
     _answerFromSeg = null;
+    _soloReady = false;
     live.resetQuestion();
     questionText = mode == GameMode.solo ? (repeat ?? _questions.next()) : '';
     _setPhase(GamePhase.ask);
@@ -698,11 +714,27 @@ class GameController extends ChangeNotifier {
     }
   }
 
-  /// Solo "Different question".
+  /// Solo "Different question", while the question is on screen.
   void differentQuestion() {
-    if (mode != GameMode.solo || phase != GamePhase.ask) return;
+    if (mode != GameMode.solo) return;
+    if (phase != GamePhase.ask && !soloHoldsQuestion) return;
+    if (!_once('differentQuestion')) return;
     unawaited(host.stopSpeaking());
     _beginQuestion();
+  }
+
+  /// Solo "Ready to answer": show the answer screen. Tapped while the host
+  /// is still reading, it ends the question there, like starting to talk.
+  void readyToAnswer() {
+    if (mode != GameMode.solo || paused) return;
+    if (phase == GamePhase.ask) {
+      _soloReady = true;
+      unawaited(host.stopSpeaking());
+      _apply(detector?.onDoneAskingTap(nowMs) ?? const []);
+    } else if (soloHoldsQuestion) {
+      _soloReady = true;
+      notifyListeners();
+    }
   }
 
   /// "Too loud? Tap when done asking" / "Done asking".
@@ -718,6 +750,18 @@ class GameController extends ChangeNotifier {
   }
 
   void _apply(List<TurnEvent> events) {
+    final held = soloHoldsQuestion;
+    _applyEvents(events);
+    _redrawIfReleased(held);
+  }
+
+  /// The answer card shows as soon as the player starts, not on the next
+  /// tick.
+  void _redrawIfReleased(bool wasHeld) {
+    if (wasHeld && !soloHoldsQuestion) notifyListeners();
+  }
+
+  void _applyEvents(List<TurnEvent> events) {
     for (final e in events) {
       switch (e) {
         case QuestionEnded():
@@ -1278,6 +1322,7 @@ class GameController extends ChangeNotifier {
     }
     final askerFrom = _askerFromSeg;
     if (askerFrom != null && e.segment < askerFrom) return;
+    final held = soloHoldsQuestion;
     final answerFrom = _answerFromSeg;
     // Text from before the answer's segment is the tail of the question.
     // In solo mode there's no human asker: early speech is the answer.
@@ -1294,6 +1339,7 @@ class GameController extends ChangeNotifier {
       live.answerText = _answerTranscript.text;
     }
     if (!paused) _apply(detector?.onSpeech(e.tMs) ?? const []);
+    _redrawIfReleased(held);
     live.notify();
   }
 

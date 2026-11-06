@@ -105,6 +105,66 @@ void main() {
     },
   );
 
+  test('solo scale: 8 players × 7 questions; the hold never leaks', () {
+    fakeAsync((async) {
+      final w = World(async);
+      w.game.setMode(GameMode.solo);
+      final names = [for (var i = 1; i <= 8; i++) 'Player $i'];
+      w.startGame(names, questions: 7);
+      for (var p = 0; p < names.length; p++) {
+        expect(w.game.phase, GamePhase.consent);
+        w.calibrate();
+        for (var q = 0; q < 7; q++) {
+          final at = '${names[p]} Q${q + 1}';
+          w.until(() => w.game.phase == GamePhase.answer, what: at);
+          expect(w.game.soloHoldsQuestion, isTrue, reason: '$at starts held');
+          final tQ1 = w.game.detector!.tQ1;
+          w.elapse(1000);
+          // Every way out of the hold: the button, the camera, the mic.
+          switch ((p * 7 + q) % 3) {
+            case 0:
+              w.game.readyToAnswer();
+              w.talk(true);
+            case 1:
+              w.talk(true);
+            case 2:
+              w.say('No way');
+              w.talk(true);
+          }
+          w.elapse(300);
+          expect(w.game.soloHoldsQuestion, isFalse, reason: at);
+          expect(w.game.shownPhase, GamePhase.answer, reason: at);
+          expect(w.game.detector!.tQ1, tQ1, reason: '$at timing unchanged');
+          w.elapse(1500);
+          w.talk(false);
+          w.elapse(800);
+          w.game.finalAnswer();
+          w.until(
+            () =>
+                w.game.phase == GamePhase.verdict ||
+                w.game.phase == GamePhase.redo,
+            what: '$at verdict',
+          );
+          expect(w.game.soloHoldsQuestion, isFalse);
+          expect(w.game.shownPhase, w.game.phase);
+          if (w.game.phase == GamePhase.redo) {
+            w.game.skipQuestion();
+          } else {
+            w.game.nextQuestion();
+          }
+          w.elapse(100);
+        }
+      }
+      expect(w.game.phase, GamePhase.leaderboard);
+      expect(
+        w.game.turns.map((t) => t.results.length).reduce((a, b) => a + b),
+        56,
+      );
+      expect(w.running, isFalse, reason: 'camera stopped after the last turn');
+      w.dispose();
+    });
+  });
+
   group('performance', () {
     test('a 10-minute stream at 10 Hz ingests and scores quickly', () {
       final samples = synth(

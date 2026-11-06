@@ -94,6 +94,7 @@ void abuse(
     (fw(4, 12), g.doneAsking),
     (fw(4, 12), g.finalAnswer),
     (fw(2, 1), g.differentQuestion),
+    (fw(2, 4), g.readyToAnswer),
     (
       fw(3, 4),
       () {

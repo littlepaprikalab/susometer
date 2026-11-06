@@ -400,8 +400,17 @@ void main() {
       final q = w.game.questionText;
       expect(DeckLibrary.fallback.mild, contains(q));
       expect(w.host.said.any((l) => l.contains(q)), isTrue);
+      expect(
+        w.game.soloHoldsQuestion,
+        isTrue,
+        reason: 'the question stays up until the player starts answering',
+      );
+      w.elapse(5000);
+      expect(w.game.soloHoldsQuestion, isTrue);
       w.talk(true);
-      w.elapse(2000);
+      w.elapse(300);
+      expect(w.game.soloHoldsQuestion, isFalse);
+      w.elapse(1700);
       w.talk(false);
       w.elapse(600);
       w.game.finalAnswer();
@@ -412,6 +421,104 @@ void main() {
       w.until(() => w.game.phase == GamePhase.verdict);
       expect(w.game.currentResult!.question, q);
       expect(w.game.currentResult!.votes, isEmpty);
+      w.dispose();
+    });
+  });
+
+  test('solo Ready to answer: shows the answer screen, timing unchanged', () {
+    fakeAsync((async) {
+      final w = World(async);
+      w.game.setMode(GameMode.solo);
+      w.startGame(['Sam']);
+      w.calibrate();
+      w.elapse(100);
+      expect(w.game.phase, GamePhase.answer);
+      final tQ1 = w.game.detector!.tQ1;
+      w.elapse(3000);
+      expect(w.game.soloHoldsQuestion, isTrue);
+      w.game.readyToAnswer();
+      expect(w.game.soloHoldsQuestion, isFalse);
+      expect(w.game.phase, GamePhase.answer);
+      expect(
+        w.game.detector!.tQ1,
+        tQ1,
+        reason: 'hesitation still counts from when the host finished',
+      );
+      // Different question only works while the question is on screen.
+      final q = w.game.questionText;
+      w.game.differentQuestion();
+      expect(w.game.questionText, q);
+      w.dispose();
+    });
+  });
+
+  test('solo Ready to answer while the host reads ends the question', () {
+    fakeAsync((async) {
+      final w = World(async);
+      w.game.setMode(GameMode.solo);
+      w.settings.hostVoice = false;
+      w.startGame(['Sam']);
+      w.calibrate();
+      w.elapse(100);
+      expect(w.game.phase, GamePhase.ask);
+      w.game.readyToAnswer();
+      expect(w.game.phase, GamePhase.answer);
+      expect(w.game.soloHoldsQuestion, isFalse);
+      expect(w.game.detector!.questionEndReason, QuestionEndReason.button);
+      w.dispose();
+    });
+  });
+
+  test('solo: the answer card shows the moment the player starts', () {
+    fakeAsync((async) {
+      final w = World(async);
+      w.game.setMode(GameMode.solo);
+      w.startGame(['Sam']);
+      w.calibrate();
+      w.elapse(100);
+      expect(w.game.shownPhase, GamePhase.ask);
+      var redraws = 0;
+      w.game.addListener(() => redraws++);
+      // Recognized words, with no tick in between.
+      w.say('Maybe');
+      async.flushMicrotasks();
+      expect(w.game.soloHoldsQuestion, isFalse);
+      expect(w.game.shownPhase, GamePhase.answer);
+      expect(redraws, greaterThan(0), reason: 'redraws without waiting');
+      w.dispose();
+    });
+  });
+
+  test('solo: a double tap on Different question skips only one', () {
+    fakeAsync((async) {
+      final w = World(async);
+      w.game.setMode(GameMode.solo);
+      w.startGame(['Sam']);
+      w.calibrate();
+      w.elapse(100);
+      w.game.differentQuestion();
+      final q = w.game.questionText;
+      w.elapse(120);
+      w.game.differentQuestion();
+      expect(w.game.questionText, q, reason: 'second tap ignored');
+      w.elapse(700);
+      w.game.differentQuestion();
+      expect(w.game.questionText, isNot(q));
+      w.dispose();
+    });
+  });
+
+  test('solo Different question still works after the host has read it', () {
+    fakeAsync((async) {
+      final w = World(async);
+      w.game.setMode(GameMode.solo);
+      w.startGame(['Sam']);
+      w.calibrate();
+      w.elapse(100);
+      expect(w.game.soloHoldsQuestion, isTrue);
+      final q = w.game.questionText;
+      w.game.differentQuestion();
+      expect(w.game.questionText, isNot(q));
       w.dispose();
     });
   });

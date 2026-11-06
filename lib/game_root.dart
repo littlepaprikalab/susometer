@@ -115,7 +115,9 @@ class _GameRootState extends State<GameRoot> with WidgetsBindingObserver {
       listenable: Listenable.merge([game, services.settings]),
       builder: (context, _) {
         final showProof = services.settings.proofPanel && game.isMeasuring;
-        _notePhase(game.phase);
+        // Solo's Ready to answer swaps in Final answer without a phase
+        // change, so the guard follows what's shown.
+        _notePhase(game.shownPhase);
         return Stack(
           children: [
             if (game.phase == GamePhase.leaderboard && game.awards != null)
