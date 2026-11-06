@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:susometer/game/game_controller.dart';
 import 'package:susometer/presage/presage_models.dart';
@@ -104,6 +106,11 @@ void main() {
     await rig.wait(200);
     expect(find.text('The replay'), findsOneWidget);
     expect(find.textContaining('Never ever.'), findsWidgets);
+    // Each row's pulse line carries its numbers: the normal and the peak.
+    final first = rig.game.turns.first.results.first;
+    final peak = first.pulseTrace.map((p) => p.$2).reduce(math.max).round();
+    expect(find.text('normal ${first.basePulse!.round()}'), findsWidgets);
+    expect(find.text('peak $peak BPM'), findsWidgets);
     await rig.tap('Play again');
     await rig.wait(300);
     expect(find.text('Start the show'), findsOneWidget);
