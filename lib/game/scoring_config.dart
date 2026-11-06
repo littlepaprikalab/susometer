@@ -47,6 +47,7 @@ class ScoringConfig {
     this.beatMinCoverage = 0.6,
     this.beatSdkWindowMs = 12000,
     this.beatMaxSdkDiffBpm = 8,
+    this.beatSdkMaxLagMs = 6000,
     this.shapePreMs = 5000,
     this.shapePreFallbackMs = 15000,
     this.shapePreMinCoverage = 0.5,
@@ -181,6 +182,10 @@ class ScoringConfig {
   /// The beats are trusted only if their median difference from the SDK's
   /// pulse is at most this.
   final double beatMaxSdkDiffBpm;
+
+  /// The SDK's pulse may arrive this much later than the beats it averages;
+  /// the cross-check tries delays up to this, in 1 s steps.
+  final int beatSdkMaxLagMs;
 
   // --- Pulse shape and the question-vs-question comparison ---
   /// The pre-question level is the mean beat heart rate over this span before

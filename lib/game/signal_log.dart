@@ -94,6 +94,7 @@ class SignalLog {
   /// Wall-clock ms minus SDK-clock ms, one entry per [TracePoint.clock].
   final List<double> _traceOffsetMs = [];
   int? _lastTraceTsUs;
+  int? _lastTraceAtMs;
 
   PresageSample? latest;
   int? _lastPulseAt;
@@ -108,6 +109,7 @@ class SignalLog {
     trace.clear();
     _traceOffsetMs.clear();
     _lastTraceTsUs = null;
+    _lastTraceAtMs = null;
     latest = null;
     _lastPulseAt = null;
     _lastConfidentPulseMs = null;
@@ -175,11 +177,15 @@ class SignalLog {
   /// Stores waveform samples with their SDK timestamps. The SDK clock is
   /// mapped to wall-clock time by the smallest delay seen between a sample's
   /// SDK time and the snapshot that carried it: delays only ever add to the
-  /// true offset, so the minimum is the best estimate. A late snapshot (the
-  /// app stalled) only looks like a longer delay and changes nothing. A new
-  /// mapping starts if the SDK clock runs ahead of the wall clock, or goes
-  /// back while the wall clock doesn't (the SDK restarted its clock); samples
-  /// that are simply old, with the same offset, are dropped as repeats.
+  /// true offset, so the minimum is the best estimate, and every sample on
+  /// the same clock uses the latest one (so a first batch that arrived late
+  /// is corrected once the next ones show the real delay).
+  ///
+  /// A new mapping starts only if the SDK clock itself jumps: it goes back
+  /// while the wall clock doesn't (a restart), or its next sample is further
+  /// ahead of the previous one than the wall clock moved, by over
+  /// [ScoringConfig.traceClockJumpMs]. Samples that are simply old, with the
+  /// same offset, are dropped as repeats.
   void _addTrace(PresageSample s, bool ok) {
     if (s.traceSamples.isEmpty) return;
     final samples = [...s.traceSamples]
@@ -187,16 +193,20 @@ class SignalLog {
     final newest = samples.last.tsUs;
     final d = s.tMs - newest / 1000;
     final last = _lastTraceTsUs;
+    final lastAt = _lastTraceAtMs;
     final current = _traceOffsetMs.isEmpty ? null : _traceOffsetMs.last;
+    final jump = config.traceClockJumpMs;
     final wentBack = last != null && newest < last;
-    if (current == null ||
-        d < current - config.traceClockJumpMs ||
-        (wentBack && d > current + config.traceClockJumpMs)) {
+    final ahead = last == null || lastAt == null || wentBack
+        ? 0.0
+        : (samples.first.tsUs - last) / 1000 - (s.tMs - lastAt);
+    if (current == null || (wentBack && d > current + jump) || ahead > jump) {
       _traceOffsetMs.add(d);
       _lastTraceTsUs = null;
     } else if (d < current) {
       _traceOffsetMs[_traceOffsetMs.length - 1] = d;
     }
+    _lastTraceAtMs = s.tMs;
     final clock = _traceOffsetMs.length - 1;
     for (final p in samples) {
       final prev = _lastTraceTsUs;

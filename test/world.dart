@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math';
 
 import 'package:fake_async/fake_async.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -86,6 +87,14 @@ class World {
 
   /// Waveform samples reach the bridge this late.
   int waveLatencyMs = 150;
+
+  /// Fuzzing: when set, some waveform batches are mangled the ways a
+  /// misbehaving SDK or bridge could (SDK clock jumps either way, samples
+  /// reversed or repeated, timestamps of the wrong length).
+  Random? waveChaos;
+  int _sdkShiftUs = 0;
+  List<double> _lastTrace = const [];
+  List<int> _lastTraceTs = const [];
   final PulseWaveGen _wave = PulseWaveGen();
   double? _waveAt;
   final List<(double, double)> _heartLog = [];
@@ -128,6 +137,34 @@ class World {
         at += dt;
       }
       _waveAt = at;
+      final r = waveChaos;
+      if (r != null) {
+        switch (r.nextInt(25)) {
+          case 0:
+            _sdkShiftUs -= r.nextInt(30000) * 1000;
+          case 1:
+            _sdkShiftUs += r.nextInt(30000) * 1000;
+          case 2:
+            final rt = trace.reversed.toList();
+            final rts = traceTs.reversed.toList();
+            trace
+              ..clear()
+              ..addAll(rt);
+            traceTs
+              ..clear()
+              ..addAll(rts);
+          case 3:
+            trace.insertAll(0, _lastTrace);
+            traceTs.insertAll(0, _lastTraceTs);
+          case 4:
+            traceTs.add(0);
+        }
+        for (var i = 0; i < traceTs.length; i++) {
+          traceTs[i] += _sdkShiftUs;
+        }
+        _lastTrace = List.of(trace);
+        _lastTraceTs = List.of(traceTs);
+      }
       _heartLog.removeWhere((e) => e.$1 < t - 12000);
       if (_heartLog.isNotEmpty) {
         pulse =

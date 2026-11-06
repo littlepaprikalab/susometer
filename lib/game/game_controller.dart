@@ -12,6 +12,7 @@ import '../settings/app_settings.dart';
 import '../voice/speech_service.dart';
 import '../voice/turn_detector.dart';
 import 'awards.dart';
+import 'beats.dart';
 import 'decks.dart';
 import 'expression_tag.dart';
 import 'models.dart';
@@ -686,7 +687,9 @@ class GameController extends ChangeNotifier {
     if (phase != GamePhase.calibrate || calibStage == CalibStage.done) return;
     calibStage = CalibStage.done;
     currentTurn.baseline = _calibBaseline;
-    currentTurn.warmupTimings = [for (final w in warmups) ?w.timing];
+    currentTurn
+      ..warmupTimings = [for (final w in warmups) ?w.timing]
+      ..warmupShapes = null;
     calibHint = null;
     // Normally 0; after a mid-turn recalibration, carry on where we were.
     questionIndex = currentTurn.results.length;
@@ -871,17 +874,16 @@ class GameController extends ChangeNotifier {
     if (d == null || base == null) return;
     final timing = d.timing();
     final t1 = timing.windowEnd(config.minWindowAfterQuestionMs);
-    // One beat search over the warm-ups and this question, so every answer
-    // is measured the same way (SPEC.md decision 63).
-    final warmups = currentTurn.warmupTimings;
-    var from = timing.tQ0;
-    for (final w in warmups) {
-      from = min(from, w.tQ0);
-    }
-    final beats = scoring.beats(log, from - config.beatLookbackMs, t1);
-    final features = scoring.features(log, timing, base, beats: beats);
+    // Beats over just this window (and the lookback before it), so the cost
+    // doesn't grow with the turn (SPEC.md decision 63).
+    final features = scoring.features(
+      log,
+      timing,
+      base,
+      beats: _beatsFor(timing),
+    );
     final refs = [
-      for (final w in warmups) ?scoring.pulseShape(log, beats, w),
+      ..._warmupShapes(),
       for (final r in currentTurn.results)
         if (r.scored) ?r.features?.pulseShape,
     ];
@@ -933,6 +935,30 @@ class GameController extends ChangeNotifier {
     } else {
       _beginCountdown();
     }
+  }
+
+  BeatSeries _beatsFor(QuestionTiming t) => scoring.beats(
+    log,
+    t.tQ0 - config.beatLookbackMs,
+    t.windowEnd(config.minWindowAfterQuestionMs),
+  );
+
+  /// Pulse shapes of this turn's answered warm-ups, the references for its
+  /// questions. Each warm-up gets the same beat search as a question; they're
+  /// found once, after the last warm-up's window has closed.
+  List<PulseShape> _warmupShapes() {
+    final turn = currentTurn;
+    final cached = turn.warmupShapes;
+    if (cached != null) return cached;
+    final shapes = [
+      for (final w in turn.warmupTimings)
+        ?scoring.pulseShape(log, _beatsFor(w), w),
+    ];
+    final allClosed = turn.warmupTimings.every(
+      (w) => w.windowEnd(config.minWindowAfterQuestionMs) <= nowMs,
+    );
+    if (allClosed) turn.warmupShapes = shapes;
+    return shapes;
   }
 
   /// E4 "Ask it again".

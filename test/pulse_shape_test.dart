@@ -151,6 +151,26 @@ void main() {
       expect(b.pulseMethod, PulseMethod.sdkMean);
     });
 
+    test('an SDK pulse that arrives a few seconds late still matches', () {
+      // A big jump (+35 BPM) is where a late SDK reading differs most from
+      // the beats' latest 12 s; it mustn't send the strongest reactions back
+      // to the SDK-mean formula.
+      double heart(double t) => t < 54000 ? 70 : (t < 66000 ? 105 : 75);
+      for (final lagS in [0, 2, 4, 6]) {
+        final log = logOf(heart, sdk: (t) => sdkOf(heart)(t - lagS * 1000));
+        final s = shapeOf(log, timing());
+        expect(s.sdkDiffBpm, lessThan(2), reason: 'SDK ${lagS}s late');
+        expect(scoring.shapeProblem(s), isNull, reason: 'SDK ${lagS}s late');
+      }
+    });
+
+    test('a steady offset from the SDK still fails, whatever the delay', () {
+      final log = logOf((_) => 82, sdk: (_) => 70);
+      final s = shapeOf(log, timing());
+      expect(s.sdkDiffBpm, closeTo(12, 1.5));
+      expect(scoring.shapeProblem(s), startsWith('beats off the SDK'));
+    });
+
     test('too few beats in the window are not trusted', () {
       expect(scoring.shapeProblem(shape(coverage: 0.4)), 'beats cover 40%');
       expect(

@@ -95,14 +95,6 @@ class Scoring {
       }
     }
     if (peak == null) return null;
-    // Cross-check: the SDK's pulse is a 12 s average, so compare each SDK
-    // reading with the beats' average over the 12 s before it.
-    final diffs = <double>[];
-    for (final p in log.confidentPulse(t0, t1)) {
-      final from = p.tMs - c.beatSdkWindowMs;
-      if (beats.coverage(from, p.tMs) < 0.5) continue;
-      diffs.add((beats.meanBpm(from, p.tMs)! - p.bpm).abs());
-    }
     return PulseShape(
       preBpm: pre,
       meanBpm: mean,
@@ -110,8 +102,36 @@ class Scoring {
       sustained: mean - pre,
       dip: low == null ? null : pre - low,
       coverage: beats.coverage(t0, t1),
-      sdkDiffBpm: diffs.isEmpty ? null : median(diffs),
+      sdkDiffBpm: sdkDiff(log, beats, t0, t1),
     );
+  }
+
+  /// How far the beats are from the SDK's own pulse over [t0, t1]: the
+  /// median difference between each confident SDK reading and the beats'
+  /// average over the 12 s before it (the SDK's pulse is a 12 s average).
+  /// The SDK's reading may also arrive late, so this tries one delay for the
+  /// whole window, 0 to [ScoringConfig.beatSdkMaxLagMs] in 1 s steps, and
+  /// keeps the best. A steady offset still shows; a delay alone doesn't.
+  /// Null if no reading had enough beats before it.
+  double? sdkDiff(SignalLog log, BeatSeries beats, int t0, int t1) {
+    final c = config;
+    final readings = log.confidentPulse(t0, t1);
+    double? best;
+    for (var lag = 0; lag <= c.beatSdkMaxLagMs; lag += 1000) {
+      final diffs = <double>[];
+      for (final p in readings) {
+        final to = p.tMs - lag;
+        final from = to - c.beatSdkWindowMs;
+        if (beats.coverage(from, to) < 0.5) continue;
+        diffs.add((beats.meanBpm(from, to)! - p.bpm).abs());
+      }
+      // Compare delays on the same readings: one that leaves readings out
+      // can't win by dropping the hard ones.
+      if (diffs.isEmpty || diffs.length < readings.length / 2) continue;
+      final d = median(diffs);
+      if (best == null || d < best) best = d;
+    }
+    return best;
   }
 
   /// Why [s] can't be scored, or null if it can: the beats must cover enough

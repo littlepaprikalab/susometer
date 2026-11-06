@@ -35,6 +35,10 @@ const needsTurns = {
 
 final Map<GamePhase, int> phaseCounts = {};
 
+/// Every scored result the invariants saw, to count how their pulse part
+/// was worked out.
+final Set<QuestionResult> seenResults = Set.identity();
+
 /// Random user actions and environment failures against one game.
 void abuse(
   World w,
@@ -155,6 +159,20 @@ void abuse(
             : null;
       },
     ),
+    // The pulse waveform (SPEC.md decision 63): on and off, a heart rate
+    // that steps between 65 and 90, a misbehaving SDK clock, and the Proof
+    // Panel's live beat readout.
+    (
+      fw(1, 1),
+      () => w.heart = rng.nextInt(4) == 0
+          ? null
+          : (t) => 65.0 + 25 * ((t ~/ 7000) % 2),
+    ),
+    (
+      fw(1, 0),
+      () => w.waveChaos = rng.nextBool() ? Random(rng.nextInt(1 << 30)) : null,
+    ),
+    (fw(1, 1), () => w.settings.proofPanel = rng.nextBool()),
     (fw(3, 4), () => w.talk(rng.nextBool())),
     (fw(3, 4), () => w.say('words ${rng.nextInt(1000)}')),
     (
@@ -201,7 +219,33 @@ void checkInvariants(World w, List<Object> errors, String where) {
       reason: where,
     );
   }
+  expect(
+    g.log.trace.length,
+    lessThanOrEqualTo(g.log.maxTracePoints),
+    reason: where,
+  );
+  for (final v in [
+    g.live.waveHz,
+    g.live.beatBpm,
+    g.live.beatRmssdMs,
+    g.live.beatCoverage,
+  ]) {
+    if (v != null) expect(v.isFinite, isTrue, reason: '$where: live beats');
+  }
   for (final t in g.turns) {
+    for (final r in t.results) {
+      final b = r.breakdown;
+      if (b == null) continue;
+      seenResults.add(r);
+      expect(b.zPulse, inInclusiveRange(0, 1), reason: '$where: zPulse');
+      if (b.pulseMethod == PulseMethod.beats) {
+        expect(b.shape, isNotNull, reason: where);
+        expect(b.pulseNote, isNull, reason: where);
+        expect(r.features?.pulseShape, isNotNull, reason: where);
+      } else {
+        expect(b.pulseNote, isNotNull, reason: '$where: no fallback reason');
+      }
+    }
     expect(
       t.results.length,
       lessThanOrEqualTo(g.questionsPerTurn),
@@ -340,6 +384,7 @@ void main() {
     'progress-biased random play reaches every screen and never breaks (60 seeds)',
     () {
       phaseCounts.clear();
+      seenResults.clear();
       for (var seed = 1000; seed < 1060; seed++) {
         final errors = <Object>[];
         runZonedGuarded(() {
@@ -357,6 +402,20 @@ void main() {
       }
       // ignore: avoid_print
       print('FUZZ (biased) phases visited: $phaseCounts');
+      final methodCounts = <PulseMethod, int>{};
+      for (final r in seenResults) {
+        final m = r.breakdown!.pulseMethod;
+        methodCounts[m] = (methodCounts[m] ?? 0) + 1;
+      }
+      // ignore: avoid_print
+      print('FUZZ (biased) pulse scored by: $methodCounts');
+      for (final m in PulseMethod.values) {
+        expect(
+          methodCounts[m] ?? 0,
+          greaterThan(0),
+          reason: 'fuzzer never scored a pulse by ${m.name}',
+        );
+      }
       for (final p in [
         GamePhase.calibrate,
         GamePhase.ask,

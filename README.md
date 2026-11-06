@@ -191,7 +191,8 @@ question is sus when your heart did something your other answers didn't, and a t
 throughout doesn't make every question look sus.
 
 The beats are used only when they cover at least 60% of the window, their 12 s average agrees with
-the SDK's pulse within 8 BPM, and there are at least 2 earlier answers with good beats. Otherwise
+the SDK's pulse within 8 BPM (allowing the SDK's reading to arrive up to 6 s late), and there are
+at least 2 earlier answers with good beats. Otherwise
 the score uses the SDK-mean formula in the table. The Proof Panel shows which one each score used
 and why.
 

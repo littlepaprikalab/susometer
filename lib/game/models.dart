@@ -221,6 +221,10 @@ class PlayerTurn {
   /// Timing of each answered warm-up, so its pulse shape can be a reference
   /// for this player's questions (SPEC.md decision 63).
   List<QuestionTiming> warmupTimings = const [];
+
+  /// Pulse shapes of those warm-ups, found once all their windows have
+  /// closed, then reused for every question in the turn.
+  List<PulseShape>? warmupShapes;
   bool skipped = false;
   final List<QuestionResult> results = [];
 

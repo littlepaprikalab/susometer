@@ -192,31 +192,95 @@ void main() {
       expect(log.traceIn(20500, 25000), isEmpty);
     });
 
-    test('a stalled snapshot doesn\'t shift the mapping', () {
-      final wave = pulseWave(start: 0, end: 30000, bpm: (_) => 70);
-      final log = SignalLog(config: cfg);
-      final samples = synth(start: 0, end: 30000, wave: wave);
-      for (var i = 0; i < samples.length; i++) {
-        final s = samples[i];
-        // Snapshots 100–130 reach Dart 3 s late (the app was busy).
-        log.add(
-          i >= 100 && i <= 130
-              ? PresageSample(
-                  tMs: s.tMs + 3000,
-                  status: s.status,
-                  validation: s.validation,
-                  traceSamples: s.traceSamples,
-                )
-              : s,
+    PresageSample withTrace(PresageSample s, List<TraceSample> t) =>
+        PresageSample(
+          tMs: s.tMs,
+          status: s.status,
+          validation: s.validation,
+          traceSamples: t,
         );
-      }
+
+    void expectOnTime(SignalLog log, List<(double, double)> wave) {
       expect(log.trace.map((p) => p.clock).toSet(), {0});
-      final mapped = log.traceIn(0, 40000);
+      final mapped = log.traceIn(0, 1 << 52);
+      expect(mapped.length, closeTo(wave.length, 10));
       for (var i = 0; i < mapped.length; i += 25) {
         final shift = mapped[i].$1 - wave[i].$1;
         expect(shift, inInclusiveRange(100, 260), reason: 'sample $i');
       }
       expect(detectBeats(mapped, cfg).meanBpm(3000, 28000), closeTo(70, 1));
+    }
+
+    test('a stall that holds back snapshots doesn\'t shift the mapping', () {
+      // The bridge's main thread is busy for 3 s: no snapshots, then one that
+      // carries everything since.
+      final wave = pulseWave(start: 0, end: 30000, bpm: (_) => 70);
+      final samples = synth(start: 0, end: 30000, wave: wave);
+      final log = SignalLog(config: cfg);
+      final held = <TraceSample>[];
+      for (var i = 0; i < samples.length; i++) {
+        final s = samples[i];
+        if (i >= 100 && i < 130) {
+          held.addAll(s.traceSamples);
+          continue;
+        }
+        log.add(i == 130 ? withTrace(s, [...held, ...s.traceSamples]) : s);
+      }
+      expectOnTime(log, wave);
+    });
+
+    test('a first batch that arrives late is corrected, not split off', () {
+      // The SDK hands over its first samples 2.5 s late, then catches up.
+      final wave = pulseWave(start: 0, end: 30000, bpm: (_) => 70);
+      final samples = synth(start: 0, end: 30000, wave: wave);
+      final first = samples.indexWhere((s) => s.traceSamples.isNotEmpty);
+      final log = SignalLog(config: cfg);
+      final held = <TraceSample>[];
+      for (var i = 0; i < samples.length; i++) {
+        final s = samples[i];
+        if (i == first) {
+          held.addAll(s.traceSamples);
+          log.add(withTrace(s, const []));
+        } else if (i > first && i < first + 25) {
+          log.add(withTrace(s, const []));
+          held.addAll(s.traceSamples);
+        } else if (i == first + 25) {
+          // The first batch alone, 2.5 s late...
+          log.add(withTrace(s, samples[first].traceSamples));
+        } else if (i == first + 26) {
+          // ...then everything since, on time.
+          final rest = held.skip(samples[first].traceSamples.length);
+          log.add(
+            withTrace(s, [
+              ...rest,
+              ...samples[first + 25].traceSamples,
+              ...s.traceSamples,
+            ]),
+          );
+        } else {
+          log.add(s);
+        }
+      }
+      expectOnTime(log, wave);
+    });
+
+    test('a bridge that stays late keeps the earlier, shorter delay', () {
+      // From 10 s on, every snapshot arrives 3 s later than before.
+      final wave = pulseWave(start: 0, end: 30000, bpm: (_) => 70);
+      final log = SignalLog(config: cfg);
+      for (final s in synth(start: 0, end: 30000, wave: wave)) {
+        log.add(
+          s.tMs < 10000
+              ? s
+              : PresageSample(
+                  tMs: s.tMs + 3000,
+                  status: s.status,
+                  validation: s.validation,
+                  traceSamples: s.traceSamples,
+                ),
+        );
+      }
+      expectOnTime(log, wave);
     });
 
     test('an SDK clock that jumps ahead starts a new mapping', () {
@@ -267,6 +331,112 @@ void main() {
       log.clear();
       expect(log.trace, isEmpty);
       expect(log.traceIn(0, 200000), isEmpty);
+    });
+  });
+
+  group('fuzz (SPEC.md decision 63)', () {
+    test('random waveforms never throw and keep the series sane', () {
+      for (var seed = 0; seed < 300; seed++) {
+        final rng = math.Random(seed);
+        double value() => switch (rng.nextInt(20)) {
+          0 => double.nan,
+          1 => double.infinity,
+          2 => -1e300,
+          3 => 1e300,
+          _ => rng.nextDouble() * 4 - 2,
+        };
+        var t = rng.nextDouble() * 1e12;
+        final points = <(double, double, bool)>[];
+        final n = rng.nextInt(3000);
+        for (var i = 0; i < n; i++) {
+          t += switch (rng.nextInt(30)) {
+            0 => -rng.nextDouble() * 5000,
+            1 => rng.nextDouble() * 5000,
+            2 => 0,
+            _ => 10 + rng.nextDouble() * 50,
+          };
+          points.add((t, value(), rng.nextInt(15) != 0));
+        }
+        final b = detectBeats(points, cfg);
+        double? prevEnd;
+        for (final i in b.intervals) {
+          expect(i.endMs, greaterThan(i.startMs), reason: 'seed $seed');
+          if (prevEnd != null) {
+            expect(i.startMs, greaterThanOrEqualTo(prevEnd - 1e-6));
+          }
+          prevEnd = i.endMs;
+        }
+        for (final i in b.accepted) {
+          expect(i.ibiMs, inInclusiveRange(cfg.beatMinIbiMs, cfg.beatMaxIbiMs));
+        }
+        if (points.isEmpty) continue;
+        final a = points.first.$1;
+        final z = points.last.$1;
+        final cov = b.coverage(a, z);
+        expect(cov, inInclusiveRange(0, 1), reason: 'seed $seed');
+        final mean = b.meanBpm(a, z);
+        if (mean != null) expect(mean.isFinite, isTrue, reason: 'seed $seed');
+        final r = b.rmssdMs(a, z);
+        if (r != null) expect(r.isFinite, isTrue, reason: 'seed $seed');
+        for (final (_, v) in b.smoothed(a, a + 20000, 250, 3000)) {
+          if (v != null) expect(v.isFinite, isTrue, reason: 'seed $seed');
+        }
+      }
+    });
+
+    test('random waveform snapshots never throw and keep the store sane', () {
+      for (var seed = 0; seed < 200; seed++) {
+        final rng = math.Random(seed);
+        final log = SignalLog(config: cfg, maxTracePoints: 2000);
+        var wall = 1700000000000;
+        var sdk = rng.nextInt(1 << 30) * 1000;
+        for (var i = 0; i < 400; i++) {
+          wall += switch (rng.nextInt(40)) {
+            0 => 3000,
+            _ => 100,
+          };
+          sdk += switch (rng.nextInt(40)) {
+            0 => -rng.nextInt(50000000),
+            1 => rng.nextInt(50000000),
+            _ => 100000,
+          };
+          final k = rng.nextInt(6);
+          final ts = [
+            for (var j = 0; j < k; j++)
+              rng.nextInt(10) == 0
+                  ? sdk - rng.nextInt(5000000)
+                  : sdk - j * 33000,
+          ];
+          final vals = [
+            for (var j = 0; j < k; j++)
+              rng.nextInt(10) == 0 ? double.nan : rng.nextDouble(),
+          ];
+          log.add(
+            PresageSample.fromMap({
+              't': wall,
+              'status': rng.nextInt(10) == 0 ? 'stopping' : 'running',
+              'validation': {
+                'code': rng.nextInt(8) == 0 ? 'EXCESSIVE_MOTION' : 'OK',
+                'hint': '',
+              },
+              'trace': vals,
+              if (rng.nextInt(12) != 0)
+                'traceTs': rng.nextInt(20) == 0 ? [...ts, 1] : ts,
+              'traceConf': [for (final _ in ts) 0.9],
+            }),
+          );
+        }
+        expect(log.trace.length, lessThanOrEqualTo(2000), reason: 'seed $seed');
+        final all = log.traceIn(-(1 << 52), 1 << 52);
+        expect(all.length, log.trace.length, reason: 'seed $seed');
+        for (var i = 1; i < all.length; i++) {
+          expect(all[i].$1, greaterThanOrEqualTo(all[i - 1].$1));
+          expect(all[i].$1.isFinite && all[i].$2.isFinite, isTrue);
+        }
+        detectBeats(all, cfg);
+        log.clear();
+        expect(log.traceIn(-(1 << 52), 1 << 52), isEmpty);
+      }
     });
   });
 }
