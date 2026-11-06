@@ -65,6 +65,11 @@ void main() {
         reason: 'one turn stays far below the cap',
       );
       expect(w.running, isFalse, reason: 'camera stopped after the last turn');
+      expect(
+        w.presage.calls.where((c) => c == 'start').length,
+        names.length,
+        reason: 'one camera session per player: no watchdog restarts',
+      );
       w.dispose();
     });
   });
@@ -162,6 +167,11 @@ void main() {
         56,
       );
       expect(w.running, isFalse, reason: 'camera stopped after the last turn');
+      expect(
+        w.presage.calls.where((c) => c == 'start').length,
+        names.length,
+        reason: 'one camera session per player: no watchdog restarts',
+      );
       w.dispose();
     });
   });
@@ -286,6 +296,7 @@ void main() {
                 'unknown9': 0.9,
               },
               'exprAt': w.now + i,
+              'frameAt': w.now + i,
               'validation': {'code': 'OK', 'hint': ''},
             }),
           );

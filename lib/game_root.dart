@@ -68,6 +68,8 @@ class _GameRootState extends State<GameRoot> with WidgetsBindingObserver {
     if (state == AppLifecycleState.paused ||
         state == AppLifecycleState.hidden) {
       game.onAppBackgrounded();
+    } else if (state == AppLifecycleState.inactive) {
+      game.onAppInactive();
     } else if (state == AppLifecycleState.resumed) {
       game.onAppResumed();
     }

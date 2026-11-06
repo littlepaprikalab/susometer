@@ -42,6 +42,7 @@ class ProofPanel extends StatelessWidget {
           final last = scored.isEmpty ? null : scored.last;
           final lastShape = last?.features?.pulseShape;
           final lastRank = last?.breakdown?.shape;
+          final camAge = s?.frameAgeMs;
           final lines = <String>[
             'SDK ${s?.status.name ?? 'idle'} · telemetry ${telemetry ? 'ON' : 'off'}'
                 '${s?.insightSeen == true ? ' · LLM INSIGHT SEEN' : ''}',
@@ -66,7 +67,9 @@ class ProofPanel extends StatelessWidget {
             'blink ${s?.blink == true ? 'Y' : 'n'}  talking ${s?.talking == true ? 'Y' : 'n'}'
                 '  mic ${(game.live.micLevel * 100).round()}%',
             'expr ${top == null ? '--' : '${top.key} ${pct(top.value)}'}',
-            'valid ${s?.validation?.code ?? '--'}',
+            // How old the camera image is: it climbs if the camera froze.
+            'valid ${s?.validation?.code ?? '--'}'
+                '${camAge == null ? '' : '  cam ${(camAge / 1000).toStringAsFixed(1)}s'}',
             if ((s?.validation?.hint ?? '').isNotEmpty)
               '  "${s!.validation!.hint}"',
             if (s?.error != null)

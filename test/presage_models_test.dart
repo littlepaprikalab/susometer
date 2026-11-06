@@ -18,6 +18,7 @@ void main() {
         'talking': true,
         'expr': {'surprise': 0.42, 'neutral': 0.5, 'fear': 0.08},
         'exprAt': 1730851200090,
+        'frameAt': 1730851200100,
         'validation': {'code': 'OK', 'hint': 'Hold still'},
         'events': [
           {'e': 'blinkEvent', 't': 1730851200050, 'ts': 1730851200050000},
@@ -54,6 +55,8 @@ void main() {
       expect(s.traceSamples.map((p) => p.conf), [0.9, 0.8, 0.85]);
       expect(s.topExpression!.key, 'neutral');
       expect(s.exprAtMs, 1730851200090);
+      expect(s.frameAtMs, 1730851200100);
+      expect(s.frameAgeMs, 23);
       expect(s.error, isNull);
     });
 
@@ -99,6 +102,7 @@ void main() {
       expect(s.validation, isNull);
       expect(s.expr, isEmpty);
       expect(s.exprAtMs, isNull);
+      expect(s.frameAgeMs, isNull, reason: 'no frame yet: age unknown');
       expect(s.events, isEmpty);
       expect(s.topExpression, isNull);
       expect(s.insightSeen, isFalse);

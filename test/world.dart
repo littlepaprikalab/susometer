@@ -74,6 +74,12 @@ class World {
   double pulse = 70;
   String code = 'OK';
 
+  /// The camera stops delivering frames while the SDK still says it's
+  /// running: snapshots keep coming with the last frame's time. Like the
+  /// bridge, a new session's frame time starts when it starts running.
+  bool cameraFrozen = false;
+  int? _frameAt;
+
   /// Expression scores in every snapshot, fresh each time (like the SDK
   /// publishing a new expression sample every frame).
   Map<String, double> expr = const {'neutral': 0.8, 'surprise': 0.05};
@@ -182,6 +188,7 @@ class World {
       }
     }
     if (_pulseAt == null || t - _pulseAt! >= 1000) _pulseAt = t;
+    if (!cameraFrozen || _frameAt == null) _frameAt = t;
     if (t >= _nextBlink) {
       _pendingEvents.add({'e': 'blinkEvent', 't': t});
       _nextBlink = t + 4000;
@@ -205,6 +212,7 @@ class World {
         'pulseAt': _pulseAt,
         'expr': expr,
         'exprAt': expr.isEmpty ? null : t,
+        'frameAt': _frameAt,
         'validation': {'code': code, 'hint': code == 'OK' ? '' : 'hint'},
         'talking': talking,
         'events': List.of(_pendingEvents),
@@ -317,17 +325,20 @@ class RunningPresage extends FakePresage {
   Future<void> start() async {
     await super.start();
     world.running = true;
+    world._frameAt = null;
   }
 
   @override
   Future<void> stop() async {
     await super.stop();
     world.running = false;
+    world._frameAt = null;
   }
 
   @override
   Future<void> reset() async {
     await super.reset();
     world.running = false;
+    world._frameAt = null;
   }
 }
