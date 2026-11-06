@@ -181,11 +181,15 @@ class SignalLog {
   /// the same clock uses the latest one (so a first batch that arrived late
   /// is corrected once the next ones show the real delay).
   ///
-  /// A new mapping starts only if the SDK clock itself jumps: it goes back
-  /// while the wall clock doesn't (a restart), or its next sample is further
-  /// ahead of the previous one than the wall clock moved, by over
-  /// [ScoringConfig.traceClockJumpMs]. Samples that are simply old, with the
-  /// same offset, are dropped as repeats.
+  /// A new mapping starts only if the SDK clock itself jumps, by over
+  /// [ScoringConfig.traceClockJumpMs]: it goes back while the wall clock
+  /// doesn't (a restart); its next sample is further ahead of the previous
+  /// one than the wall clock moved (it jumped forward); or its newest sample
+  /// is further behind than the wall clock moved (it paused, e.g. while the
+  /// phone slept). A stall doesn't look like any of these: the samples made
+  /// meanwhile arrive together, so the SDK clock kept pace. Samples that are
+  /// simply old, with the same offset, are dropped as repeats (the bridge
+  /// only sends newer ones, so this is a safeguard).
   void _addTrace(PresageSample s, bool ok) {
     if (s.traceSamples.isEmpty) return;
     final samples = [...s.traceSamples]
@@ -197,10 +201,14 @@ class SignalLog {
     final current = _traceOffsetMs.isEmpty ? null : _traceOffsetMs.last;
     final jump = config.traceClockJumpMs;
     final wentBack = last != null && newest < last;
-    final ahead = last == null || lastAt == null || wentBack
-        ? 0.0
-        : (samples.first.tsUs - last) / 1000 - (s.tMs - lastAt);
-    if (current == null || (wentBack && d > current + jump) || ahead > jump) {
+    final steady = last == null || lastAt == null || wentBack;
+    final wallMs = steady ? 0 : s.tMs - lastAt;
+    final ahead = steady ? 0.0 : (samples.first.tsUs - last) / 1000 - wallMs;
+    final behind = steady ? 0.0 : wallMs - (newest - last) / 1000;
+    if (current == null ||
+        (wentBack && d > current + jump) ||
+        ahead > jump ||
+        behind > jump) {
       _traceOffsetMs.add(d);
       _lastTraceTsUs = null;
     } else if (d < current) {

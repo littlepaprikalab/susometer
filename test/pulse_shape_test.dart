@@ -136,7 +136,7 @@ void main() {
         beats: scoring.beats(log, 0, 70000),
       );
       expect(f.pulseShape, isNull);
-      final b = scoring.score(f, base, refs: [shape(), shape()]);
+      final b = scoring.score(f, base, warmups: [shape(), shape()]);
       expect(b.pulseMethod, PulseMethod.sdkMean);
       expect(b.pulseNote, 'no beats found');
       expect(b.zPulse, closeTo(6 / cfg.pulseScaleBpm, 0.02));
@@ -147,7 +147,11 @@ void main() {
       final s = shapeOf(log, timing());
       expect(s.sdkDiffBpm, closeTo(30, 2));
       expect(scoring.shapeProblem(s), 'beats off the SDK by 30 BPM');
-      final b = scoring.score(featuresWith(s), base, refs: [shape(), shape()]);
+      final b = scoring.score(
+        featuresWith(s),
+        base,
+        warmups: [shape(), shape()],
+      );
       expect(b.pulseMethod, PulseMethod.sdkMean);
     });
 
@@ -228,23 +232,44 @@ void main() {
       expect(r.dip, 0);
     });
 
-    test('needs enough earlier answers with good beats', () {
+    test('needs enough warm-ups with good beats', () {
       expect(scoring.rankShape(shape(), [shape()]), isNull);
       final b = scoring.score(
         featuresWith(shape(rise: 20)),
         base,
-        refs: [shape(), shape(coverage: 0.3)],
+        warmups: [shape(), shape(coverage: 0.3)],
       );
       expect(b.pulseMethod, PulseMethod.sdkMean);
-      expect(b.pulseNote, 'only 1 earlier answer with beats');
+      expect(b.pulseNote, 'only 1 warm-up with beats');
       expect(b.zPulse, closeTo(6 / cfg.pulseScaleBpm, 1e-9));
+    });
+
+    test('earlier questions add to the warm-ups but can\'t replace them', () {
+      // Without this, a turn whose warm-ups were skipped would switch from
+      // the SDK mean to beats at Q3, mixing two scales in one turn.
+      final noWarmups = scoring.score(
+        featuresWith(shape(rise: 20)),
+        base,
+        earlier: [shape(), shape(), shape()],
+      );
+      expect(noWarmups.pulseMethod, PulseMethod.sdkMean);
+      expect(noWarmups.pulseNote, 'only 0 warm-ups with beats');
+      final both = scoring.score(
+        featuresWith(shape(rise: 20)),
+        base,
+        warmups: [shape(), shape()],
+        earlier: [shape(), shape(coverage: 0.2)],
+      );
+      expect(both.pulseMethod, PulseMethod.beats);
+      expect(both.shape!.refs, 3, reason: 'the bad earlier one is left out');
     });
 
     test('good beats and enough references replace the SDK-mean pulse', () {
       final b = scoring.score(
         featuresWith(shape(rise: 20, sustained: 12, dip: 10), meanPulse: 70),
         base,
-        refs: refs,
+        warmups: refs.take(2).toList(),
+        earlier: refs.skip(2).toList(),
       );
       expect(b.pulseMethod, PulseMethod.beats);
       expect(b.pulseNote, isNull);
@@ -288,6 +313,68 @@ void main() {
         expect(racing.features!.pulseShape!.rise, closeTo(20, 3));
         expect(b2.zPulse, greaterThan(0.6));
         expect(racing.score!, greaterThan(calm.score!));
+        w.dispose();
+      });
+    });
+
+    test('a racing first question isn\'t compared with itself', () {
+      // The warm-ups' windows used to run 12 s past their question, into
+      // Q1, so a racing Q1 raised its own references.
+      fakeAsync((async) {
+        final w = World(async);
+        w.heart = (_) =>
+            w.game.phase == GamePhase.answer || w.game.phase == GamePhase.settle
+            ? 90
+            : 70;
+        w.startGame(['Sam', 'Alex']);
+        w.calibrate();
+        final turn = w.game.currentTurn;
+        final q1Start = w.now;
+        for (var i = 0; i < turn.warmupTimings.length; i++) {
+          final end = turn.warmupTimings[i].windowEnd(
+            cfg.minWindowAfterQuestionMs,
+          );
+          expect(end, lessThanOrEqualTo(q1Start), reason: 'warm-up $i');
+          if (i + 1 < turn.warmupTimings.length) {
+            expect(
+              end,
+              lessThanOrEqualTo(turn.warmupTimings[i + 1].tQ0),
+              reason: 'warm-up $i runs into the next one',
+            );
+          }
+        }
+        final r = w.askAndAnswer();
+        final b = r.breakdown!;
+        expect(b.pulseMethod, PulseMethod.beats, reason: '${b.pulseNote}');
+        for (final ref in turn.warmupShapes!) {
+          expect(ref.rise, lessThan(3), reason: 'a warm-up saw Q1\'s race');
+        }
+        expect(b.zPulse, greaterThan(0.6));
+        w.dispose();
+      });
+    });
+
+    test('skipped warm-ups keep the whole turn on the SDK mean', () {
+      fakeAsync((async) {
+        final w = World(async);
+        w.heart = (_) => 70;
+        w.autoAnswerWarmups = false;
+        w.startGame(['Sam', 'Alex'], questions: 5);
+        w.game.agreeToMeasure();
+        w.until(
+          () => w.game.phase == GamePhase.ask,
+          what: 'calibration with every warm-up skipped',
+          step: () {
+            if (w.game.currentWarmup != null) w.game.skipWarmup();
+          },
+        );
+        expect(w.game.currentTurn.warmupTimings, isEmpty);
+        for (var q = 0; q < 5; q++) {
+          final r = w.askAndAnswer(question: 'Q$q?');
+          expect(r.breakdown!.pulseMethod, PulseMethod.sdkMean, reason: 'Q$q');
+          expect(r.breakdown!.pulseNote, 'only 0 warm-ups with beats');
+          if (q < 4) w.game.nextQuestion();
+        }
         w.dispose();
       });
     });

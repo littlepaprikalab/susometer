@@ -264,8 +264,34 @@ void main() {
       expectOnTime(log, wave);
     });
 
-    test('a bridge that stays late keeps the earlier, shorter delay', () {
-      // From 10 s on, every snapshot arrives 3 s later than before.
+    test('an SDK clock that pauses starts a new mapping', () {
+      // The SDK's clock stops for 30 s (the phone slept) while the wall
+      // clock runs on, then carries on from where it stopped.
+      final first = pulseWave(start: 0, end: 20000, bpm: (_) => 70);
+      final second = pulseWave(start: 50000, end: 80000, bpm: (_) => 90);
+      final log = SignalLog(config: cfg);
+      for (final s in synth(start: 0, end: 20200, wave: first)) {
+        log.add(s);
+      }
+      for (final s in synth(
+        start: 50000,
+        end: 80200,
+        wave: second,
+        sdkClockOffsetMs: 30000,
+      )) {
+        log.add(s);
+      }
+      expect(log.trace.map((p) => p.clock).toSet(), {0, 1});
+      final b = detectBeats(log.traceIn(0, 90000), cfg);
+      expect(b.meanBpm(3000, 18000), closeTo(70, 1));
+      expect(b.meanBpm(53000, 78000), closeTo(90, 1));
+      expect(b.coverage(53000, 78000), greaterThan(0.9));
+      expect(log.traceIn(20500, 50000), isEmpty);
+    });
+
+    test('a bridge that turns late follows the new delay', () {
+      // From 10 s on, every snapshot arrives 3 s later: the waveform stays
+      // lined up with the pulse readings and frames, which arrive late too.
       final wave = pulseWave(start: 0, end: 30000, bpm: (_) => 70);
       final log = SignalLog(config: cfg);
       for (final s in synth(start: 0, end: 30000, wave: wave)) {
@@ -280,7 +306,18 @@ void main() {
                 ),
         );
       }
-      expectOnTime(log, wave);
+      expect(log.trace.map((p) => p.clock).toSet(), {0, 1});
+      final mapped = log.traceIn(0, 40000);
+      for (var i = 0; i < mapped.length; i += 25) {
+        final shift = mapped[i].$1 - wave[i].$1;
+        // Samples up to 9.75 s ride snapshots before 10 s (150 ms delay,
+        // 100 ms between snapshots); later ones ride the late snapshots.
+        final late = wave[i].$1 > 9750 ? 3000 : 0;
+        expect(shift - late, inInclusiveRange(100, 360), reason: 'sample $i');
+      }
+      final b = detectBeats(mapped, cfg);
+      expect(b.meanBpm(1000, 9500), closeTo(70, 1));
+      expect(b.meanBpm(14000, 32000), closeTo(70, 1));
     });
 
     test('an SDK clock that jumps ahead starts a new mapping', () {

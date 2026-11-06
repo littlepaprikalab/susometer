@@ -230,26 +230,37 @@ class Scoring {
       f.cleanFraction >= config.minCleanFraction;
 
   /// The 0–100 score. The pulse part comes from the beat shape ranked
-  /// against [refs] (the player's earlier answers) when the beats are good
-  /// and there are enough references; otherwise from the mean SDK pulse
-  /// against the calibration median, as before (SPEC.md §5.4, decision 63).
+  /// against the player's [warmups] and [earlier] questions when the beats
+  /// are good; otherwise from the mean SDK pulse against the calibration
+  /// median, as before (SPEC.md §5.4, decision 63).
+  ///
+  /// Beats need at least [ScoringConfig.shapeMinRefs] good warm-ups. Earlier
+  /// questions add to the comparison but can't stand in for them, so a turn
+  /// whose warm-ups had no usable beats stays on one scale (the SDK mean)
+  /// instead of switching once enough questions have piled up.
   ScoreBreakdown score(
     WindowFeatures f,
     Baseline base, {
-    List<PulseShape> refs = const [],
+    List<PulseShape> warmups = const [],
+    List<PulseShape> earlier = const [],
   }) {
     final c = config;
     var note = shapeProblem(f.pulseShape);
     ShapeScore? shape;
     if (note == null) {
-      final good = [
-        for (final r in refs)
+      final goodWarmups = [
+        for (final r in warmups)
           if (shapeProblem(r) == null) r,
       ];
-      shape = rankShape(f.pulseShape!, good);
-      if (shape == null) {
-        note =
-            'only ${good.length} earlier answer${good.length == 1 ? '' : 's'} with beats';
+      if (goodWarmups.length < c.shapeMinRefs) {
+        final n = goodWarmups.length;
+        note = 'only $n warm-up${n == 1 ? '' : 's'} with beats';
+      } else {
+        shape = rankShape(f.pulseShape!, [
+          ...goodWarmups,
+          for (final r in earlier)
+            if (shapeProblem(r) == null) r,
+        ]);
       }
     }
     final zPulse =

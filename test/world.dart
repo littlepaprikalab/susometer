@@ -81,12 +81,17 @@ class World {
 
   /// Pulse waveform (SPEC.md decision 63). When [heart] is set, each
   /// snapshot carries the waveform since the last one, beating at
-  /// `heart(t)` BPM, and the SDK pulse becomes the mean heart rate over the
-  /// last 12 s, as the real SDK reports it, instead of [pulse].
+  /// `heart(t)` BPM, and the SDK pulse becomes the mean heart rate over 12 s
+  /// ending [sdkLagMs] ago (a 12 s average that also arrives late, as the
+  /// real SDK's may), instead of [pulse].
   double Function(int t)? heart;
+  int sdkLagMs = 2000;
 
-  /// Waveform samples reach the bridge this late.
+  /// Waveform samples reach the bridge this late, plus up to
+  /// [waveLatencyJitterMs] more, varying snapshot to snapshot.
   int waveLatencyMs = 150;
+  int waveLatencyJitterMs = 120;
+  final Random _latencyJitter = Random(7);
 
   /// Fuzzing: when set, some waveform batches are mangled the ways a
   /// misbehaving SDK or bridge could (SDK clock jumps either way, samples
@@ -128,8 +133,10 @@ class World {
     final h = heart;
     if (h != null) {
       const dt = 1000 / 30;
-      var at = _waveAt ?? (t - waveLatencyMs).toDouble();
-      while (at <= t - waveLatencyMs) {
+      final latency =
+          waveLatencyMs + _latencyJitter.nextInt(waveLatencyJitterMs + 1);
+      var at = _waveAt ?? (t - latency).toDouble();
+      while (at <= t - latency) {
         final bpm = h(at.round());
         trace.add(_wave.next(at, bpm, dt));
         traceTs.add((at * 1000).round());
@@ -165,11 +172,13 @@ class World {
         _lastTrace = List.of(trace);
         _lastTraceTs = List.of(traceTs);
       }
-      _heartLog.removeWhere((e) => e.$1 < t - 12000);
-      if (_heartLog.isNotEmpty) {
-        pulse =
-            _heartLog.map((e) => e.$2).reduce((a, b) => a + b) /
-            _heartLog.length;
+      _heartLog.removeWhere((e) => e.$1 < t - sdkLagMs - 12000);
+      final window = [
+        for (final (at, bpm) in _heartLog)
+          if (at <= t - sdkLagMs) bpm,
+      ];
+      if (window.isNotEmpty) {
+        pulse = window.reduce((a, b) => a + b) / window.length;
       }
     }
     if (_pulseAt == null || t - _pulseAt! >= 1000) _pulseAt = t;
@@ -210,9 +219,15 @@ class World {
   }
 
   /// Advances fake time in 100 ms steps until [cond] holds.
-  void until(bool Function() cond, {int maxMs = 120000, String? what}) {
+  void until(
+    bool Function() cond, {
+    int maxMs = 120000,
+    String? what,
+    void Function()? step,
+  }) {
     var waited = 0;
     while (!cond()) {
+      step?.call();
       async.elapse(const Duration(milliseconds: 100));
       waited += 100;
       if (waited > maxMs) {

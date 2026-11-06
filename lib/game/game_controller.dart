@@ -63,18 +63,21 @@ class Warmup {
   bool skipped = false;
 
   /// Its timing as a question, for comparing pulse shapes (SPEC.md decision
-  /// 63). Null unless it was answered.
-  QuestionTiming? get timing {
+  /// 63), with the window ending by [capMs] (where the next warm-up or the
+  /// first question starts). Null unless it was answered.
+  QuestionTiming? timingUntil(int capMs) {
     final latency = latencyS;
     final end = doneAtMs;
     if (!done || skipped || latency == null || end == null) return null;
     final tA0 = askedAtMs + (latency * 1000).round();
+    final tA1 = max(end, tA0);
     return QuestionTiming(
       tQ0: startedAtMs,
       tQ1: askedAtMs,
       tA0: tA0,
-      tA1: max(end, tA0),
+      tA1: tA1,
       hesitationFromMs: askedAtMs,
+      endCapMs: max(capMs, tA1),
     );
   }
 }
@@ -688,7 +691,12 @@ class GameController extends ChangeNotifier {
     calibStage = CalibStage.done;
     currentTurn.baseline = _calibBaseline;
     currentTurn
-      ..warmupTimings = [for (final w in warmups) ?w.timing]
+      ..warmupTimings = [
+        for (var i = 0; i < warmups.length; i++)
+          ?warmups[i].timingUntil(
+            i + 1 < warmups.length ? warmups[i + 1].startedAtMs : nowMs,
+          ),
+      ]
       ..warmupShapes = null;
     calibHint = null;
     // Normally 0; after a mid-turn recalibration, carry on where we were.
@@ -882,8 +890,7 @@ class GameController extends ChangeNotifier {
       base,
       beats: _beatsFor(timing),
     );
-    final refs = [
-      ..._warmupShapes(),
+    final earlier = [
       for (final r in currentTurn.results)
         if (r.scored) ?r.features?.pulseShape,
     ];
@@ -922,7 +929,12 @@ class GameController extends ChangeNotifier {
       answer: _answerTranscript.text,
       timing: timing,
       features: features,
-      breakdown: scoring.score(features, base, refs: refs),
+      breakdown: scoring.score(
+        features,
+        base,
+        warmups: _warmupShapes(),
+        earlier: earlier,
+      ),
       pulseTrace: trace,
       traceEndMs: t1,
       basePulse: base.pulse,

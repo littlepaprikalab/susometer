@@ -203,14 +203,20 @@ List<BeatInterval> _beatsIn(List<(double, double)> piece, ScoringConfig c) {
     peaks.add(i);
   }
 
-  // Drop small bumps: under a fraction of the median of nearby peaks.
+  // Drop small bumps: under a fraction of the median of the peaks within
+  // 5 s. Peaks are in order, so the neighbours are a sliding range.
   final window = (5000 / dt).round();
   final kept = <int>[];
+  var lo = 0;
+  var hi = 0;
   for (final p in peaks) {
-    final near = [
-      for (final q in peaks)
-        if ((q - p).abs() <= window) y[q],
-    ];
+    while (peaks[lo] < p - window) {
+      lo++;
+    }
+    while (hi < peaks.length && peaks[hi] <= p + window) {
+      hi++;
+    }
+    final near = [for (var k = lo; k < hi; k++) y[peaks[k]]];
     if (y[p] >= c.beatMinPeakFraction * _median(near)) kept.add(p);
   }
 

@@ -130,6 +130,7 @@ class QuestionTiming {
     required this.tA0,
     required this.tA1,
     required this.hesitationFromMs,
+    this.endCapMs,
   });
 
   final int tQ0;
@@ -141,9 +142,16 @@ class QuestionTiming {
   /// "{name}, your answer?" prompt when the question ended on silence.
   final int hesitationFromMs;
 
+  /// The window never runs past this (ms), if set: a warm-up's window ends
+  /// where the next warm-up, or the first question, begins (SPEC.md
+  /// decision 63).
+  final int? endCapMs;
+
   int windowEnd(int minAfterQuestionMs) {
     final minEnd = tQ1 + minAfterQuestionMs;
-    return tA1 > minEnd ? tA1 : minEnd;
+    final end = tA1 > minEnd ? tA1 : minEnd;
+    final cap = endCapMs;
+    return cap != null && cap < end ? cap : end;
   }
 }
 
