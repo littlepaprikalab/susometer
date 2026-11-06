@@ -349,6 +349,8 @@ Add unit tests for scoring and turn detection with synthetic streams. They're ru
 
 ## 16. Open items to verify on the device
 
+The step-by-step script for these (and everything else a device must confirm) is [`docs/DEVICE_CHECKLIST.md`](DEVICE_CHECKLIST.md).
+
 - [ ] The camera (SmartSpectra) and mic (speech recognition) run together without audio session errors.
 - [x] The confidence field name on `MeasurementWithConfidence`, and the expression category names (Data Types reference). *`confidence`, a percentage 0–100; expressions: angry, contempt, disgust, fear, happy, neutral, sad, surprise. See Decisions.*
 - [ ] Whether the SDK needs network access to start, and its behavior offline.
@@ -422,3 +424,8 @@ Choices made once the real APIs were in hand. Where these differ from the sectio
 42. **Sound effects are synthesized**, not downloaded: `tool/gen_sfx.py` (standard library only, deterministic) writes jingle, drumroll, ding-ding, wah-wah, buzzer and applause to `assets/sfx/` as 22 kHz mono WAV (~540 KB total). They're original work, released under CC0. The turn-start jingle finishes before the host's first line.
 43. **App icon and launch screen.** `tool/gen_icon.py` draws the icon (tomato marquee board with bulbs, "SUS" in Bowlby One SC on mustard) at every size in the asset catalog, opaque as the App Store requires. The launch screen background is mustard.
 44. **Accessibility pass.** Custom buttons put their tap handler on the semantics node, so VoiceOver can activate them (a test checks this). Text scale is capped at 1.3× so the fixed 390×844 layouts hold. Small cream text never sits on tomato (~4.1:1); those surfaces use the meter ramp's deeper red `#B8301D` (~5.5:1). A test checks every small-text color pair against WCAG AA.
+
+### Milestone 6
+
+45. **Submission docs.** `README.md` follows §15. `docs/DEV_POST.md` is a draft using the challenge's official template headings (What I Built, Demo, Code, How It Responds to Human Signals, Prize Categories, Consent and Data Handling, Agent Session), with placeholders for the video and agent-session links. `docs/DEMO.md` is the shot list with timings. `docs/DEVICE_CHECKLIST.md` collects every check that needs a real iPhone. Before submitting: make the GitHub repo public (it's private now), record the video, and fill the placeholders. Deadline Nov 22, 11:59 PM PST.
+
