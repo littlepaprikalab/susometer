@@ -71,11 +71,17 @@ void expectOvalClear(WidgetTester tester, List<Finder> overlays, String when) {
   }
 }
 
-/// The expression stamp shows inside the camera, clear of its chips and
-/// cards. (It may run over the oval: it's stamped on the picture.)
-void expectStampPlaced(WidgetTester tester, List<Finder> others, String when) {
-  final stamp = find.byType(ExpressionStamp);
-  expect(stamp, findsOneWidget, reason: '$when: no expression stamp');
+/// The expression stamp (or a camera problem's, with [type] IssueStamp)
+/// shows inside the camera, clear of its chips and cards. (It may run over
+/// the oval: it's stamped on the picture.)
+void expectStampPlaced(
+  WidgetTester tester,
+  List<Finder> others,
+  String when, {
+  Type type = ExpressionStamp,
+}) {
+  final stamp = find.byType(type);
+  expect(stamp, findsOneWidget, reason: '$when: no $type');
   final r = tester.getRect(stamp);
   final window = tester
       .getRect(find.byType(CameraWindow))
@@ -361,7 +367,8 @@ void main() {
     rig.game.doneAsking();
     rig.presage.code = 'NO_FACE_FOUND';
     await rig.wait(2000);
-    expect(find.text("Picks up again when it's clear"), findsOneWidget);
+    expect(find.text('No face'), findsOneWidget, reason: 'E3 stamp');
+    expect(find.text('Get your face inside the oval.'), findsOneWidget);
     expect(
       find.byType(ExpressionStamp),
       findsNothing,
@@ -369,8 +376,50 @@ void main() {
     );
     expectOvalClear(tester, [
       chip('Reading paused'),
-      chip('Picks up again'),
+      chip('Get your face'),
     ], 'bad signal');
+    expectStampPlaced(
+      tester,
+      [chip('Reading paused'), chip('Get your face')],
+      'bad signal',
+      type: IssueStamp,
+    );
+    // Like the #tag: while the problem holds, the 10 Hz overlay rebuild
+    // doesn't repaint the stamp (its worn-ink layer is the costly part).
+    final issueLayer = tester.renderObject<RenderRepaintBoundary>(
+      find
+          .descendant(
+            of: find.byType(IssueStamp),
+            matching: find.byType(RepaintBoundary),
+          )
+          .first,
+    );
+    int issuePaints() =>
+        issueLayer.debugSymmetricPaintCount +
+        issueLayer.debugAsymmetricPaintCount;
+    final painted = issuePaints();
+    expect(painted, greaterThan(0), reason: 'paint counts are tracked');
+    await rig.wait(1000);
+    expect(
+      issuePaints(),
+      painted,
+      reason: 'the stamp repainted while unchanged',
+    );
+    // VoiceOver hears the problem and its fix once, when the stamp lands.
+    final handle = tester.ensureSemantics();
+    expect(
+      tester.getSemantics(find.byType(IssueStamp)),
+      matchesSemantics(
+        label: "Can't see a face. Get your face inside the oval.",
+        isLiveRegion: true,
+      ),
+    );
+    expect(
+      find.bySemanticsLabel('Get your face inside the oval.'),
+      findsNothing,
+    );
+    handle.dispose();
+    await checkScreen(tester, 'bad signal');
     await rig.tap('Final answer');
     await rig.until(() => rig.game.phase == GamePhase.redo);
     await checkScreen(tester, 'redo');
@@ -498,6 +547,36 @@ void main() {
               chip('Light'),
               find.byType(LiveStatCard),
             ], 'calibrate');
+            // A camera problem is stamped here too, with its fix in the
+            // pulse card's place, and nothing moves.
+            final calibCamera = tester.getRect(find.byType(CameraPreview));
+            rig.presage.code = 'MULTIPLE_FACES_FOUND'; // the longest stamp
+            await rig.wait(2000);
+            expect(find.text('Too many faces'), findsOneWidget);
+            expect(find.byType(ExpressionStamp), findsNothing);
+            expect(find.byType(LiveStatCard), findsNothing);
+            expect(
+              tester.getRect(find.byType(CameraPreview)),
+              calibCamera,
+              reason: 'the calibration camera moved',
+            );
+            final calibChips = [
+              chip('Face found'),
+              chip('Looking for a face'),
+              chip('Light'),
+              chip('Only the hot seat'),
+            ];
+            expectOvalClear(tester, calibChips, 'calibrate, bad signal');
+            expectStampPlaced(
+              tester,
+              calibChips,
+              'calibrate, bad signal',
+              type: IssueStamp,
+            );
+            rig.presage.code = 'OK';
+            await rig.wait(1500);
+            expect(find.byType(IssueStamp), findsNothing);
+            expect(find.byType(LiveStatCard), findsOneWidget);
             // During a warm-up answer the "Talking" indicator shows too.
             await rig.until(
               () =>
@@ -592,6 +671,48 @@ void main() {
             await rig.wait(1500);
             expect(find.text('#surprise'), findsOneWidget);
             same('the expression changes');
+            // A camera problem (E3) is stamped where the tag was, with its
+            // fix in the live cards' row. Nothing on screen moves: a jump
+            // is what makes people move.
+            final transcript = tester.getRect(
+              find.textContaining('to start answering'),
+            );
+            rig.presage.code = 'MULTIPLE_FACES_FOUND'; // the longest stamp
+            await rig.wait(2000);
+            expect(find.text('Too many faces'), findsOneWidget);
+            expect(find.byType(ExpressionStamp), findsNothing);
+            same('a camera problem');
+            expect(
+              tester.getRect(find.textContaining('to start answering')),
+              transcript,
+              reason: 'the transcript card moved',
+            );
+            final fix = chip('Only the hot seat');
+            expectOvalClear(tester, [
+              chip('Reading paused'),
+              fix,
+            ], 'bad signal');
+            expectStampPlaced(
+              tester,
+              [chip('Reading paused'), fix],
+              'bad signal',
+              type: IssueStamp,
+            );
+            // Readable at a glance: at normal text sizes even the longest
+            // stamp stays near full size (15 pt or more on an SE).
+            final issueStamp = find.byType(IssueStamp);
+            final drawn = tester.getRect(issueStamp).width;
+            final natural = tester.getSize(issueStamp).width;
+            expect(
+              drawn / natural,
+              greaterThan(scale == 1 ? 0.8 : 0.6),
+              reason: 'the stamp shrank to ${drawn / natural}',
+            );
+            rig.presage.code = 'OK';
+            await rig.wait(1500);
+            expect(find.byType(IssueStamp), findsNothing);
+            expect(find.text('Pulse'), findsOneWidget);
+            same('the camera problem clears');
             rig.presage.talk(false);
             await rig.wait(400);
             await rig.tap('Final answer');
@@ -633,6 +754,83 @@ void main() {
       }
     }
   }
+
+  testWidgets('slow calibration: problems and the hint are stamped on the '
+      'camera, and nothing moves', (tester) async {
+    final rig = Rig(tester);
+    await rig.pumpApp();
+    await rig.startParty(['Sam', 'Alex']);
+    rig.presage.code = 'FACE_NOT_CENTERED';
+    await rig.tap('I agree, measure me');
+    await rig.until(() => rig.game.phase == GamePhase.calibrate);
+    await rig.wait(2500);
+    final camera = find.byType(CameraPreview);
+    final bottom = tester.getRect(find.byType(CameraWindow)).bottom;
+    final view = tester.element(camera);
+    // Nothing comes between the host and the camera any more (the old
+    // "Still calibrating" card did), and the camera's view is kept. (The
+    // host's line still grows when the warm-up questions start.)
+    void same(String when) {
+      final window = tester.getRect(find.byType(CameraWindow));
+      expect(
+        window.top,
+        closeTo(tester.getRect(find.byType(HostBubble)).bottom + 12, 0.01),
+        reason: '$when: something sits between the host and the camera',
+      );
+      expect(window.bottom, closeTo(bottom, 0.01), reason: '$when: moved');
+      expect(
+        identical(tester.element(camera), view),
+        isTrue,
+        reason: '$when: the camera view was rebuilt',
+      );
+    }
+
+    // Live, from the start, as on Ask and Answer.
+    expect(find.text('Off center'), findsOneWidget);
+    expect(find.text('Line your face up with the oval.'), findsOneWidget);
+    expect(rig.game.calibIssue, isNull, reason: 'no hint before 45 s');
+    await checkScreen(tester, 'calibrate, bad signal');
+    await rig.wait(45000);
+    expect(rig.game.calibIssue?.stamp, 'Off center');
+    same('the hint comes');
+
+    // Fixed: the reading runs again, so the pulse card is back, but the
+    // hint stays stamped while the baseline is still short.
+    rig.presage.code = 'OK';
+    await rig.wait(1500); // 1 s clean before the live stamp goes
+    expect(rig.game.visibleIssue, isNull);
+    expect(find.text('Off center'), findsOneWidget);
+    expect(find.byType(LiveStatCard), findsOneWidget);
+    expect(find.byType(PausedFixRow), findsNothing);
+    await rig.wait(5500);
+    expect(find.text('Hold steady'), findsOneWidget, reason: 'no recent issue');
+    final handle = tester.ensureSemantics();
+    expect(
+      tester.getSemantics(find.byType(IssueStamp)),
+      matchesSemantics(
+        label:
+            'Still calibrating. Keep your face in the oval and hold the '
+            'phone steady.',
+        isLiveRegion: true,
+      ),
+    );
+    handle.dispose();
+    await checkScreen(tester, 'calibrate, slow');
+    same('the hint changes');
+
+    // The stamp goes as soon as the baseline is good, before calibration
+    // ends.
+    await rig.until(
+      () => rig.game.calibIssue == null,
+      what: 'a clean baseline',
+    );
+    expect(rig.game.phase, GamePhase.calibrate);
+    await rig.wait(300);
+    expect(find.byType(IssueStamp), findsNothing);
+    same('the hint goes');
+    await rig.wait(2000); // the rig's warm-up answer ends
+    await rig.finish();
+  });
 
   testWidgets('a double tap never carries into the next screen', (
     tester,

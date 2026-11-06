@@ -72,8 +72,11 @@ The spec wins where the two disagree (see SPEC.md, "Decisions made during build"
 - **Calibrate:** the live pulse card (number and waveform) sits on the bottom of the camera, like
   the Ask/Answer cards, instead of under it, and "{name} is talking" is inside it. This gives the
   face more room on small phones.
-- **E3 in the camera:** "Picks up again when it's clear" takes the live cards' place while the
-  reading is paused, instead of floating over the face.
+- **E3 in the camera:** there's no banner. The problem is stamped on the camera in the expression
+  #tag's corner (mustard ink: "Hold still", "Too dark"), and its fix ("Rest your elbows or prop
+  the phone up.") takes the live cards' place while the reading is paused, so nothing on screen
+  moves. The mock's banner pushed the camera down and shrank the oval mid-answer. Calibration
+  does the same, and its slow-calibration hint is a stamp too instead of a "Still calibrating" card.
 - **Leaderboard footnote:** "Scores are wiped when you leave this screen" conflicts with going on to
   the Replay. The app says scores are wiped when a new game starts or on Wipe.
 - **Replay tabs:** the mock always has four tabs. With one contestant the app shows the name line

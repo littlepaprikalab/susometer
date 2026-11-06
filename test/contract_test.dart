@@ -7,6 +7,7 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:susometer/audio/host_audio.dart';
 import 'package:susometer/game/expression_tag.dart';
+import 'package:susometer/game/scoring.dart';
 import 'package:susometer/game/scoring_config.dart';
 import 'package:susometer/settings/app_settings.dart';
 
@@ -334,8 +335,14 @@ void main() {
       }
     });
     test('every code string Dart matches on is one Swift sends', () {
-      // Codes Dart makes up itself: off-iPhone, engine paused, watchdog.
-      const dartMade = {'UNAVAILABLE', 'NOT_RUNNING', 'NO_SIGNAL'};
+      // Codes Dart makes up itself: off-iPhone, engine paused, watchdog,
+      // slow calibration's hint (SPEC.md decision 69).
+      const dartMade = {
+        'UNAVAILABLE',
+        'NOT_RUNNING',
+        'NO_SIGNAL',
+        'STILL_CALIBRATING',
+      };
       final swift = [presageSwift, speechSwift, deviceSwift].join('\n');
       final pattern = RegExp(r"'([A-Z][A-Z0-9]*(?:_[A-Z0-9]+)+|BUSY|OK)'");
       final codes = <String, String>{};
@@ -374,6 +381,35 @@ void main() {
         presageSwift,
         'validationName',
       );
+    });
+    test('every validation code the bridge sends gets its own stamp', () {
+      // The body of Swift's validationName, so a code added there without
+      // a stamp in Dart fails here instead of showing "Adjusting".
+      final start = presageSwift.indexOf('func validationName(');
+      expect(start, greaterThan(0), reason: 'validationName not found');
+      final body = presageSwift.substring(
+        start,
+        presageSwift.indexOf('\n  }\n', start),
+      );
+      final named = [
+        for (final m in RegExp(r'"([A-Z][A-Z_]+)"').allMatches(body)) m[1]!,
+      ];
+      expect(named.length, greaterThan(14), reason: 'the scan found codes');
+      const nothingToFix = {'OK', 'CAMERA_TUNING', 'CHEST_NOT_VISIBLE'};
+      for (final code in named) {
+        final issue = SignalIssue.fromCode(code);
+        if (nothingToFix.contains(code)) {
+          expect(issue, isNull, reason: '$code stamps nothing');
+          continue;
+        }
+        expect(issue, isNotNull, reason: code);
+        expect(issue!.stamp, isNot('Adjusting'), reason: '$code has no stamp');
+        expect(issue.stamp.length, lessThanOrEqualTo(14), reason: code);
+        expect(issue.fix, isNotEmpty, reason: code);
+      }
+      // A code from a newer SDK ("CODE_<n>") still gets a stamp.
+      expect(body, contains('"CODE_'));
+      expect(SignalIssue.fromCode('CODE_42')?.stamp, 'Adjusting');
     });
   });
 

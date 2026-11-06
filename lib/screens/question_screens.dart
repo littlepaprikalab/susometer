@@ -39,28 +39,6 @@ class _Header extends StatelessWidget {
   }
 }
 
-/// E3 banner when a validation problem lasts more than 1.5 s, else nothing.
-class _IssueBanner extends StatelessWidget {
-  const _IssueBanner({required this.game});
-
-  final GameController game;
-
-  @override
-  Widget build(BuildContext context) {
-    return ListenableBuilder(
-      listenable: game.live,
-      builder: (context, _) {
-        final issue = game.visibleIssue;
-        if (issue == null) return const SizedBox.shrink();
-        return Padding(
-          padding: const EdgeInsets.only(bottom: 12),
-          child: SignalBannerCard(title: issue.title, body: issue.fix),
-        );
-      },
-    );
-  }
-}
-
 /// Fixed heights that keep the camera card the same size and in the same
 /// place from "Ask your question!" through "Locking in the reading…".
 const _cardHeight = 160.0;
@@ -105,14 +83,6 @@ class HotSeatScreen extends StatelessWidget {
           const SizedBox(height: 14),
           HostBubble(text: host, singleLine: true),
           const SizedBox(height: 14),
-          // The E3 banner slides in, so the camera eases down instead of
-          // jumping.
-          AnimatedSize(
-            duration: const Duration(milliseconds: 250),
-            curve: Curves.easeOut,
-            alignment: Alignment.topCenter,
-            child: _IssueBanner(game: game),
-          ),
           SizedBox(
             height: _cardHeight,
             child: answering
@@ -146,7 +116,10 @@ class _MeasuringCamera extends StatelessWidget {
       builder: (context, _) {
         final issue = game.visibleIssue;
         // The same overlay on Ask, Answer and Settle, so nothing over the
-        // face changes between them.
+        // face changes between them. A camera problem (E3) is stamped on
+        // the picture, where the player is looking, with its fix in the
+        // live cards' row; nothing outside the camera moves.
+        final stampFlex = issue == null ? stampRowFlex : issueStampRowFlex;
         return CameraWindow(
           guideClear: cameraGuideClear(context),
           overlay: Stack(
@@ -164,7 +137,7 @@ class _MeasuringCamera extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Expanded(
-                      flex: 100 - stampRowFlex,
+                      flex: 100 - stampFlex,
                       child: Align(
                         alignment: Alignment.topLeft,
                         child: FittedBox(
@@ -180,37 +153,25 @@ class _MeasuringCamera extends StatelessWidget {
                     ),
                     const SizedBox(width: 8),
                     Expanded(
-                      flex: stampRowFlex,
-                      child: ExpressionStampSlot(
+                      flex: stampFlex,
+                      child: CameraStampSlot(
                         tag: issue == null ? game.live.expression.tag : null,
                         stressTags: game.config.exprCategories,
+                        issue: issue == null ? null : issueStampFor(issue),
                       ),
                     ),
                   ],
                 ),
               ),
-              // While the reading is paused its numbers are frozen, so the
-              // cards' row says when it comes back instead. Same row, so
-              // nothing runs into the face oval.
+              // While the reading is paused, the cards' row says how to fix
+              // it instead.
               Positioned(
                 left: LiveStatCard.inset,
                 right: LiveStatCard.inset,
                 bottom: LiveStatCard.inset,
                 child: issue == null
                     ? _LiveStats(game: game)
-                    : SizedBox(
-                        height: LiveStatCard.height,
-                        child: Center(
-                          child: FittedBox(
-                            fit: BoxFit.scaleDown,
-                            child: DotChip(
-                              label: "Picks up again when it's clear",
-                              dot: SusColors.bulb,
-                              fontSize: 13,
-                            ),
-                          ),
-                        ),
-                      ),
+                    : PausedFixRow(issue.fix),
               ),
             ],
           ),

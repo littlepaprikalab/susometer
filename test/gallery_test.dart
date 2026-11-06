@@ -95,6 +95,10 @@ void main() {
     await rig.wait(400);
     await shot(tester, key, '03-calibrate');
     rig.presage.talk(false);
+    rig.presage.code = 'EXCESSIVE_MOTION';
+    await rig.wait(2000);
+    await shot(tester, key, '03b-calibrate-bad-signal');
+    rig.presage.code = 'OK';
     rig.presage.expr = const {'neutral': 0.8, 'happy': 0.1, 'surprise': 0.05};
     await rig.until(() => rig.game.phase == GamePhase.ask);
     rig.services.settings.proofPanel = true;

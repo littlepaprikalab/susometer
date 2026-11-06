@@ -776,6 +776,31 @@ class LiveStatCard extends StatelessWidget {
   }
 }
 
+/// What to do about a camera problem, in the live cards' row while the
+/// reading is paused (their numbers are frozen then). Same row, so nothing
+/// runs into the face oval. VoiceOver hears it with the problem's stamp
+/// (SPEC.md decision 69), so it isn't read twice.
+class PausedFixRow extends StatelessWidget {
+  const PausedFixRow(this.fix, {super.key});
+
+  final String fix;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: LiveStatCard.height,
+      child: Center(
+        child: FittedBox(
+          fit: BoxFit.scaleDown,
+          child: ExcludeSemantics(
+            child: DotChip(label: fix, dot: SusColors.mustard, fontSize: 13),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 /// Where the face oval must stay clear of: chips along the top (at 12 pt)
 /// and live cards along the bottom.
 EdgeInsets cameraGuideClear(BuildContext context) => EdgeInsets.only(

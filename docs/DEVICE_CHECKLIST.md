@@ -43,7 +43,7 @@ Settings → **Signal check** → **Start both**. Allow microphone and speech re
 ## 4. A party game (2 players, 3 questions)
 
 - [ ] Lobby → Start the show → How to play → Consent → calibration completes on its own in about
-  30–60 s. (If it says "Still calibrating", note the hint.)
+  30–60 s. (If a mustard stamp stays on the camera, note what it says.)
 - [ ] A friend asks a question: it appears as they speak. Stop talking and wait: after ~1.5 s
   the host asks "{name}, your answer?"
 - [ ] Next question: answer **immediately** after it's asked. The question should end the moment
@@ -69,8 +69,8 @@ Settings → **Signal check** → **Start both**. Allow microphone and speech re
   treats expressions older than 3 s as no reading; if they update less often than that, note the
   rate.)
 - [ ] The preview is still mirrored like a selfie (raise your right hand: it's on the right of the
-  screen), and still fills its box after the "Too dark in here" banner slides in and out.
-- [ ] Sit so your face fills the oval: no "move closer" or "move back" banner. **If there's a
+  screen), and still fills its box while a "Too dark" stamp comes and goes.
+- [ ] Sit so your face fills the oval: no "Move closer" or "Move back" stamp. **If there's a
   small iPhone (SE/mini) around, try it there too, and with Larger Text on.**
 - [ ] **Heartbeats** (Proof Panel on, sit still during calibration):
   - The `wave` line says about **30/s**. **Note the number and the conf %.** (`--` or 0 means
@@ -104,8 +104,9 @@ Settings → **Signal check** → **Start both**. Allow microphone and speech re
 
 - [ ] **E2:** in iOS Settings, turn the app's microphone off → Start the show → "The show needs
   eyes and ears" → *Play without voice* works (tap *Done asking*, then *Final answer*).
-- [ ] **E3:** mid-question, turn the lights down or cover the camera: a banner like "Too dark in
-  here" appears, then disappears when fixed.
+- [ ] **E3:** mid-question, turn the lights down or cover the camera: a "Too dark" stamp lands on
+  the camera with its fix underneath, nothing else on screen moves, and it goes when fixed. **Is
+  the mustard stamp easy to spot against your room?**
 - [ ] **E4:** move around a lot while answering: "No clean read" with a reason, then *Ask it again*.
 - [ ] **E5:** turn on Airplane Mode, then start a turn: "The meter won't warm up" → turn Airplane
   Mode off → *Try again* works.

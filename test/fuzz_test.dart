@@ -278,6 +278,18 @@ void checkInvariants(World w, List<Object> errors, String where) {
       isNull,
       reason: '$where: an expression tag outlived the camera (${g.phase})',
     );
+    expect(
+      g.visibleIssue,
+      isNull,
+      reason: '$where: a camera problem outlived the camera (${g.phase})',
+    );
+  }
+  if (g.phase != GamePhase.calibrate) {
+    expect(
+      g.calibIssue,
+      isNull,
+      reason: '$where: a calibration hint outside calibration (${g.phase})',
+    );
   }
   expect(
     w.haptics.cues.where((c) => measuring.contains(c.$2)),

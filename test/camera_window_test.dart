@@ -10,7 +10,7 @@ void main() {
       Size(354, 428), // standard iPhone, Ask
       Size(270, 245), // iPhone SE, pillarboxed video
       Size(270, 214), // iPhone SE, largest text
-      Size(354, 300), // standard iPhone with the bad-signal banner
+      Size(354, 300), // a short box on a standard iPhone
     ]) {
       test('stays face-shaped and clear of the chips and cards ($size)', () {
         final r = faceOvalRect(size, clear);
