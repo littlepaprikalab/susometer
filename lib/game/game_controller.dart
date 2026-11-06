@@ -1301,6 +1301,7 @@ class GameController extends ChangeNotifier {
       final e = _epoch;
       if (!await _startSdk() || e != _epoch) return;
       _lastSampleMs = nowMs;
+      live.sample = null;
       _startTicker();
       await _startListening();
       if (e != _epoch) return;
@@ -1315,6 +1316,7 @@ class GameController extends ChangeNotifier {
   /// The app went to the background: iOS stops the camera, so stop cleanly
   /// and restart on resume.
   Future<void> onAppBackgrounded() async {
+    _appActive = false;
     if (!_sdkShouldRun) return;
     paused = true;
     _needsRestart = true;
@@ -1331,8 +1333,18 @@ class GameController extends ChangeNotifier {
   }
 
   Future<void> onAppResumed() async {
+    _appActive = true;
+    _activeSinceMs = nowMs;
     if (phase == GamePhase.permissions) await recheckPermissions();
   }
+
+  /// Control Center, Notification Center, the app switcher or a system
+  /// alert is over the app. iOS may hold the camera until it's back, so a
+  /// camera with no new frames isn't frozen yet.
+  void onAppInactive() => _appActive = false;
+
+  bool _appActive = true;
+  int _activeSinceMs = 0;
 
   // ---------------------------------------------------------------------------
   // Signals
@@ -1543,10 +1555,16 @@ class GameController extends ChangeNotifier {
         !(phase == GamePhase.calibrate && calibStage == CalibStage.starting);
     // Snapshots keep coming while the SDK says it's running, even when its
     // camera has stalled: the preview and the validation code freeze, and
-    // "Reading paused" would never clear. So check the frames too.
+    // "Reading paused" would never clear. So check the frames too, but not
+    // while something is over the app or for 5 s after, while the camera
+    // comes back.
     final frameAge = live.sample?.frameAgeMs;
     final frozen =
-        status == PresageStatus.running && frameAge != null && frameAge > 5000;
+        status == PresageStatus.running &&
+        frameAge != null &&
+        frameAge > 5000 &&
+        _appActive &&
+        now - _activeSinceMs > 5000;
     if (silent || status == PresageStatus.error || stuck || frozen) {
       _recoverSdk(switch ((silent, stuck, frozen)) {
         (true, _, _) => 'no signal for 6 seconds',

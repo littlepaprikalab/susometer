@@ -363,6 +363,36 @@ void main() {
     });
   });
 
+  test('no restart while something is over the app, or just after', () {
+    fakeAsync((async) {
+      final w = World(async);
+      w.startGame(['Sam', 'Alex']);
+      w.calibrate();
+      int starts() => w.presage.calls.where((c) => c == 'start').length;
+      final before = starts();
+      // Notification Center is pulled down: iOS may hold the camera.
+      w.game.onAppInactive();
+      w.cameraFrozen = true;
+      w.elapse(20000);
+      expect(starts(), before, reason: 'the app is inactive');
+      w.game.onAppResumed();
+      w.elapse(4500);
+      expect(starts(), before, reason: 'the camera gets 5 s to come back');
+      w.elapse(1000);
+      expect(starts(), before + 1, reason: 'it did not come back');
+      w.cameraFrozen = false;
+      // Back in time: no restart.
+      w.game.onAppInactive();
+      w.cameraFrozen = true;
+      w.elapse(8000);
+      w.cameraFrozen = false;
+      w.game.onAppResumed();
+      w.elapse(10000);
+      expect(starts(), before + 1);
+      w.dispose();
+    });
+  });
+
   test('a camera that froze while paused is restarted on resume', () {
     fakeAsync((async) {
       final w = World(async);

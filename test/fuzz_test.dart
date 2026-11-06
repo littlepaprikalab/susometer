@@ -124,9 +124,11 @@ void abuse(
     (fw(1, 2), g.backToLeaderboard),
     (fw(1, 1), () => g.onAppBackgrounded()),
     (fw(1, 1), () => g.onAppResumed()),
+    (fw(1, 1), g.onAppInactive),
     (fw(1, 1), () => g.recheckPermissions()),
     // Environment.
     (fw(2, 1), () => w.emitting = rng.nextInt(biased ? 12 : 4) != 0),
+    (fw(2, 1), () => w.cameraFrozen = rng.nextInt(biased ? 12 : 4) == 0),
     (
       fw(2, 1),
       () {
@@ -289,6 +291,7 @@ void rescue(World w, int seed) {
   final g = w.game;
   w
     ..emitting = true
+    ..cameraFrozen = false
     ..code = 'OK'
     ..status = 'running';
   w.presage.startError = null;
