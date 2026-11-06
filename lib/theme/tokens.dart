@@ -17,6 +17,10 @@ abstract final class SusColors {
   /// "Legit", primary action buttons (cream text on teal).
   static const teal = Color(0xFF1F6F78);
 
+  /// Deeper red (last step of the meter ramp) for surfaces that carry small
+  /// cream text: cream on [tomato] is only ~4.1:1, on this ~5.5:1.
+  static const tomatoDeep = Color(0xFFB8301D);
+
   /// "Hmm..." verdict board.
   static const brown = Color(0xFF8A4B1C);
 

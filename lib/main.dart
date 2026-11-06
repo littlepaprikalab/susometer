@@ -43,6 +43,17 @@ class SusApp extends StatelessWidget {
           title: 'Sus-o-meter',
           debugShowCheckedModeBanner: false,
           theme: buildSusTheme(),
+          // Large accessibility text still scales up, but is capped so the
+          // fixed 390x844 game-show layouts don't break.
+          builder: (context, child) {
+            final mq = MediaQuery.of(context);
+            return MediaQuery(
+              data: mq.copyWith(
+                textScaler: mq.textScaler.clamp(maxScaleFactor: 1.3),
+              ),
+              child: child!,
+            );
+          },
           home: home ?? const GameRoot(),
         ),
       ),

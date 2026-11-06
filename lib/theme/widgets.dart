@@ -82,6 +82,7 @@ class _ChunkyButtonState extends State<ChunkyButton> {
       enabled: enabled,
       label: widget.label,
       excludeSemantics: true,
+      onTap: widget.onPressed,
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
         onTapDown: enabled ? (_) => setState(() => _down = true) : null,
@@ -238,6 +239,7 @@ class RoundIconButton extends StatelessWidget {
         button: true,
         label: tooltip,
         excludeSemantics: true,
+        onTap: onPressed,
         child: InkResponse(
           onTap: onPressed,
           radius: 28,

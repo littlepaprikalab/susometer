@@ -124,12 +124,13 @@ class _VoteChip extends StatelessWidget {
     final (bg, fg, label) = switch (vote) {
       null => (SusColors.cream, SusColors.ink, 'Tap to vote'),
       Vote.legit => (SusColors.teal, SusColors.cream, 'Legit'),
-      Vote.sus => (SusColors.tomato, SusColors.cream, 'Sus'),
+      Vote.sus => (SusColors.tomatoDeep, SusColors.cream, 'Sus'),
     };
     return Semantics(
       button: true,
       label: '${player.name}: ${vote == null ? 'no vote' : label}',
       excludeSemantics: true,
+      onTap: onTap,
       child: GestureDetector(
         onTap: onTap,
         child: AnimatedContainer(
@@ -841,6 +842,7 @@ class _ReplayScreenState extends State<ReplayScreen> {
                     selected: i == tab,
                     label: turns[i].player.name,
                     excludeSemantics: true,
+                    onTap: () => setState(() => _tab = i),
                     child: GestureDetector(
                       onTap: () => setState(() => _tab = i),
                       child: Container(
@@ -982,7 +984,9 @@ class _ReplayCard extends StatelessWidget {
             width: 60,
             height: 64,
             decoration: BoxDecoration(
-              color: result.skipped ? SusColors.ink : verdictColor(v),
+              color: result.skipped
+                  ? SusColors.ink
+                  : (v == Verdict.sus ? SusColors.tomatoDeep : verdictColor(v)),
               borderRadius: BorderRadius.circular(14),
               border: Border.all(color: SusColors.ink, width: 2.5),
             ),

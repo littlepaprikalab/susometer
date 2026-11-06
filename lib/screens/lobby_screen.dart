@@ -267,6 +267,7 @@ class _ModeToggle extends StatelessWidget {
         selected: on,
         label: label,
         excludeSemantics: true,
+        onTap: () => game.setMode(mode),
         child: GestureDetector(
           onTap: () => game.setMode(mode),
           child: Container(
@@ -440,6 +441,7 @@ class _Segmented<T> extends StatelessWidget {
               selected: values[i] == selected,
               label: label(values[i]),
               excludeSemantics: true,
+              onTap: () => onSelected(values[i]),
               child: GestureDetector(
                 onTap: () => onSelected(values[i]),
                 child: Container(

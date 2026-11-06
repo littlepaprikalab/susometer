@@ -650,6 +650,7 @@ class _FinalAnswerButton extends StatelessWidget {
       button: true,
       label: 'Final answer',
       excludeSemantics: true,
+      onTap: onPressed,
       child: GestureDetector(
         onTap: onPressed,
         child: Container(

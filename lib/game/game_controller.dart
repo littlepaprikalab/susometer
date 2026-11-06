@@ -400,7 +400,8 @@ class GameController extends ChangeNotifier {
       _lastSampleMs = nowMs;
       _startTicker();
       await _startListening();
-      if (settings.soundEffects) unawaited(host.play(Sfx.jingle));
+      // The turn-start jingle ends before the host speaks (SPEC.md §12).
+      if (settings.soundEffects) await host.play(Sfx.jingle);
       await _say('${currentPlayer.name}, sit still and look at the camera.');
     } finally {
       _calibrationStarting = false;

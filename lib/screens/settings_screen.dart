@@ -274,6 +274,7 @@ class _ApiKeyCardState extends State<ApiKeyCard> {
                     button: true,
                     label: _show ? 'Hide key' : 'Show key',
                     excludeSemantics: true,
+                    onTap: typed ? () => setState(() => _show = !_show) : null,
                     child: GestureDetector(
                       // Show only reveals text that hasn't been saved yet.
                       onTap: typed
@@ -511,6 +512,7 @@ class _ToggleRow extends StatelessWidget {
         label: title,
         hint: subtitle,
         excludeSemantics: true,
+        onTap: () => onChanged(!value),
         child: GestureDetector(
           behavior: HitTestBehavior.opaque,
           onTap: () => onChanged(!value),

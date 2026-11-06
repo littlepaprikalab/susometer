@@ -411,6 +411,7 @@ class PauseButton extends StatelessWidget {
       button: true,
       label: 'Pause the game',
       excludeSemantics: true,
+      onTap: onPressed,
       child: GestureDetector(
         onTap: onPressed,
         child: Container(
@@ -450,6 +451,7 @@ class DashedButton extends StatelessWidget {
       button: true,
       label: label,
       excludeSemantics: true,
+      onTap: onPressed,
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
         onTap: onPressed,
