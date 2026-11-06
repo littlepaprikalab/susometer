@@ -299,15 +299,34 @@ final class SpeechBridge {
     result(nil)
   }
 
-  /// Best English voice available: premium, then enhanced, then default.
+  /// Best English voice the app can use: premium, then enhanced, then
+  /// standard. iOS only ships the standard ("compact") voices. Enhanced and
+  /// premium ones show up here once the user downloads one in Settings >
+  /// Accessibility > Spoken Content > Voices > English.
+  ///
+  /// Novelty, personal and legacy voices (Albert, Bells, Zarvox, Fred,
+  /// Eloquence's Eddy or Rocko…) are skipped. They're English and the same
+  /// "default" quality as Samantha, so without this filter a tie could land on
+  /// one of them, and they're the robotic ones. Ties go to the user's own
+  /// English variant, then en-US, then the voice iOS uses for that language.
   private static func hostVoice() -> AVSpeechSynthesisVoice? {
     let preferred = Locale.current.identifier.replacingOccurrences(of: "_", with: "-")
     let language = preferred.hasPrefix("en") ? preferred : "en-US"
-    let voices = AVSpeechSynthesisVoice.speechVoices().filter { $0.language == language }
-    if let best = voices.max(by: { $0.quality.rawValue < $1.quality.rawValue }) {
-      return best
+    let systemDefault =
+      AVSpeechSynthesisVoice(language: language) ?? AVSpeechSynthesisVoice(language: "en-US")
+    func rank(_ voice: AVSpeechSynthesisVoice) -> (Int, Int, Int) {
+      let place = voice.language == language ? 2 : (voice.language == "en-US" ? 1 : 0)
+      let isSystemDefault = voice.identifier == systemDefault?.identifier ? 1 : 0
+      return (voice.quality.rawValue, place, isSystemDefault)
     }
-    return AVSpeechSynthesisVoice(language: language) ?? AVSpeechSynthesisVoice(language: "en-US")
+    let usable = AVSpeechSynthesisVoice.speechVoices().filter { voice in
+      voice.language.hasPrefix("en")
+        && !voice.voiceTraits.contains(.isNoveltyVoice)
+        && !voice.voiceTraits.contains(.isPersonalVoice)
+        && !voice.identifier.hasPrefix("com.apple.speech.synthesis.voice.")
+        && !voice.identifier.hasPrefix("com.apple.eloquence.")
+    }
+    return usable.max(by: { rank($0) < rank($1) }) ?? systemDefault
   }
 
   /// Plays `assets/sfx/<name>.wav` from the Flutter assets. Missing files are

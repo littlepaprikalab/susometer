@@ -342,6 +342,17 @@ void main() {
       }
       expect(speechSwift, contains('assets/sfx/'));
     });
+    test('the host voice never lands on a novelty or legacy voice', () {
+      for (final s in [
+        '.isNoveltyVoice',
+        '.isPersonalVoice',
+        '"com.apple.speech.synthesis.voice."',
+        '"com.apple.eloquence."',
+        'voice.quality.rawValue',
+      ]) {
+        expect(speechSwift, contains(s));
+      }
+    });
     test('decks and fonts are bundled', () {
       final pubspec = read('pubspec.yaml');
       expect(pubspec, contains('- assets/decks/'));

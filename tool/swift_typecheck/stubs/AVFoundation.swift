@@ -84,10 +84,18 @@ public enum AVSpeechSynthesisVoiceQuality: Int, Sendable { case `default` = 1, e
 public let AVSpeechUtteranceDefaultSpeechRate: Float = 0.5
 
 open class AVSpeechSynthesisVoice: NSObject {
+  public struct Traits: OptionSet, Sendable {
+    public let rawValue: UInt
+    public init(rawValue: UInt) { self.rawValue = rawValue }
+    public static let isNoveltyVoice = Traits(rawValue: 1)
+    public static let isPersonalVoice = Traits(rawValue: 2)
+  }
   public init?(language: String?) { nil }
   open class func speechVoices() -> [AVSpeechSynthesisVoice] { [] }
+  open var identifier: String { "" }
   open var language: String { "en-US" }
   open var quality: AVSpeechSynthesisVoiceQuality { .default }
+  open var voiceTraits: Traits { [] }
 }
 
 open class AVSpeechUtterance: NSObject {
