@@ -32,10 +32,30 @@ class ScreenFrame extends StatelessWidget {
 /// The host: an ink circle with a speaker icon and a cream speech bubble.
 /// The text doubles as captions for the host's voice.
 class HostBubble extends StatelessWidget {
-  const HostBubble({super.key, required this.text, this.fontSize = 20});
+  const HostBubble({
+    super.key,
+    required this.text,
+    this.fontSize = 20,
+    this.singleLine = false,
+  });
 
   final String text;
   final double fontSize;
+
+  /// One line that shrinks to fit, so the bubble's height never changes.
+  final bool singleLine;
+
+  double _lineHeight(BuildContext context) {
+    final painter = TextPainter(
+      text: TextSpan(text: 'Ag', style: SusText.display(fontSize)),
+      textDirection: Directionality.of(context),
+      textScaler: MediaQuery.textScalerOf(context),
+      maxLines: 1,
+    )..layout();
+    final h = painter.height;
+    painter.dispose();
+    return h;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -75,7 +95,22 @@ class HostBubble extends StatelessWidget {
                   bottomLeft: Radius.circular(4),
                 ),
               ),
-              child: Text(text, style: SusText.display(fontSize)),
+              child: singleLine
+                  ? SizedBox(
+                      // Height of one full-size line, so a long line that
+                      // shrinks to fit doesn't make the bubble shorter.
+                      height: _lineHeight(context),
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          text,
+                          maxLines: 1,
+                          style: SusText.display(fontSize),
+                        ),
+                      ),
+                    )
+                  : Text(text, style: SusText.display(fontSize)),
             ),
           ),
         ],
@@ -243,38 +278,6 @@ class LevelBars extends StatelessWidget {
               ),
           ],
         ),
-      ),
-    );
-  }
-}
-
-/// "Question 2 of 5" dots.
-class ProgressDots extends StatelessWidget {
-  const ProgressDots({super.key, required this.total, required this.filled});
-
-  final int total;
-  final int filled;
-
-  @override
-  Widget build(BuildContext context) {
-    return Semantics(
-      label: 'Question $filled of $total',
-      excludeSemantics: true,
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          for (var i = 0; i < total; i++)
-            Container(
-              width: 14,
-              height: 14,
-              margin: EdgeInsets.only(left: i == 0 ? 0 : 6),
-              decoration: BoxDecoration(
-                color: i < filled ? SusColors.bulb : Colors.transparent,
-                shape: BoxShape.circle,
-                border: Border.all(color: SusColors.ink, width: 2),
-              ),
-            ),
-        ],
       ),
     );
   }

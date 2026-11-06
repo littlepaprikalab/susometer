@@ -50,6 +50,8 @@ Settings → **Signal check** → **Start both**. Allow microphone and speech re
   you start (no host prompt).
 - [ ] After answering, stay quiet: the answer ends by itself after ~4 s, then "Locking in the
   reading…".
+- [ ] From *Ask your question!* to *{name}, your answer?* to *Locking in the reading…*, the camera
+  card doesn't move, resize or flash black.
 - [ ] Call it! → tap your friend's chip (Legit/Sus) → Reveal → countdown → verdict.
 - [ ] Do the verdicts feel plausible? A calm answer should usually be Legit, and a jump-and-shout
   should be higher. **Note a few scores.**

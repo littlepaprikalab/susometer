@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'app_scope.dart';
 import 'debug/proof_panel.dart';
 import 'game/game_controller.dart';
-import 'game/models.dart';
 import 'screens/edge_screens.dart';
 import 'screens/intro_screens.dart';
 import 'screens/lobby_screen.dart';
@@ -66,9 +65,9 @@ class _GameRootState extends State<GameRoot> with WidgetsBindingObserver {
         },
       ),
       GamePhase.calibrate => const CalibrateScreen(),
-      GamePhase.ask =>
-        game.mode == GameMode.solo ? const SoloAskScreen() : const AskScreen(),
-      GamePhase.answer || GamePhase.settle => const AnswerScreen(),
+      GamePhase.ask ||
+      GamePhase.answer ||
+      GamePhase.settle => const HotSeatScreen(),
       GamePhase.redo => const RedoScreen(),
       GamePhase.callIt => const CallItScreen(),
       GamePhase.countdown => const CountdownScreen(),
@@ -105,7 +104,14 @@ class _GameRootState extends State<GameRoot> with WidgetsBindingObserver {
               ),
             Positioned.fill(
               child: KeyedSubtree(
-                key: ValueKey(game.phase),
+                // Ask, answer and settle share one screen, so the camera
+                // preview isn't torn down and rebuilt between them.
+                key: ValueKey<Object>(switch (game.phase) {
+                  GamePhase.ask ||
+                  GamePhase.answer ||
+                  GamePhase.settle => 'hotSeat',
+                  final phase => phase,
+                }),
                 child: _screen(game),
               ),
             ),

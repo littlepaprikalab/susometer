@@ -6,6 +6,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:susometer/game/game_controller.dart';
+import 'package:susometer/game/models.dart';
+import 'package:susometer/presage/camera_preview.dart';
 import 'package:susometer/presage/presage_models.dart';
 import 'package:susometer/settings/app_settings.dart';
 
@@ -72,8 +74,7 @@ void main() {
       () => rig.game.phase == GamePhase.answer,
       what: 'host reads the question',
     );
-    expect(find.text('The host asked'), findsOneWidget);
-    expect(find.textContaining(rig.game.questionText), findsWidgets);
+    expect(find.text('Q: “${rig.game.questionText}”'), findsOneWidget);
     await checkScreen(tester, 'answer-solo');
     for (var q = 0; q < 3; q++) {
       await rig.until(() => rig.game.phase == GamePhase.answer);
@@ -338,4 +339,80 @@ void main() {
     expect(find.text('Start the show'), findsOneWidget);
     await rig.finish();
   });
+
+  for (final scale in [1.0, 1.3]) {
+    for (final mode in GameMode.values) {
+      testWidgets(
+        'the camera keeps its size, place and native view from Ask to Settle '
+        '(${mode.name}, text ×$scale)',
+        (tester) async {
+          tester.platformDispatcher.textScaleFactorTestValue = scale;
+          addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+          final rig = Rig(tester);
+          await rig.pumpApp();
+          if (mode == GameMode.solo) {
+            await rig.tap('Solo · host asks');
+            // The fake host finishes instantly; with the voice off the host
+            // "reads" for a few seconds, so Ask stays on screen.
+            rig.services.settings.hostVoice = false;
+          }
+          await rig.startParty(
+            mode == GameMode.solo ? ['Christopher'] : ['Christopher', 'Alex'],
+          );
+          await rig.tap('I agree, measure me');
+          await rig.until(() => rig.game.phase == GamePhase.ask);
+          await rig.wait(200);
+
+          final camera = find.byType(CameraPreview);
+          final rect = tester.getRect(camera);
+          final element = tester.element(camera);
+          void same(String when) {
+            expect(tester.getRect(camera), rect, reason: when);
+            expect(
+              identical(tester.element(camera), element),
+              isTrue,
+              reason: '$when: the camera view was rebuilt',
+            );
+          }
+
+          expect(
+            rect.height,
+            greaterThan(240),
+            reason: 'the face stays big enough to frame',
+          );
+          if (mode == GameMode.party) {
+            rig.say(
+              'Have you ever told a friend you loved a gift they gave you and '
+              'then quietly returned it to the store the very next day?',
+            );
+            await rig.wait(300);
+            same('a long question');
+            rig.game.doneAsking();
+          }
+          await rig.until(() => rig.game.phase == GamePhase.answer);
+          await rig.wait(200);
+          same('answer starts');
+          expect(find.text('Final answer'), findsOneWidget);
+          rig.presage.talk(true);
+          await rig.wait(1200);
+          rig.say(
+            'No way, absolutely not, I would never, okay maybe once but it '
+            'was a really ugly sweater and honestly anyone would have done it',
+          );
+          await rig.wait(800);
+          expect(find.textContaining('to start answering'), findsOneWidget);
+          same('a long answer with the hesitation chip');
+          rig.presage.talk(false);
+          await rig.wait(400);
+          await rig.tap('Final answer');
+          await rig.wait(200);
+          expect(rig.game.phase, GamePhase.settle);
+          expect(find.text('Locking in the reading…'), findsOneWidget);
+          same('settle');
+          expect(find.bySemanticsLabel('Pause the game'), findsOneWidget);
+          await rig.finish();
+        },
+      );
+    }
+  }
 }

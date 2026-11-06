@@ -207,11 +207,8 @@ void main() {
     );
     rig.say('Have you ever lied?');
     await rig.until(() => rig.game.phase == GamePhase.answer, maxMs: 4000);
-    expect(
-      find.text('Forgot to tap? It ends itself after 4s of silence.'),
-      findsOneWidget,
-    );
-    expect(find.text('“Have you ever lied?”'), findsOneWidget);
+    expect(find.text('Or it ends itself after 4s of silence'), findsOneWidget);
+    expect(find.text('Q: “Have you ever lied?”'), findsOneWidget);
     await rig.finish();
   });
 }

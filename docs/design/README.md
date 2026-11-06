@@ -52,6 +52,12 @@ The spec wins where the two disagree (see SPEC.md, "Decisions made during build"
   from the Keychain (SPEC.md §6), so the field shows only a "••••1a2b" hint.
 - **Error codes:** E5 shows `AUTH_FAILED`; the app shows the SDK's real code (e.g.
   `authenticationFailed`).
+- **Answer screen (4b):** the mock shrinks the camera to a small LIVE thumbnail. The app keeps the
+  camera card the same size and in the same place from *Ask your question!* through *Locking in
+  the reading…*, because the answer is the part being measured and a jump makes people move. The
+  pulse and blink cards sit over the bottom of the camera, the question is pinned inside the
+  answer card, Pause stays bottom-left (the SPEC §4 state machine has Pause on 4b too), and *Final answer* fills
+  the rest of the bottom row. Ask and Answer both show "Q 1 / 5" instead of dots.
 - **Leaderboard footnote:** "Scores are wiped when you leave this screen" conflicts with going on to
   the Replay. The app says scores are wiped when a new game starts or on Wipe.
 
