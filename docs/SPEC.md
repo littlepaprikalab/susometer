@@ -7,7 +7,7 @@
 > **It reads stress, not truth.** This is an entertainment game, never a lie detector. Say so in the app, the README and the DEV post.
 
 - **Hackathon:** DEV Presage Challenge, tag `#presagechallenge`. Solo entry, entrant is 18+.
-- **Visual mockup (source of truth for look and layout):** exported screens in `docs/design/`. Screen names below match the file names and artboard titles there.
+- **Visual mockup (source of truth for look and layout):** the Design canvas's screen sources in `docs/design/mocks/` (HTML, one file per artboard; `docs/design/README.md` maps files to screens). Screen names below match the artboard titles there.
 - **Target:** iPhone only, iOS 17+, portrait, built with **Flutter (UI) + native Swift (SmartSpectra bridge)**.
 
 ---
@@ -380,4 +380,5 @@ Choices made once the real APIs were in hand. Where these differ from the sectio
 13. **Keep-awake** uses `UIApplication.isIdleTimerDisabled` directly (a `setKeepAwake` call on the Presage channel) instead of a plugin.
 14. **Portal link.** Until `url_launcher` is added, Settings offers "Copy portal link" for physiology.presagetech.com.
 15. **Home screen during milestone 1** is a bare "Bridge spike" screen (camera preview, live signals, transcript). The Lobby replaces it in milestone 2.
+16. **Mockups vs spec.** The mockups are the canvas's HTML sources in `docs/design/mocks/`, not PNG exports. Where they disagree with this spec, the spec wins: the room vote stays on *Call it!* (not the Verdict screen); the Lobby gains the Mild / Spicy deck picker and the on-device transcription note; Settings shows a key hint, never the saved key; E5 shows the SDK's real error code; the Leaderboard footnote says scores are wiped when a new game starts or on Wipe. Details in `docs/design/README.md`.
 

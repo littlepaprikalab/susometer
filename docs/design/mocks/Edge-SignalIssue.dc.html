@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Bad signal during a question</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bowlby+One+SC&amp;family=Work+Sans:wght@500;600;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#2A160C}a:hover{color:#5A3420}
+</style>
+</helmet>
+<div style="width: 390px; height: 844px; box-sizing: border-box; padding: 54px 18px 28px; background: #F2B33D; color: #2A160C; font-family: 'Work Sans', system-ui, sans-serif; display: flex; flex-direction: column; gap: 14px">
+  <div style="display: flex; align-items: center; justify-content: space-between">
+    <span style="background: #2A160C; color: #F2B33D; border-radius: 20px; padding: 6px 14px; font-weight: 700; font-size: 14px">Sam's in the hot seat</span>
+    <span style="font-family: 'Bowlby One SC', sans-serif; font-size: 16px">Q 2 / 5</span>
+  </div>
+
+  <div style="background: #FFF4DF; border: 3px solid #2A160C; border-radius: 18px; padding: 12px 14px; display: flex; gap: 12px; align-items: center; box-shadow: 0 5px 0 #2A160C">
+    <div style="width: 44px; height: 44px; border-radius: 22px; background: #D9412B; border: 2.5px solid #2A160C; display: flex; align-items: center; justify-content: center; flex-shrink: 0; box-sizing: border-box">
+      <svg width="22" height="22" viewBox="0 0 22 22" fill="none" stroke="#FFF4DF" stroke-width="2.6" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="4"></circle><path d="M11 2v2M11 18v2M2 11h2M18 11h2M4.6 4.6l1.4 1.4M16 16l1.4 1.4M4.6 17.4L6 16M16 6l1.4-1.4"></path></svg>
+    </div>
+    <div style="display: flex; flex-direction: column; gap: 2px">
+      <span style="font-family: 'Bowlby One SC', sans-serif; font-size: 19px">Too dark in here</span>
+      <span style="font-size: 14px; font-weight: 600">Face a lamp or window. Reading paused.</span>
+    </div>
+  </div>
+
+  <div style="position: relative; height: 300px; border-radius: 24px; border: 3px solid #2A160C; background: #1A0E08; overflow: hidden; display: flex; align-items: center; justify-content: center">
+    <svg width="170" height="226" viewBox="0 0 190 250" fill="none" role="img" aria-label="Face guide shown in warning color"><ellipse cx="95" cy="125" rx="88" ry="118" stroke="#D9412B" stroke-width="4" stroke-dasharray="12 10"></ellipse></svg>
+    <div style="position: absolute; top: 12px; left: 12px; display: flex; gap: 6px">
+      <span style="display: flex; align-items: center; gap: 6px; background: #FFF4DF; border-radius: 14px; padding: 5px 10px; font-size: 12px; font-weight: 700"><span style="width: 9px; height: 9px; border-radius: 5px; background: #1F6F78"></span>Face found</span>
+      <span style="display: flex; align-items: center; gap: 6px; background: #FFF4DF; border-radius: 14px; padding: 5px 10px; font-size: 12px; font-weight: 700"><span style="width: 9px; height: 9px; border-radius: 5px; background: #D9412B"></span>Light too low</span>
+    </div>
+    <span style="position: absolute; bottom: 12px; left: 0; right: 0; text-align: center"><span style="background: #FFF4DF; border-radius: 14px; padding: 5px 12px; font-size: 13px; font-weight: 700">Picks up again when it's clear</span></span>
+  </div>
+
+  <div style="display: flex; flex-direction: column; gap: 8px">
+    <span style="font-size: 14px; font-weight: 700">Other hints the camera can give</span>
+    <div style="display: flex; flex-wrap: wrap; gap: 6px">
+      <sc-for list="{{hints}}" as="h" hint-placeholder-count="4">
+        <span style="background: #FFF4DF; border: 2px solid #2A160C; border-radius: 12px; padding: 5px 10px; font-size: 13px; font-weight: 600">{{h.text}}</span>
+      </sc-for>
+    </div>
+  </div>
+
+  <div style="flex-grow: 1"></div>
+
+  <div style="display: flex; gap: 10px">
+    <button style="flex: 1; height: 52px; border-radius: 16px; border: 3px solid #2A160C; background: #FFF4DF; color: #2A160C; font-family: 'Work Sans', sans-serif; font-size: 15px; font-weight: 700; box-shadow: 0 4px 0 #2A160C; cursor: pointer">Skip question</button>
+    <button style="flex: 1; height: 52px; border-radius: 16px; border: 3px solid #2A160C; background: #FFF4DF; color: #2A160C; font-family: 'Work Sans', sans-serif; font-size: 15px; font-weight: 700; box-shadow: 0 4px 0 #2A160C; cursor: pointer">Pause</button>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return {
+      hints: [
+        { text: 'Move closer' },
+        { text: 'Move back a bit' },
+        { text: 'Hold still' },
+        { text: 'Too bright behind you' },
+        { text: 'Phone is lagging' }
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Vitals engine could not start</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bowlby+One+SC&amp;family=Work+Sans:wght@500;600;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#2A160C}a:hover{color:#5A3420}
+</style>
+</helmet>
+<div style="width: 390px; height: 844px; box-sizing: border-box; padding: 54px 18px 28px; background: #F2B33D; color: #2A160C; font-family: 'Work Sans', system-ui, sans-serif; display: flex; flex-direction: column; gap: 16px">
+  <div style="width: 88px; height: 88px; border-radius: 44px; background: #2A160C; display: flex; align-items: center; justify-content: center; margin-top: 12px">
+    <svg width="44" height="44" viewBox="0 0 44 44" fill="none" stroke="#F2B33D" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 16a24 24 0 0 1 34 0M11 22.5a15 15 0 0 1 22 0M17 29a7 7 0 0 1 10 0"></path><circle cx="22" cy="35" r="1.8" fill="#F2B33D"></circle><path d="M6 6l32 32"></path></svg>
+  </div>
+  <div style="display: flex; flex-direction: column; gap: 6px">
+    <h1 style="margin: 0; font-family: 'Bowlby One SC', sans-serif; font-weight: 400; font-size: 32px; line-height: 1.05">The meter won't warm up</h1>
+    <p style="margin: 0; font-size: 15px; font-weight: 500; line-height: 1.45">The Presage vitals engine signs in when a game starts. Readings still happen on this phone, but it needs a connection to begin.</p>
+  </div>
+
+  <div style="background: #FFF4DF; border: 3px solid #2A160C; border-radius: 20px; padding: 14px 16px; display: flex; flex-direction: column; gap: 10px">
+    <span style="font-family: 'Bowlby One SC', sans-serif; font-size: 17px">Try this</span>
+    <sc-for list="{{fixes}}" as="f" hint-placeholder-count="3">
+      <div style="display: flex; gap: 10px; align-items: flex-start">
+        <span style="width: 24px; height: 24px; border-radius: 12px; border: 2px solid #2A160C; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; flex-shrink: 0; box-sizing: border-box">{{f.n}}</span>
+        <span style="font-size: 15px; font-weight: 500; line-height: 1.4">{{f.text}}</span>
+      </div>
+    </sc-for>
+  </div>
+
+  <span style="align-self: flex-start; background: #2A160C; color: #F2B33D; border-radius: 10px; padding: 5px 10px; font-size: 13px; font-weight: 700; font-family: ui-monospace, Menlo, monospace">AUTH_FAILED · session not started</span>
+
+  <div style="flex-grow: 1"></div>
+
+  <div style="display: flex; flex-direction: column; gap: 10px">
+    <button style="height: 60px; border-radius: 16px; border: 3px solid #2A160C; background: #1F6F78; color: #FFF4DF; font-family: 'Bowlby One SC', sans-serif; font-size: 21px; box-shadow: 0 5px 0 #2A160C; cursor: pointer">Try again</button>
+    <button style="height: 48px; border-radius: 16px; border: 3px solid #2A160C; background: #FFF4DF; color: #2A160C; font-family: 'Work Sans', sans-serif; font-size: 15px; font-weight: 700; box-shadow: 0 4px 0 #2A160C; cursor: pointer">Back to lobby</button>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return {
+      fixes: [
+        { n: '1', text: 'Check Wi-Fi or cellular data is on' },
+        { n: '2', text: 'Turn off Low Data Mode or a VPN that blocks it' },
+        { n: '3', text: 'Still stuck? Check the Presage API key in Settings, then tap Test' }
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>

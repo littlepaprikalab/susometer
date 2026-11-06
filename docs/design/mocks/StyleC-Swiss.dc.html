@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Style C: Swiss poster verdict</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;600;800;900&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#0B0B0B}a:hover{color:#E10600}
+</style>
+</helmet>
+<div style="width: 390px; height: 844px; box-sizing: border-box; padding: 54px 22px 28px; background: #EFEEE9; color: #0B0B0B; font-family: Archivo, 'Helvetica Neue', Arial, sans-serif; display: flex; flex-direction: column; gap: 14px">
+  <div style="display: flex; justify-content: space-between; font-size: 13px; font-weight: 800; letter-spacing: 0.02em; border-bottom: 1.5px solid #0B0B0B; padding-bottom: 8px">
+    <span>SUS—O—METER</span>
+    <span>SAM · 02/05</span>
+  </div>
+
+  <p style="margin: 0; font-size: 26px; font-weight: 600; line-height: 1.12; letter-spacing: -0.01em">Have you ever re-gifted a present?</p>
+
+  <div style="display: flex; align-items: flex-end; justify-content: space-between">
+    <span style="font-size: 210px; font-weight: 900; line-height: 0.8; letter-spacing: -0.07em; color: #E10600; margin-left: -8px">82</span>
+    <span style="font-size: 15px; font-weight: 800; text-align: right; line-height: 1.2; padding-bottom: 6px">/100<br>sus<br>index</span>
+  </div>
+
+  <div style="background: #0B0B0B; color: #EFEEE9; padding: 10px 12px; display: flex; justify-content: space-between; align-items: center">
+    <span style="font-size: 13px; font-weight: 600; letter-spacing: 0.06em">VERDICT</span>
+    <span style="font-size: 28px; font-weight: 900; letter-spacing: -0.01em">SUS.</span>
+  </div>
+
+  <div style="display: flex; flex-direction: column; gap: 4px" role="img" aria-label="Scale from 0 to 100, marker at 82">
+    <div style="position: relative; height: 22px">
+      <div style="position: absolute; left: 82%; top: 0; width: 0; height: 0; border-left: 8px solid transparent; border-right: 8px solid transparent; border-top: 12px solid #E10600; transform: translateX(-8px)"></div>
+    </div>
+    <div style="display: flex; justify-content: space-between; align-items: flex-end; height: 16px; border-bottom: 1.5px solid #0B0B0B">
+      <sc-for list="{{ticks}}" as="t" hint-placeholder-count="21">
+        <span style="width: 1.5px; background: #0B0B0B; height: {{t.h}}"></span>
+      </sc-for>
+    </div>
+    <div style="display: flex; justify-content: space-between; font-size: 11px; font-weight: 600">
+      <span>0 LEGIT</span><span>50</span><span>100 SUS</span>
+    </div>
+  </div>
+
+  <div style="display: flex; flex-direction: column">
+    <sc-for list="{{rows}}" as="r" hint-placeholder-count="3">
+      <div style="display: flex; align-items: baseline; gap: 12px; border-bottom: 1px solid #0B0B0B; padding: 8px 0">
+        <span style="width: 24px; font-size: 12px; font-weight: 600">{{r.n}}</span>
+        <span style="flex-grow: 1; font-size: 16px; font-weight: 600">{{r.label}}</span>
+        <span style="font-size: 18px; font-weight: 900">{{r.value}}</span>
+      </div>
+    </sc-for>
+  </div>
+
+  <div style="flex-grow: 1"></div>
+
+  <div style="display: flex; flex-direction: column; gap: 10px">
+    <button style="height: 58px; border: none; border-radius: 0; background: #0B0B0B; color: #EFEEE9; font-family: Archivo, sans-serif; font-size: 18px; font-weight: 800; display: flex; align-items: center; justify-content: space-between; padding: 0 18px; cursor: pointer">Next question<span aria-hidden="true">→</span></button>
+    <button style="height: 44px; border: 1.5px solid #0B0B0B; border-radius: 0; background: transparent; color: #0B0B0B; font-family: Archivo, sans-serif; font-size: 14px; font-weight: 700; cursor: pointer">End Sam's turn</button>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  renderVals() {
+    var ticks = [];
+    for (var i = 0; i <= 20; i++) {
+      ticks.push({ h: i % 10 === 0 ? '16px' : (i % 5 === 0 ? '11px' : '6px') });
+    }
+    return {
+      ticks: ticks,
+      rows: [
+        { n: '01', label: 'Pulse vs baseline', value: '+16' },
+        { n: '02', label: 'Blink rate', value: '+41%' },
+        { n: '03', label: 'Hesitation', value: '2.1s' }
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>

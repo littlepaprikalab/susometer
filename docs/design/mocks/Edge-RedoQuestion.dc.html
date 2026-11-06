@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>No clean reading, redo the question</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bowlby+One+SC&amp;family=Work+Sans:wght@500;600;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#2A160C}a:hover{color:#5A3420}
+</style>
+</helmet>
+<div style="width: 390px; height: 844px; box-sizing: border-box; padding: 54px 18px 28px; background: #F2B33D; color: #2A160C; font-family: 'Work Sans', system-ui, sans-serif; display: flex; flex-direction: column; gap: 16px">
+  <div style="display: flex; justify-content: space-between; align-items: center">
+    <span style="font-family: 'Bowlby One SC', sans-serif; font-size: 18px">Question 2</span>
+    <span style="background: #2A160C; color: #F2B33D; border-radius: 20px; padding: 6px 14px; font-weight: 700; font-size: 14px">Sam's in the hot seat</span>
+  </div>
+
+  <div style="background: #5A4A3A; border: 3px solid #2A160C; border-radius: 26px; padding: 12px 14px 18px; display: flex; flex-direction: column; align-items: center; gap: 6px; box-shadow: 0 6px 0 #2A160C">
+    <div style="display: flex; justify-content: space-between; width: 100%" aria-hidden="true">
+      <sc-for list="{{bulbs}}" as="b" hint-placeholder-count="12">
+        <span style="width: 12px; height: 12px; border-radius: 6px; background: {{b.c}}; border: 2px solid #2A160C"></span>
+      </sc-for>
+    </div>
+    <span style="margin-top: 10px; font-family: 'Bowlby One SC', sans-serif; font-size: 64px; line-height: 1; color: #FFF4DF">? ? ?</span>
+    <span style="font-family: 'Bowlby One SC', sans-serif; font-size: 28px; line-height: 1.1; color: #FFF4DF; text-align: center">No clean read</span>
+  </div>
+
+  <div style="background: #FFF4DF; border: 3px solid #2A160C; border-radius: 20px; padding: 14px 16px; display: flex; flex-direction: column; gap: 10px">
+    <span style="font-family: 'Bowlby One SC', sans-serif; font-size: 18px">Too much wiggle on that one</span>
+    <sc-for list="{{why}}" as="w" hint-placeholder-count="2">
+      <div style="display: flex; gap: 10px; align-items: flex-start">
+        <span style="width: 9px; height: 9px; border-radius: 5px; background: #D9412B; margin-top: 6px; flex-shrink: 0"></span>
+        <span style="font-size: 15px; font-weight: 500; line-height: 1.4">{{w.text}}</span>
+      </div>
+    </sc-for>
+    <span style="font-size: 13px; font-weight: 700; border-top: 1.5px solid #2A160C; padding-top: 8px">Shaky readings never get a score. No fake verdicts.</span>
+  </div>
+
+  <div style="flex-grow: 1"></div>
+
+  <div style="display: flex; gap: 10px">
+    <button style="flex: 1; height: 58px; border-radius: 16px; border: 3px solid #2A160C; background: #FFF4DF; color: #2A160C; font-family: 'Work Sans', sans-serif; font-size: 15px; font-weight: 700; box-shadow: 0 5px 0 #2A160C; cursor: pointer">Skip it</button>
+    <button style="flex: 2; height: 58px; border-radius: 16px; border: 3px solid #2A160C; background: #1F6F78; color: #FFF4DF; font-family: 'Bowlby One SC', sans-serif; font-size: 19px; box-shadow: 0 5px 0 #2A160C; cursor: pointer">Ask it again</button>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  renderVals() {
+    var bulbs = [];
+    for (var j = 0; j < 12; j++) { bulbs.push({ c: j % 3 === 0 ? '#FFE9A8' : '#8A7A5A' }); }
+    return {
+      bulbs: bulbs,
+      why: [
+        { text: 'Sam moved around a lot while answering' },
+        { text: 'The camera lost Sam’s face for about 5 seconds' }
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>

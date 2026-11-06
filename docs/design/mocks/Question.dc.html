@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Host: ask your question</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bowlby+One+SC&amp;family=Work+Sans:wght@500;600;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#2A160C}a:hover{color:#5A3420}
+</style>
+</helmet>
+<div style="width: 390px; height: 844px; box-sizing: border-box; padding: 54px 18px 28px; background: #F2B33D; color: #2A160C; font-family: 'Work Sans', system-ui, sans-serif; display: flex; flex-direction: column; gap: 14px">
+  <div style="display: flex; align-items: center; justify-content: space-between">
+    <span style="background: #2A160C; color: #F2B33D; border-radius: 20px; padding: 6px 14px; font-weight: 700; font-size: 14px">Sam's in the hot seat</span>
+    <div style="display: flex; gap: 6px" role="img" aria-label="Question 2 of 5">
+      <span style="width: 14px; height: 14px; border-radius: 7px; border: 2px solid #2A160C; background: #FFE9A8"></span>
+      <span style="width: 14px; height: 14px; border-radius: 7px; border: 2px solid #2A160C; background: #FFE9A8"></span>
+      <span style="width: 14px; height: 14px; border-radius: 7px; border: 2px solid #2A160C; background: transparent"></span>
+      <span style="width: 14px; height: 14px; border-radius: 7px; border: 2px solid #2A160C; background: transparent"></span>
+      <span style="width: 14px; height: 14px; border-radius: 7px; border: 2px solid #2A160C; background: transparent"></span>
+    </div>
+  </div>
+
+  <div style="display: flex; align-items: center; gap: 10px">
+    <div style="width: 48px; height: 48px; border-radius: 24px; background: #2A160C; display: flex; align-items: center; justify-content: center; flex-shrink: 0">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#F2B33D" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9v6h4l5 4V5L8 9z"></path><path d="M16.5 8.5a5 5 0 0 1 0 7M19 6a8.5 8.5 0 0 1 0 12"></path></svg>
+    </div>
+    <div style="background: #FFF4DF; border: 3px solid #2A160C; border-radius: 18px 18px 18px 4px; padding: 10px 14px">
+      <span style="font-family: 'Bowlby One SC', sans-serif; font-size: 20px">Ask your question!</span>
+    </div>
+  </div>
+
+  <div style="background: #FFF4DF; border: 3px solid #2A160C; border-radius: 20px; padding: 14px 16px; display: flex; flex-direction: column; gap: 10px; min-height: 150px; box-sizing: border-box">
+    <div style="display: flex; align-items: center; justify-content: space-between">
+      <span style="display: flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 700"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="#2A160C" stroke-width="2" stroke-linecap="round" aria-hidden="true"><rect x="5.5" y="1.5" width="5" height="8" rx="2.5"></rect><path d="M3 7.5a5 5 0 0 0 10 0M8 12.5v2"></path></svg>Asker · listening</span>
+      <div style="display: flex; align-items: center; gap: 3px; height: 20px" aria-hidden="true">
+        <sc-for list="{{levels}}" as="l" hint-placeholder-count="8">
+          <span style="width: 4px; border-radius: 2px; background: #1F6F78; height: {{l.h}}"></span>
+        </sc-for>
+      </div>
+    </div>
+    <p style="margin: 0; font-family: 'Bowlby One SC', sans-serif; font-size: 28px; line-height: 1.15">Have you ever re-gifted a<span style="display: inline-block; width: 4px; height: 26px; background: #2A160C; margin-left: 4px; vertical-align: -3px"></span></p>
+  </div>
+
+  <div style="position: relative; height: 250px; border-radius: 24px; border: 3px solid #2A160C; background: #2A160C; overflow: hidden; display: flex; align-items: center; justify-content: center">
+    <svg width="150" height="200" viewBox="0 0 190 250" fill="none" role="img" aria-label="Front camera on Sam with face guide"><ellipse cx="95" cy="125" rx="88" ry="118" stroke="#FFE9A8" stroke-width="4" stroke-dasharray="12 10"></ellipse></svg>
+    <span style="position: absolute; top: 12px; left: 12px; display: flex; align-items: center; gap: 6px; background: #FFF4DF; border-radius: 14px; padding: 5px 10px; font-size: 12px; font-weight: 700"><span style="width: 9px; height: 9px; border-radius: 5px; background: #D9412B"></span>Measuring Sam</span>
+    <span style="position: absolute; bottom: 12px; right: 12px; display: flex; align-items: center; gap: 6px; background: #FFF4DF; border-radius: 14px; padding: 5px 10px; font-size: 13px; font-weight: 700"><svg width="14" height="14" viewBox="0 0 22 22" fill="none" stroke="#D9412B" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 11h4l2-5 3 10 2-5h7"></path></svg>84 BPM</span>
+  </div>
+
+  <p style="margin: 0; text-align: center; font-size: 15px; font-weight: 700">Sam: just start answering when you're ready.</p>
+
+  <div style="flex-grow: 1"></div>
+
+  <div style="display: flex; gap: 10px">
+    <button aria-label="Pause the game" style="width: 56px; height: 48px; border-radius: 14px; border: 2.5px solid #2A160C; background: #FFF4DF; color: #2A160C; display: flex; align-items: center; justify-content: center; box-shadow: 0 3px 0 #2A160C; cursor: pointer"><svg width="18" height="18" viewBox="0 0 18 18" fill="currentColor" aria-hidden="true"><rect x="4" y="3" width="3.5" height="12" rx="1"></rect><rect x="10.5" y="3" width="3.5" height="12" rx="1"></rect></svg></button>
+    <a href="Answer.dc.html" style="flex-grow: 1; height: 48px; border-radius: 14px; border: 2.5px dashed #2A160C; color: #2A160C; text-decoration: none; display: flex; align-items: center; justify-content: center; font-size: 15px; font-weight: 700">Too loud? Tap when done asking</a>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  renderVals() {
+    var hs = [6, 12, 18, 10, 16, 20, 8, 13];
+    return { levels: hs.map(function (h) { return { h: h + 'px' }; }) };
+  }
+}
+</script>
+</body>
+</html>

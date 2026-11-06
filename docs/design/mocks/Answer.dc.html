@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Sam answers</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bowlby+One+SC&amp;family=Work+Sans:wght@500;600;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#2A160C}a:hover{color:#5A3420}
+</style>
+</helmet>
+<div style="width: 390px; height: 844px; box-sizing: border-box; padding: 54px 18px 28px; background: #F2B33D; color: #2A160C; font-family: 'Work Sans', system-ui, sans-serif; display: flex; flex-direction: column; gap: 14px">
+  <div style="display: flex; align-items: center; justify-content: space-between">
+    <span style="background: #2A160C; color: #F2B33D; border-radius: 20px; padding: 6px 14px; font-weight: 700; font-size: 14px">Sam's in the hot seat</span>
+    <span style="font-family: 'Bowlby One SC', sans-serif; font-size: 16px">Q 2 / 5</span>
+  </div>
+
+  <div style="border: 2.5px solid #2A160C; border-radius: 14px; padding: 8px 12px; display: flex; flex-direction: column; gap: 2px">
+    <span style="font-size: 12px; font-weight: 700">The asker asked</span>
+    <span style="font-size: 16px; font-weight: 700">“Have you ever re-gifted a present?”</span>
+  </div>
+
+  <div style="display: flex; align-items: center; gap: 10px">
+    <div style="width: 48px; height: 48px; border-radius: 24px; background: #2A160C; display: flex; align-items: center; justify-content: center; flex-shrink: 0">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#F2B33D" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9v6h4l5 4V5L8 9z"></path><path d="M16.5 8.5a5 5 0 0 1 0 7M19 6a8.5 8.5 0 0 1 0 12"></path></svg>
+    </div>
+    <div style="background: #FFF4DF; border: 3px solid #2A160C; border-radius: 18px 18px 18px 4px; padding: 10px 14px">
+      <span style="font-family: 'Bowlby One SC', sans-serif; font-size: 20px">Sam, your answer?</span>
+    </div>
+  </div>
+
+  <div style="background: #FFF4DF; border: 3px solid #2A160C; border-radius: 20px; padding: 14px 16px; display: flex; flex-direction: column; gap: 10px">
+    <div style="display: flex; align-items: center; justify-content: space-between">
+      <span style="display: flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 700"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="#2A160C" stroke-width="2" stroke-linecap="round" aria-hidden="true"><rect x="5.5" y="1.5" width="5" height="8" rx="2.5"></rect><path d="M3 7.5a5 5 0 0 0 10 0M8 12.5v2"></path></svg>Sam · talking</span>
+      <div style="display: flex; align-items: center; gap: 3px; height: 20px" aria-hidden="true">
+        <sc-for list="{{levels}}" as="l" hint-placeholder-count="8">
+          <span style="width: 4px; border-radius: 2px; background: #D9412B; height: {{l.h}}"></span>
+        </sc-for>
+      </div>
+    </div>
+    <p style="margin: 0; font-family: 'Bowlby One SC', sans-serif; font-size: 26px; line-height: 1.15">No way. Okay… maybe once.</p>
+    <span style="align-self: flex-start; background: #2A160C; color: #F2B33D; border-radius: 12px; padding: 4px 10px; font-size: 13px; font-weight: 700">Took 2.1s to start answering</span>
+  </div>
+
+  <div style="display: flex; gap: 10px">
+    <div style="position: relative; width: 104px; height: 128px; box-sizing: border-box; border-radius: 18px; border: 3px solid #2A160C; background: #2A160C; display: flex; align-items: center; justify-content: center; flex-shrink: 0">
+      <svg width="60" height="80" viewBox="0 0 70 94" fill="none" role="img" aria-label="Camera preview on Sam"><ellipse cx="35" cy="47" rx="31" ry="43" stroke="#FFE9A8" stroke-width="3" stroke-dasharray="8 6"></ellipse></svg>
+      <span style="position: absolute; top: 7px; left: 7px; display: flex; align-items: center; gap: 4px; background: #FFF4DF; border-radius: 10px; padding: 2px 7px; font-size: 11px; font-weight: 700"><span style="width: 7px; height: 7px; border-radius: 4px; background: #D9412B"></span>LIVE</span>
+    </div>
+    <div style="flex-grow: 1; display: flex; flex-direction: column; gap: 7px">
+      <sc-for list="{{signals}}" as="s" hint-placeholder-count="2">
+        <div style="background: #FFF4DF; border: 2.5px solid #2A160C; border-radius: 14px; padding: 8px 10px; display: flex; align-items: center; justify-content: space-between">
+          <div style="display: flex; flex-direction: column">
+            <span style="font-size: 12px; font-weight: 600">{{s.label}}</span>
+            <span style="font-size: 17px; font-weight: 700">{{s.value}}</span>
+          </div>
+          <span style="display: flex; align-items: center; gap: 3px; font-size: 15px; font-weight: 700"><svg width="12" height="12" viewBox="0 0 12 12" fill="#D9412B" aria-hidden="true"><path d="M6 1l5 8H1z"></path></svg>{{s.delta}}</span>
+        </div>
+      </sc-for>
+    </div>
+  </div>
+
+  <div style="flex-grow: 1"></div>
+
+  <div style="display: flex; flex-direction: column; gap: 8px">
+    <a href="Verdict.dc.html" style="height: 108px; border-radius: 22px; border: 3px solid #2A160C; background: #1F6F78; color: #FFF4DF; text-decoration: none; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; box-shadow: 0 6px 0 #2A160C">
+      <span style="font-family: 'Bowlby One SC', sans-serif; font-size: 32px; line-height: 1">Final answer</span>
+      <span style="font-size: 14px; font-weight: 600">Tap anywhere here</span>
+    </a>
+    <p style="margin: 0; text-align: center; font-size: 13px; font-weight: 600">Forgot to tap? It ends itself after 4s of silence.</p>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  renderVals() {
+    var hs = [14, 8, 19, 12, 20, 9, 16, 6];
+    return {
+      levels: hs.map(function (h) { return { h: h + 'px' }; }),
+      signals: [
+        { label: 'Pulse', value: '88 BPM', delta: '16' },
+        { label: 'Blinks', value: '31 / min', delta: '9' }
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>

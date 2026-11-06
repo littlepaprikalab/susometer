@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>How to play</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bowlby+One+SC&amp;family=Work+Sans:wght@500;600;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#2A160C}a:hover{color:#5A3420}
+</style>
+</helmet>
+<div style="width: 390px; height: 844px; box-sizing: border-box; padding: 54px 18px 28px; background: #F2B33D; color: #2A160C; font-family: 'Work Sans', system-ui, sans-serif; display: flex; flex-direction: column; gap: 14px">
+  <h1 style="margin: 0; font-family: 'Bowlby One SC', sans-serif; font-weight: 400; font-size: 36px; line-height: 1">How to play</h1>
+
+  <div style="display: flex; flex-direction: column; gap: 10px">
+    <sc-for list="{{steps}}" as="s" hint-placeholder-count="4">
+      <div style="background: #FFF4DF; border: 3px solid #2A160C; border-radius: 18px; padding: 12px 14px; display: flex; gap: 12px; align-items: flex-start">
+        <span style="width: 36px; height: 36px; border-radius: 18px; background: #1F6F78; border: 2.5px solid #2A160C; color: #FFF4DF; display: flex; align-items: center; justify-content: center; font-family: 'Bowlby One SC', sans-serif; font-size: 17px; flex-shrink: 0; box-sizing: border-box">{{s.n}}</span>
+        <div style="display: flex; flex-direction: column; gap: 2px">
+          <span style="font-size: 17px; font-weight: 700">{{s.title}}</span>
+          <span style="font-size: 14px; font-weight: 500; line-height: 1.4">{{s.body}}</span>
+        </div>
+      </div>
+    </sc-for>
+  </div>
+
+  <div style="background: #2A160C; color: #FFF4DF; border-radius: 18px; padding: 14px 16px; display: flex; flex-direction: column; gap: 4px">
+    <span style="font-family: 'Bowlby One SC', sans-serif; font-size: 18px; color: #F2B33D">House rule</span>
+    <span style="font-size: 14px; font-weight: 500; line-height: 1.45">It reads stress, not truth. Nervous doesn't mean guilty. Keep the questions fun, and anyone can skip their turn.</span>
+  </div>
+
+  <div style="flex-grow: 1"></div>
+
+  <button style="height: 60px; border-radius: 16px; border: 3px solid #2A160C; background: #1F6F78; color: #FFF4DF; font-family: 'Bowlby One SC', sans-serif; font-size: 21px; box-shadow: 0 5px 0 #2A160C; cursor: pointer">Got it, let's play</button>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return {
+      steps: [
+        { n: '1', title: 'Prop it up or hold it steady', body: 'Face in the oval, light in front of you, not behind.' },
+        { n: '2', title: 'Asker: say it out loud', body: 'The host listens and writes your question on screen.' },
+        { n: '3', title: 'Hot seat: just answer', body: 'Start talking when ready, then smash Final answer.' },
+        { n: '4', title: 'Get your verdict', body: 'Pulse, blinks and face, compared with your own normal.' }
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>
