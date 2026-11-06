@@ -60,6 +60,14 @@ Settings → **Signal check** → **Start both**. Allow microphone and speech re
   consent screen.
 - [ ] Verdict: the pulse chart's shaded stretch lines up with when you were talking.
 - [ ] The camera card has a visible dark border around the video, with rounded corners.
+- [ ] **Expression #tag:** a stamp like *#neutral* lands in the camera's top-right corner about a
+  second after measuring starts. Pull a big surprised face and hold it: it changes to a red
+  *#surprise* within about a second, and back when you relax. **Does it flicker between two tags
+  while you sit still?** Smile: a teal *#happy*. Cover the camera: it's gone within about a second.
+  It never covers the middle of your face, and it stays readable against a bright wall behind you.
+  **With the Proof Panel on, does the `expr` line change several times a second?** (The tag
+  treats expressions older than 3 s as no reading; if they update less often than that, note the
+  rate.)
 - [ ] The preview is still mirrored like a selfie (raise your right hand: it's on the right of the
   screen), and still fills its box after the "Too dark in here" banner slides in and out.
 - [ ] Sit so your face fills the oval: no "move closer" or "move back" banner. **If there's a

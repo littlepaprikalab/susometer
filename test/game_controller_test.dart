@@ -102,6 +102,40 @@ void main() {
     });
   });
 
+  test('the expression tag follows the player in the seat, never the last '
+      'one', () {
+    fakeAsync((async) {
+      final w = World(async);
+      w.startGame(['Sam', 'Alex'], questions: 3);
+      w.expr = const {'surprise': 0.7, 'neutral': 0.2};
+      w.calibrate();
+      expect(w.game.live.expression.tag, 'surprise');
+      for (var q = 0; q < 3; q++) {
+        w.askAndAnswer();
+        w.game.nextQuestion();
+      }
+      w.elapse(100);
+      expect(w.game.phase, GamePhase.consent);
+      expect(w.game.currentPlayer.name, 'Alex');
+      expect(w.game.live.expression.tag, isNull, reason: 'camera is off');
+
+      // Alex's face: the first frames must not show Sam's #surprise.
+      w.expr = const {'happy': 0.7, 'neutral': 0.2};
+      w.game.agreeToMeasure();
+      for (var i = 0; i < 6; i++) {
+        w.elapse(100);
+        expect(
+          w.game.live.expression.tag,
+          isNot('surprise'),
+          reason: '${(i + 1) * 100} ms into Alex calibrating',
+        );
+      }
+      w.elapse(1000);
+      expect(w.game.live.expression.tag, 'happy');
+      w.dispose();
+    });
+  });
+
   test('host lines and the half-duplex speech segments', () {
     fakeAsync((async) {
       final w = World(async);

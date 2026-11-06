@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../app_scope.dart';
 import '../game/game_controller.dart';
 import '../presage/camera_preview.dart';
+import '../theme/expression_stamp.dart';
 import '../theme/game_widgets.dart';
 import '../theme/tokens.dart';
 import '../theme/widgets.dart';
@@ -531,6 +532,27 @@ class _CalibCamera extends StatelessWidget {
                               : 'Light good',
                           dot: lightBad ? SusColors.tomato : SusColors.teal,
                         ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              // The expression stamp, in the same corner and width as on
+              // Ask and Answer, just under the chips.
+              Positioned(
+                top: cameraGuideClear(context).top,
+                left: 12,
+                right: 12,
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Spacer(flex: 100 - stampRowFlex),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      flex: stampRowFlex,
+                      child: ExpressionStampSlot(
+                        tag: game.live.expression.tag,
+                        stressTags: game.config.exprCategories,
                       ),
                     ),
                   ],

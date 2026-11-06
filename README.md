@@ -156,6 +156,15 @@ confident pulse, the result is **No clean read** with the real reasons (e.g. "Th
 Sam's face for about 5 seconds") and an *Ask it again* button. Every constant lives in
 [`ScoringConfig`](lib/game/scoring_config.dart) for tuning.
 
+**Expression #tag.** While the camera measures, the player's strongest expression is stamped in
+its top-right corner as a #tag, in the SDK's own words (#surprise, #happy, #neutral…). SmartSpectra
+gives a score per expression rather than one label, so the tag is the top score, smoothed over
+about 0.6 s and changed only once a new one has clearly led for 0.7 s, so it doesn't flicker
+and a tie never shows an arbitrary expression. Red ink
+marks the four that move the score, teal the rest. It's hidden when no expression scores clearly,
+there's no usable face, or the SDK stops sending new expression readings. It's the raw reading, not compared to the player's normal, so it's for
+show; the score uses the comparison. Logic: [`lib/game/expression_tag.dart`](lib/game/expression_tag.dart).
+
 ## How turn-taking works
 
 The host is the phone's voice. Speaker separation uses SmartSpectra's **talking** detection

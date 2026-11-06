@@ -227,6 +227,11 @@ void checkInvariants(World w, List<Object> errors, String where) {
   };
   if (cameraOff.contains(g.phase)) {
     expect(w.running, isFalse, reason: '$where: camera running in ${g.phase}');
+    expect(
+      g.live.expression.tag,
+      isNull,
+      reason: '$where: an expression tag outlived the camera (${g.phase})',
+    );
   }
   expect(
     w.haptics.cues.where((c) => measuring.contains(c.$2)),

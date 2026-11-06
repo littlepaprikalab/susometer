@@ -51,6 +51,7 @@ void main() {
     );
     rig.presage.begin();
     rig.presage.pulse = 84;
+    rig.presage.expr = const {'happy': 0.7, 'neutral': 0.2, 'surprise': 0.05};
     await tester.pumpWidget(
       RepaintBoundary(
         key: key,
@@ -94,6 +95,7 @@ void main() {
     await rig.wait(400);
     await shot(tester, key, '03-calibrate');
     rig.presage.talk(false);
+    rig.presage.expr = const {'neutral': 0.8, 'happy': 0.1, 'surprise': 0.05};
     await rig.until(() => rig.game.phase == GamePhase.ask);
     rig.services.settings.proofPanel = true;
     await rig.wait(300);
@@ -124,6 +126,7 @@ void main() {
     await rig.wait(1200);
     rig.presage.talk(true);
     rig.presage.pulse = 95;
+    rig.presage.expr = const {'surprise': 0.6, 'neutral': 0.3, 'fear': 0.05};
     await rig.wait(500);
     rig.speech.controller.add(
       SpeechText(

@@ -71,6 +71,10 @@ class World {
   String status = 'running';
   double pulse = 70;
   String code = 'OK';
+
+  /// Expression scores in every snapshot, fresh each time (like the SDK
+  /// publishing a new expression sample every frame).
+  Map<String, double> expr = const {'neutral': 0.8, 'surprise': 0.05};
   bool autoAnswerWarmups = true;
   final List<Map<String, Object?>> _pendingEvents = [];
   int? _pulseAt;
@@ -116,7 +120,8 @@ class World {
         'pulse': pulse,
         'pulseConf': 0.9,
         'pulseAt': _pulseAt,
-        'expr': const {'neutral': 0.8, 'surprise': 0.05},
+        'expr': expr,
+        'exprAt': expr.isEmpty ? null : t,
         'validation': {'code': code, 'hint': code == 'OK' ? '' : 'hint'},
         'talking': talking,
         'events': List.of(_pendingEvents),

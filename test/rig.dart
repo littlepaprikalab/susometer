@@ -19,6 +19,9 @@ class StreamingPresage extends FakePresage {
   bool emitting = true;
   double pulse = 70;
   String code = 'OK';
+
+  /// Expression scores in every snapshot (none unless a test sets them).
+  Map<String, double> expr = const {};
   final List<Map<String, Object?>> pending = [];
   int? _pulseAt;
   int _nextBlink = 0;
@@ -59,6 +62,8 @@ class StreamingPresage extends FakePresage {
         'pulseAt': _pulseAt,
         'validation': {'code': code, 'hint': ''},
         'talking': talking,
+        'expr': expr,
+        'exprAt': expr.isEmpty ? null : t,
         'events': List.of(pending),
       }),
     );

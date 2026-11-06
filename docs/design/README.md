@@ -30,6 +30,12 @@ colors, font sizes, spacing and sample data for every screen. They need the canv
 | [`Edge-SdkOffline.dc.html`](mocks/Edge-SdkOffline.dc.html) | E5 · SDK sign-in failed / offline |
 | [`Edge-EndGame.dc.html`](mocks/Edge-EndGame.dc.html) | E6 · End the show early |
 
+Added later, outside the canvas (an image, not a `.dc.html` source):
+
+| File | Screen |
+|---|---|
+| [`ExpressionStamp.png`](mocks/ExpressionStamp.png) | The expression #tag stamped on the camera. Placement **A** (top-right corner) is built; B was the alternative. |
+
 Style options for the Verdict screen (only **Style B** is built):
 
 | File | Option |

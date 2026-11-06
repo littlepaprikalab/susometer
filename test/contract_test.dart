@@ -6,6 +6,8 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:susometer/audio/host_audio.dart';
+import 'package:susometer/game/expression_tag.dart';
+import 'package:susometer/game/scoring_config.dart';
 import 'package:susometer/settings/app_settings.dart';
 
 String read(String path) => File(path).readAsStringSync();
@@ -160,6 +162,7 @@ void main() {
           'blink',
           'talking',
           'expr',
+          'exprAt',
           'validation',
           'error',
           'events',
@@ -261,7 +264,15 @@ void main() {
   test('the test fakes send the same snapshot keys as the Swift bridge', () {
     for (final fake in ['test/rig.dart', 'test/world.dart']) {
       final src = read(fake);
-      for (final key in ['t', 'status', 'pulse', 'pulseConf', 'pulseAt']) {
+      for (final key in [
+        't',
+        'status',
+        'pulse',
+        'pulseConf',
+        'pulseAt',
+        'expr',
+        'exprAt',
+      ]) {
         expect(src, contains("'$key':"), reason: '$fake: $key');
       }
       for (final key in ['talking', 'validation', 'events']) {
@@ -269,6 +280,33 @@ void main() {
         expect(src, contains("'$key':"), reason: '$fake: $key');
       }
     }
+  });
+
+  test('expression names agree: bridge, tag, score and stamp', () {
+    // `case .fear: return "fear"` inside PresageBridge.expressionName.
+    final fn = RegExp(
+      r'func expressionName\(.*?\n  \}',
+      dotAll: true,
+    ).firstMatch(presageSwift)!.group(0)!;
+    final swiftNames = {
+      for (final m in RegExp(r'case \.(\w+): return "(\w+)"').allMatches(fn))
+        if (m.group(1) == m.group(2)) m.group(2)!,
+    }..remove('unspecified');
+    expect(swiftNames, ExpressionTagger.labels.toSet());
+    expect(
+      ExpressionTagger.labels,
+      containsAll(const ScoringConfig().exprCategories),
+      reason: 'every scored category can show as a red tag',
+    );
+    // The bridge's fallbacks never pass as a tag.
+    expect(fn, contains('"unspecified"'));
+    expect(fn, contains('"unknown'));
+    for (final odd in ['unspecified', 'unknown', 'unknown7']) {
+      expect(ExpressionTagger.labels, isNot(contains(odd)));
+    }
+    // Confidence arrives as a percentage and is sent as 0..1, which the
+    // tagger's 0.3 threshold assumes.
+    expect(presageSwift, contains('Double(score.confidence) / 100.0'));
   });
 
   group('codes Dart reacts to are codes Swift sends', () {

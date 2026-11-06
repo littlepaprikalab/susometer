@@ -1,5 +1,6 @@
 import 'package:fake_async/fake_async.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:susometer/game/expression_tag.dart';
 import 'package:susometer/game/game_controller.dart';
 import 'package:susometer/game/models.dart';
 import 'package:susometer/game/scoring.dart';
@@ -221,7 +222,8 @@ void main() {
         w.elapse(100);
         expect(w.game.phase, GamePhase.answer);
         // Push 3000 extra snapshots straight through the answer-phase path,
-        // which recomputes live pulse and blink cards on every snapshot.
+        // which recomputes live pulse and blink cards and the expression
+        // tag on every snapshot.
         final sw = Stopwatch()..start();
         for (var i = 0; i < 3000; i++) {
           w.presage.controller.add(
@@ -231,6 +233,13 @@ void main() {
               'pulse': 72.0,
               'pulseConf': 0.9,
               'pulseAt': w.now + i * 100,
+              'expr': {
+                'neutral': 0.5 + (i % 7) / 20,
+                'surprise': 0.4 - (i % 5) / 20,
+                'happy': 0.05,
+                'unknown9': 0.9,
+              },
+              'exprAt': w.now + i,
               'validation': {'code': 'OK', 'hint': ''},
             }),
           );
@@ -244,5 +253,31 @@ void main() {
         w.dispose();
       });
     });
+  });
+
+  test('the expression tagger: constant time, no growth', () {
+    final t = ExpressionTagger();
+    final frames = [
+      for (var i = 0; i < 64; i++)
+        {
+          'neutral': 0.4 + (i % 9) / 30,
+          'surprise': 0.3 + (i % 7) / 25,
+          'happy': 0.1,
+          'fear': 0.05,
+          'unspecified': 0.2,
+        },
+    ];
+    // A 10-minute turn at 10 Hz is 6000 snapshots; this is 100 of them.
+    const n = 600000;
+    final sw = Stopwatch()..start();
+    var changes = 0;
+    for (var i = 0; i < n; i++) {
+      if (t.add(i * 100, frames[i % 64], faceOk: true, exprAtMs: i * 100)) {
+        changes++;
+      }
+    }
+    final us = sw.elapsedMicroseconds / n;
+    expect(us, lessThan(5), reason: '${us.toStringAsFixed(2)} µs per snapshot');
+    expect(changes, lessThan(10), reason: 'steady input, steady tag');
   });
 }
