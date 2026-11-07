@@ -369,12 +369,15 @@ void main() {
     expect(find.text('Sam: tap Done asking, then answer.'), findsOneWidget);
     expect(find.text('Too loud? Tap when done asking'), findsNothing);
     rig.say('Have you ever');
+    final asked = rig.speech.segment;
     await rig.wait(500);
     rig.presage.talk(true);
     await rig.wait(600);
     rig.presage.talk(false);
     await rig.wait(1500);
-    rig.say('Have you ever lied?');
+    // Like the recognizer: a laugh may have opened a new segment (it might
+    // have been the answer), which starts from the new words.
+    rig.say(rig.speech.segment == asked ? 'Have you ever lied?' : 'lied?');
     await rig.wait(5000);
     expect(rig.game.phase, GamePhase.ask);
     await rig.tap('Done asking');

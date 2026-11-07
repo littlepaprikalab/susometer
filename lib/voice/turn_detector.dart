@@ -123,6 +123,19 @@ class AnswerStarted extends TurnEvent {
   const AnswerStarted(super.tMs);
 }
 
+/// Party: the player started talking after the asker's last words, before
+/// Done asking. Nothing moves; the controller keeps their words apart from
+/// the question in case it's the answer.
+class EarlyAnswer extends TurnEvent {
+  const EarlyAnswer(super.tMs);
+}
+
+/// ...and then the asker carried on, so it was a reaction: their words
+/// belong to the question after all.
+class EarlyAnswerWithdrawn extends TurnEvent {
+  const EarlyAnswerWithdrawn(super.tMs);
+}
+
 /// Final answer was tapped. [tMs] is where the scored answer ends, which
 /// can be before the tap (see [TurnConfig.answerTailMs]).
 class AnswerEnded extends TurnEvent {
@@ -193,14 +206,26 @@ class TurnDetector {
       if (_askerCouldSpeak(tMs)) {
         tQ0 ??= tMs;
         lastAskerSpeechMs = tMs;
-        earlyTalkMs = null;
+        if (earlyTalkMs != null) {
+          earlyTalkMs = null;
+          return [EarlyAnswerWithdrawn(tMs)];
+        }
       }
-    } else if (_talk.talking || _talk.rawTalking || tA0 != null) {
+    } else if (_talk.talking || _talk.rawTalking || _answerStillOpen(tMs)) {
       // Once the player has started answering, new words keep the answer
-      // open even if SmartSpectra's talking flag drops out for a moment.
+      // open even if SmartSpectra's talking flag drops out for a moment,
+      // but only while it's still going: words after a gap longer than the
+      // tail are the room's, as when the answer ended itself on silence.
       lastPlayerActivityMs = math.max(lastPlayerActivityMs ?? 0, tMs);
     }
     return const [];
+  }
+
+  /// The player has started answering and was last active within
+  /// [TurnConfig.answerTailMs] of [tMs].
+  bool _answerStillOpen(int tMs) {
+    final last = lastPlayerActivityMs;
+    return tA0 != null && last != null && tMs - last <= config.answerTailMs;
   }
 
   /// Mic level. Only extends speech that recognition already picked up, so
@@ -291,7 +316,10 @@ class TurnDetector {
     if (answerEnded) return const [];
     if (!questionEnded) {
       // Noted, not acted on: only a tap ends the question.
-      if (party && lastAskerSpeechMs != null) earlyTalkMs ??= t;
+      if (party && lastAskerSpeechMs != null && earlyTalkMs == null) {
+        earlyTalkMs = t;
+        return [EarlyAnswer(t)];
+      }
       return const [];
     }
     lastPlayerActivityMs = math.max(lastPlayerActivityMs ?? 0, t);

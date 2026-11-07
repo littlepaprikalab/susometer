@@ -75,7 +75,11 @@ void main() {
       }
       s.run(60000);
       expect(s.detector.questionEnded, isFalse);
-      expect(s.events, isEmpty);
+      expect(s.events.whereType<QuestionEnded>(), isEmpty);
+      expect(s.events.whereType<AnswerStarted>(), isEmpty);
+      expect(s.events.whereType<AnswerEnded>(), isEmpty);
+      // Talking after the asker is only noted, for the transcript.
+      expect(s.events.whereType<EarlyAnswer>().length, 1);
     });
 
     test("Done asking ends it at the asker's last words", () {
@@ -264,6 +268,40 @@ void main() {
       s.run(20500);
       expect(s.detector.tA1, 12000);
     });
+
+    test('room chatter after the player is done never stretches the answer '
+        '(PR #18 review)', () {
+      final s = Script(party());
+      s.speech(1000);
+      s.doneAsking(1500);
+      s.talk(2000, true);
+      s.talk(5000, false);
+      // The room chats from 15 s; nobody taps until 45 s.
+      for (var t = 15000; t <= 40000; t += 500) {
+        s.speech(t);
+        s.level(t, 0.9);
+      }
+      s.finalAnswer(45000);
+      s.run(45000);
+      expect(s.detector.tA1, 9000, reason: '4 s after the player stopped');
+    });
+
+    test(
+      'a pause over 4 s, then the player talks again: the answer goes on',
+      () {
+        final s = Script(party());
+        s.speech(1000);
+        s.doneAsking(1500);
+        s.talk(2000, true);
+        s.talk(4000, false);
+        s.speech(12000); // chatter in the gap: not the player
+        s.talk(14000, true); // the camera sees the player again
+        s.talk(16000, false);
+        s.finalAnswer(40000);
+        s.run(40000);
+        expect(s.detector.tA1, 20000);
+      },
+    );
 
     test('words keep the answer going if the talking flag drops out', () {
       final s = Script(party());

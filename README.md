@@ -264,9 +264,11 @@ The voice and camera still say *when* things happened, so a slow tap doesn't cha
 - **The question ends** with the asker's last words, not the *Done asking* tap. The pause before
   answering counts from there, less up to 1.5 s for the tap itself (the warm-ups it's compared
   with have no tap), so stalling before the tap still counts. Answering before the tap is fine:
-  the answer is timed from its first word.
+  the answer is timed from its first word, and its words are the answer, not part of the
+  question.
 - **The answer ends** at *Final answer*, or 4 s after the player last spoke if the tap comes
-  later, so the room's chatter while nobody tapped isn't read as part of it. It's never scored
+  later, so the room's chatter while nobody tapped isn't read as part of it (words count as the
+  player's only while the answer is still going). It's never scored
   for more than 60 s after the question, however late the tap.
 - **Half-duplex:** recognition is muted while the host speaks or a sound plays, and for 150 ms
   after, so the transcript never contains the host.

@@ -785,7 +785,13 @@ class GameController extends ChangeNotifier {
 
   void _onCalibTalk(bool talking, int t) {
     final w = currentWarmup;
-    if (talking && w != null && w.latencyS == null && t >= w.askedAtMs) {
+    // A talk that starts more than a minute after the warm-up was asked
+    // isn't its answer: its window would stretch over the wait.
+    if (talking &&
+        w != null &&
+        w.latencyS == null &&
+        t >= w.askedAtMs &&
+        t - w.askedAtMs <= _turnConfig.maxAnswerMs) {
       w.latencyS = (t - w.askedAtMs) / 1000;
     }
   }
@@ -884,6 +890,12 @@ class GameController extends ChangeNotifier {
   int questionStartMs = 0;
   int? _askerFromSeg;
   int? _answerFromSeg;
+
+  /// Party: the segment opened when the player started answering before
+  /// Done asking. Its words are kept out of the question, and become the
+  /// answer if the asker doesn't carry on.
+  int? _earlyFromSeg;
+  int _earlySeq = 0;
   final TranscriptBuffer _askerTranscript = TranscriptBuffer();
   final TranscriptBuffer _answerTranscript = TranscriptBuffer();
   int? settleUntilMs;
@@ -942,6 +954,8 @@ class GameController extends ChangeNotifier {
     _answerTranscript.clear();
     _askerFromSeg = null;
     _answerFromSeg = null;
+    _earlyFromSeg = null;
+    _earlySeq++;
     _soloReady = false;
     live.resetQuestion();
     questionText = mode == GameMode.solo
@@ -1026,12 +1040,61 @@ class GameController extends ChangeNotifier {
           live.notify();
         case AnswerEnded():
           _onAnswerEnded();
+        case EarlyAnswer():
+          _onEarlyAnswer();
+        case EarlyAnswerWithdrawn():
+          _earlySeq++;
+          _earlyFromSeg = null;
+          _showAskerText();
       }
     }
   }
 
+  /// Party: a new segment for what may be the answer, so it isn't recognized
+  /// as the end of the question's.
+  void _onEarlyAnswer() {
+    if (!micEnabled) return;
+    final seq = ++_earlySeq;
+    unawaited(
+      speech
+          .newSegment()
+          .then((seg) {
+            if (seq != _earlySeq || seg == null) return;
+            if (phase != GamePhase.ask || detector?.earlyTalkMs == null) return;
+            _earlyFromSeg = seg;
+            _showAskerText();
+          })
+          .catchError((Object _) => null),
+    );
+  }
+
+  /// The question as heard so far: without an early answer's words.
+  String get _questionSoFar {
+    final early = _earlyFromSeg;
+    return early == null
+        ? _askerTranscript.text
+        : _askerTranscript.textBefore(early);
+  }
+
+  void _showAskerText() {
+    live.askerText = _questionSoFar;
+    live.notify();
+  }
+
   void _onQuestionEnded(QuestionEnded e) {
     _setPhase(GamePhase.answer);
+    final early = _earlyFromSeg;
+    if (early != null && detector?.tA0 != null) {
+      // The player was already answering: that segment is the answer, and
+      // it carries on.
+      _earlyFromSeg = null;
+      _answerFromSeg = early;
+      _askerTranscript.moveFrom(early, _answerTranscript);
+      live.askerText = _askerTranscript.text;
+      live.answerText = _answerTranscript.text;
+      live.notify();
+      return;
+    }
     if (micEnabled) {
       unawaited(
         speech
@@ -1169,11 +1232,10 @@ class GameController extends ChangeNotifier {
     // Already skipped, and the next question is still waiting on the camera
     // (Pause and Skip again during the restart): one result per question.
     if (currentTurn.results.any((r) => r.index == questionIndex)) return;
+    final asked = _questionSoFar;
     final q = mode == GameMode.solo
         ? questionText
-        : (_askerTranscript.text.isEmpty
-              ? 'Question ${questionIndex + 1}'
-              : _askerTranscript.text);
+        : (asked.isEmpty ? 'Question ${questionIndex + 1}' : asked);
     currentTurn.results.add(
       QuestionResult(
         index: questionIndex,
@@ -1811,12 +1873,14 @@ class GameController extends ChangeNotifier {
             e.segment < answerFrom);
     if (isQuestion) {
       _askerTranscript.add(e);
-      live.askerText = _askerTranscript.text;
     } else {
       _answerTranscript.add(e);
       live.answerText = _answerTranscript.text;
     }
     if (!paused) _apply(detector?.onSpeech(e.tMs) ?? const []);
+    // After the detector: the asker carrying on hands an early answer's
+    // words back to the question.
+    live.askerText = _questionSoFar;
     live.notify();
   }
 

@@ -464,6 +464,95 @@ void main() {
       });
     });
 
+    test('an answer before Done asking is the answer, not part of the '
+        'question (PR #18 review)', () {
+      fakeAsync((async) {
+        final w = World(async);
+        w.startGame(['Sam', 'Alex'], questions: 1);
+        w.calibrate();
+        w.elapse(300);
+        w.say('Have you ever lied?');
+        final asked = w.speech.segment;
+        w.elapse(1200);
+        w.talk(true);
+        w.elapse(400);
+        // Like the recognizer: a segment's partials replace each other, so
+        // with no new segment the answer would arrive inside the question's.
+        w.say(
+          w.speech.segment == asked
+              ? 'Have you ever lied? No, never.'
+              : 'No, never.',
+        );
+        w.elapse(1500);
+        w.talk(false);
+        w.elapse(1000);
+        expect(w.game.live.askerText, 'Have you ever lied?');
+        w.game.doneAsking();
+        expect(w.game.live.answerText, 'No, never.');
+        w.elapse(500);
+        w.game.finalAnswer();
+        w.until(() => w.game.phase == GamePhase.callIt);
+        expect(w.game.currentResult!.question, 'Have you ever lied?');
+        expect(w.game.currentResult!.answer, 'No, never.');
+        w.dispose();
+      });
+    });
+
+    test('a reaction the asker talks over stays in the question', () {
+      fakeAsync((async) {
+        final w = World(async);
+        w.startGame(['Sam', 'Alex'], questions: 1);
+        w.calibrate();
+        w.elapse(300);
+        w.say('Have you ever');
+        w.elapse(300);
+        w.talk(true);
+        w.elapse(500);
+        w.talk(false);
+        w.elapse(1500);
+        // The asker carries on; whichever segment it lands in, it's theirs.
+        w.say('Have you ever lied to me?');
+        w.elapse(1000);
+        w.game.doneAsking();
+        w.elapse(800);
+        w.talk(true);
+        w.elapse(300);
+        w.say('Nope.');
+        w.elapse(1500);
+        w.talk(false);
+        w.game.finalAnswer();
+        w.until(() => w.game.phase == GamePhase.callIt);
+        expect(
+          w.game.currentResult!.question,
+          endsWith('Have you ever lied to me?'),
+        );
+        expect(w.game.currentResult!.answer, 'Nope.');
+        w.dispose();
+      });
+    });
+
+    test('a warm-up answered only after a minute counts as unanswered '
+        '(PR #18 review)', () {
+      fakeAsync((async) {
+        final w = World(async)
+          ..autoAnswerWarmups = false
+          ..autoTaps = false;
+        w.startGame(['Sam', 'Alex']);
+        w.game.agreeToMeasure();
+        w.until(() => w.game.calibStage == CalibStage.chat, what: 'chat');
+        final first = w.game.currentWarmup!;
+        w.elapse(3 * 60000);
+        w.talk(true);
+        w.elapse(2000);
+        w.talk(false);
+        w.elapse(1000);
+        w.game.nextWarmup();
+        expect(first.latencyS, isNull, reason: 'too late to be its answer');
+        expect(first.timingUntil(w.now), isNull, reason: 'no window at all');
+        w.dispose();
+      });
+    });
+
     test('Pause just after a short trip, while the camera restarts: Resume '
         'still starts the ticker', () {
       fakeAsync((async) {

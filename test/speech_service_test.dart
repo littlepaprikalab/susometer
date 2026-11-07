@@ -84,5 +84,23 @@ void main() {
       expect(b.text, '');
       expect(b.lastUpdateMs, isNull);
     });
+
+    test('an early answer: the text before a segment, and moving the rest', () {
+      final asker = TranscriptBuffer()
+        ..add(text('Have you ever lied?', 1, at: 1))
+        ..add(text('No, never.', 2, at: 2))
+        ..add(text('Honest.', 3, at: 3));
+      expect(asker.textBefore(2), 'Have you ever lied?');
+      final answer = TranscriptBuffer();
+      asker.moveFrom(2, answer);
+      expect(asker.text, 'Have you ever lied?');
+      expect(asker.latestSegment, 'Have you ever lied?');
+      expect(answer.text, 'No, never. Honest.');
+      expect(answer.latestSegment, 'Honest.');
+      expect(answer.lastUpdateMs, 3);
+      // Nothing from there on: nothing moves.
+      asker.moveFrom(9, answer);
+      expect(answer.text, 'No, never. Honest.');
+    });
   });
 }
