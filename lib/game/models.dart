@@ -152,8 +152,9 @@ class QuestionTiming {
   final int? tA0;
   final int tA1;
 
-  /// Where hesitation is measured from: tQ1, or the end of the host's
-  /// "{name}, your answer?" prompt when the question ended on silence.
+  /// Where hesitation is measured from: tQ1 for a question (the asker's
+  /// last words in party mode, the end of the host's reading in solo), the
+  /// end of the host's reading for a warm-up.
   final int hesitationFromMs;
 
   /// The window never runs past this (ms), if set: a warm-up's window ends

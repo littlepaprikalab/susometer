@@ -163,6 +163,7 @@ void main() {
     await checkScreen(tester, 'answer-solo');
     for (var q = 0; q < 3; q++) {
       await rig.until(() => rig.game.phase == GamePhase.answer);
+      if (q > 0) await rig.tap('Ready to answer');
       rig.presage.talk(true);
       await rig.wait(1500);
       rig.presage.talk(false);
@@ -327,7 +328,7 @@ void main() {
         what: 'first warm-up',
       );
       final first = rig.game.currentWarmup!;
-      await rig.tap("Doesn't apply? Next one");
+      await rig.tap("Doesn't apply");
       expect(first.skipped, isTrue);
       await rig.until(() => rig.game.phase == GamePhase.ask);
       expect(find.textContaining('tQ0'), findsOneWidget);
@@ -875,9 +876,9 @@ void main() {
     expect(rig.game.phase, GamePhase.consent, reason: 'consent is deliberate');
     await rig.tap('I agree, measure me');
     await rig.until(() => rig.game.phase == GamePhase.ask);
-    // "Tap when done asking" → "Final answer" must not end the answer
+    // "Done asking" → "Final answer" must not end the answer
     // before it starts.
-    await quickSecondTap('Tap when done asking', 'Final answer');
+    await quickSecondTap('Done asking', 'Final answer');
     expect(rig.game.phase, GamePhase.answer);
     await rig.wait(500);
     await rig.tap('Final answer');

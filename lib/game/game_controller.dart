@@ -42,7 +42,9 @@ enum GamePhase {
 
 enum StartBlock { needPlayers, needKey }
 
-enum CalibStage { starting, quiet, chat, done }
+/// Calibration steps. [ready]: the player's normal is locked in and the
+/// screen waits for "Start the questions" (SPEC.md decision 76).
+enum CalibStage { starting, quiet, chat, ready, done }
 
 /// One warm-up during calibration.
 class Warmup {
@@ -57,7 +59,8 @@ class Warmup {
   int askedAtMs;
   double? latencyS;
 
-  /// When the answer ended (or the warm-up was skipped or timed out).
+  /// When the answer ended (or the warm-up was skipped, or Next was tapped
+  /// without an answer being seen).
   int? doneAtMs;
   bool done = false;
   bool skipped = false;
@@ -441,7 +444,7 @@ class GameController extends ChangeNotifier {
     }
   }
 
-  /// E2 "Play without voice": no transcripts, tap-to-advance (SPEC.md §7).
+  /// E2 "Play without voice": no transcripts (SPEC.md §7).
   void playWithoutVoice() {
     if (phase != GamePhase.permissions) return;
     if (!(permissions?.cameraOk ?? false)) return;
@@ -468,7 +471,7 @@ class GameController extends ChangeNotifier {
     awards = null;
     _clearPause();
     _voiceLostMidTurn = false;
-    notice = micEnabled ? null : 'Playing without voice: tap to move on.';
+    notice = micEnabled ? null : 'Playing without voice: no transcripts.';
     unawaited(device.setKeepAwake(true));
     _setPhase(hasSeenHowToPlay ? GamePhase.consent : GamePhase.howToPlay);
   }
@@ -520,7 +523,7 @@ class GameController extends ChangeNotifier {
   int get warmupsDone => warmups.where((w) => w.done).length;
 
   /// Warm-up slots covered so far (SPEC.md §11, decision 74). A slot is
-  /// covered once its warm-up is answered or times out. A skip gets one
+  /// covered once Next is tapped on its warm-up. A skip gets one
   /// replacement from the same slot; a second skip in a row moves on, so a
   /// player who skips everything still gets through calibration.
   int get warmupSlotsDone {
@@ -544,7 +547,9 @@ class GameController extends ChangeNotifier {
   int get stillBlocks {
     final start = quietStartMs;
     if (start == null) return 0;
-    if (calibStage == CalibStage.chat || calibStage == CalibStage.done) {
+    if (calibStage == CalibStage.chat ||
+        calibStage == CalibStage.ready ||
+        calibStage == CalibStage.done) {
       return 4;
     }
     final step = config.calibQuietMs / 4;
@@ -678,15 +683,15 @@ class GameController extends ChangeNotifier {
     _voiceLostMidTurn =
         code == 'RECOGNIZER_FAILING' || code == 'AUDIO_RESTART_FAILED';
     notice = code == 'ON_DEVICE_UNAVAILABLE'
-        ? "On-device speech isn't available, so it's tap-to-advance now."
+        ? "On-device speech isn't available, so there are no transcripts now."
         : _voiceLostMidTurn
-        ? 'Voice recognition stopped, so it\'s tap-to-advance for this turn.'
-        : 'Voice recognition stopped, so it\'s tap-to-advance now.';
+        ? 'Voice recognition stopped, so no transcripts for this turn.'
+        : 'Voice recognition stopped, so there are no transcripts now.';
     unawaited(speech.stop().catchError((Object _) {}));
     notifyListeners();
   }
 
-  /// "Doesn't apply? Next one".
+  /// "Doesn't apply": another warm-up of the same kind instead.
   void skipWarmup() {
     if (phase != GamePhase.calibrate) return;
     final w = currentWarmup;
@@ -696,6 +701,31 @@ class GameController extends ChangeNotifier {
       ..skipped = true
       ..doneAtMs = nowMs;
     _afterWarmup();
+  }
+
+  /// Warm-up "Next": the player has answered. Warm-ups never move on by
+  /// themselves (SPEC.md decision 76).
+  void nextWarmup() {
+    if (phase != GamePhase.calibrate || paused) return;
+    final w = currentWarmup;
+    if (w == null || !_once('nextWarmup')) return;
+    final lastEnd = _calibTalk.lastEndMs;
+    // The answer ended when the player stopped talking, not at the tap.
+    final answered =
+        w.latencyS != null && !_calibTalk.talking && lastEnd != null;
+    w
+      ..done = true
+      ..doneAtMs = answered ? lastEnd : nowMs;
+    _afterWarmup();
+  }
+
+  /// Calibrate "Start the questions", once the player's normal is locked in.
+  void startQuestions() {
+    if (phase != GamePhase.calibrate || calibStage != CalibStage.ready) return;
+    // A double tap on the last Next lands here: don't let it skip the wait.
+    if (paused || nowMs - _readyAtMs < 600) return;
+    if (!_once('startQuestions')) return;
+    _finishCalibration();
   }
 
   final TalkTracker _calibTalk = TalkTracker(const TurnConfig());
@@ -725,35 +755,15 @@ class GameController extends ChangeNotifier {
     for (final (talking, t) in _calibTalk.settle(now)) {
       _onCalibTalk(talking, t);
     }
-    final w = currentWarmup;
-    if (w != null) {
-      final lastEnd = _calibTalk.lastEndMs;
-      final answered =
-          w.latencyS != null &&
-          !_calibTalk.talking &&
-          lastEnd != null &&
-          now - lastEnd >= 1500;
-      final limit = _calibTalk.talking
-          ? config.calibWarmupTalkingMs
-          : config.calibWarmupMs;
-      if (answered || now - w.askedAtMs >= limit) {
-        w
-          ..done = true
-          ..doneAtMs = answered ? lastEnd : now;
-        _afterWarmup();
-        // Finishing the last warm-up may have ended calibration already.
-        if (phase != GamePhase.calibrate) return;
-      }
-    }
 
     if (now - _lastBaselineCheck >= 500) {
       _lastBaselineCheck = now;
       _calibBaseline = _baselineAt(now);
       final valid = scoring.baselineValid(_calibBaseline);
       // Only between warm-ups: never while the host reads one or the player
-      // is answering it, or question 1 would start on top of it.
+      // is answering it.
       if (currentWarmup == null && _calibrationReady(now)) {
-        _finishCalibration();
+        _lockBaseline();
         return;
       }
       // The hint goes once the baseline is good, even while calibration
@@ -788,9 +798,12 @@ class GameController extends ChangeNotifier {
 
   void _afterWarmup() {
     if (phase != GamePhase.calibrate) return;
+    // Tapped while the host was still reading it: the next line mustn't
+    // queue behind it with the mic gated (SPEC.md decision 71).
+    unawaited(host.stopSpeaking().catchError((Object _) {}));
     _calibBaseline = _baselineAt(nowMs);
     if (_calibrationReady(nowMs)) {
-      _finishCalibration();
+      _lockBaseline();
       return;
     }
     // Keep chatting until the baseline is valid and the chat long enough
@@ -821,15 +834,29 @@ class GameController extends ChangeNotifier {
         now - chat >= config.calibMinChatMs;
   }
 
+  /// When the player's normal was locked in ([CalibStage.ready]).
+  int _readyAtMs = 0;
+
+  /// The player's normal is locked in. Calibration waits on "Start the
+  /// questions" (SPEC.md decision 76): the camera keeps running, but nothing
+  /// from here on goes into the baseline.
+  void _lockBaseline() {
+    if (phase != GamePhase.calibrate || calibStage != CalibStage.chat) return;
+    calibStage = CalibStage.ready;
+    _readyAtMs = nowMs;
+    calibIssue = null;
+    unawaited(_say("That's your normal locked in."));
+  }
+
   void _finishCalibration() {
-    if (phase != GamePhase.calibrate || calibStage == CalibStage.done) return;
+    if (phase != GamePhase.calibrate || calibStage != CalibStage.ready) return;
     calibStage = CalibStage.done;
     currentTurn.baseline = _calibBaseline;
     currentTurn
       ..warmupTimings = [
         for (var i = 0; i < warmups.length; i++)
           ?warmups[i].timingUntil(
-            i + 1 < warmups.length ? warmups[i + 1].startedAtMs : nowMs,
+            i + 1 < warmups.length ? warmups[i + 1].startedAtMs : _readyAtMs,
           ),
       ]
       ..warmupShapes = null;
@@ -859,15 +886,11 @@ class GameController extends ChangeNotifier {
   bool _soloReady = false;
 
   /// Solo: after the host reads the question, it stays on screen until the
-  /// player starts answering (talks or is heard) or taps "Ready to answer".
-  /// Only the screen waits: hesitation still counts from when the host
-  /// finished reading (SPEC.md §5.3).
+  /// player taps "Ready to answer" (SPEC.md decisions 58 and 76). Only the
+  /// screen waits: hesitation still counts from when the host finished
+  /// reading (SPEC.md §5.3).
   bool get soloHoldsQuestion =>
-      mode == GameMode.solo &&
-      phase == GamePhase.answer &&
-      !_soloReady &&
-      detector?.tA0 == null &&
-      live.answerText.isEmpty;
+      mode == GameMode.solo && phase == GamePhase.answer && !_soloReady;
 
   /// The phase the screen shows: Ask while solo holds the question.
   GamePhase get shownPhase => soloHoldsQuestion ? GamePhase.ask : phase;
@@ -877,6 +900,25 @@ class GameController extends ChangeNotifier {
       ? questionText
       : (live.askerText.isEmpty ? '' : live.askerText);
 
+  /// Party: who asks this question. The other players take turns, starting
+  /// with the one after the hot seat, so everyone gets to ask (SPEC.md
+  /// decision 76). The same question asked again keeps its asker. Null in
+  /// solo mode.
+  Player? get currentAsker {
+    if (mode != GameMode.party || turns.length < 2) return null;
+    final others = turns.length - 1;
+    final i = (playerIndex + 1 + questionIndex % others) % turns.length;
+    return turns[i].player;
+  }
+
+  /// The host's party prompt, naming who asks.
+  String get askLine {
+    final asker = currentAsker;
+    return asker == null
+        ? 'Ask your question!'
+        : '${asker.name}, ask your question!';
+  }
+
   void _beginQuestion({String? repeat}) {
     // Whatever the host was still saying (a verdict line, or the question
     // being re-asked after a camera restart or a skip) stops here, so the
@@ -884,7 +926,6 @@ class GameController extends ChangeNotifier {
     unawaited(host.stopSpeaking().catchError((Object _) {}));
     detector = TurnDetector(
       party: mode == GameMode.party,
-      micEnabled: micEnabled,
       startMs: nowMs,
       config: _turnConfig,
     );
@@ -901,7 +942,7 @@ class GameController extends ChangeNotifier {
         ? (repeat ?? _questions.next(questionIndex, questionsPerTurn))
         : '';
     _setPhase(GamePhase.ask);
-    if (mode == GameMode.party) unawaited(_say('Ask your question!'));
+    if (mode == GameMode.party) unawaited(_say(askLine));
     if (micEnabled) {
       unawaited(
         speech
@@ -946,11 +987,12 @@ class GameController extends ChangeNotifier {
       _apply(detector?.onDoneAskingTap(nowMs) ?? const []);
     } else if (soloHoldsQuestion) {
       _soloReady = true;
+      detector?.onReadyTap(nowMs);
       notifyListeners();
     }
   }
 
-  /// "Too loud? Tap when done asking" / "Done asking".
+  /// "Done asking".
   void doneAsking() {
     if (phase != GamePhase.ask) return;
     _apply(detector?.onDoneAskingTap(nowMs) ?? const []);
@@ -963,18 +1005,6 @@ class GameController extends ChangeNotifier {
   }
 
   void _apply(List<TurnEvent> events) {
-    final held = soloHoldsQuestion;
-    _applyEvents(events);
-    _redrawIfReleased(held);
-  }
-
-  /// The answer card shows as soon as the player starts, not on the next
-  /// tick.
-  void _redrawIfReleased(bool wasHeld) {
-    if (wasHeld && !soloHoldsQuestion) notifyListeners();
-  }
-
-  void _applyEvents(List<TurnEvent> events) {
     for (final e in events) {
       switch (e) {
         case QuestionEnded():
@@ -998,13 +1028,6 @@ class GameController extends ChangeNotifier {
             .newSegment()
             .then((seg) => _answerFromSeg = seg)
             .catchError((Object _) => null),
-      );
-    }
-    if (e.hostShouldPrompt) {
-      unawaited(
-        _say('${currentPlayer.name}, your answer?').then((_) {
-          detector?.onHostPromptFinished(nowMs);
-        }),
       );
     }
   }
@@ -1148,6 +1171,9 @@ class GameController extends ChangeNotifier {
       ),
     );
     final restart = _needsRestart;
+    // It's over: a Final answer tapped while the camera restarts mustn't
+    // score it too.
+    detector = null;
     _clearPause();
     if (restart && !isLastQuestion) {
       // Skipped from the Pause sheet after the app was away: the next
@@ -1164,9 +1190,9 @@ class GameController extends ChangeNotifier {
   // ---------------------------------------------------------------------------
   // Call it! (room vote, SPEC.md §5.6)
 
+  /// Votes so far. Call it! waits for Reveal, however long the room argues
+  /// (SPEC.md decision 76).
   final Map<String, Vote> pendingVotes = {};
-  int callItDeadlineMs = 0;
-  static const callItTimeoutMs = 10000;
 
   /// Everyone except the hot seat.
   List<Player> get voters => [
@@ -1176,7 +1202,6 @@ class GameController extends ChangeNotifier {
 
   void _beginCallIt() {
     pendingVotes.clear();
-    callItDeadlineMs = nowMs + callItTimeoutMs;
     _setPhase(GamePhase.callIt);
     unawaited(_say('Call it! Legit or sus?'));
   }
@@ -1398,19 +1423,22 @@ class GameController extends ChangeNotifier {
     }
     sdkError = null;
     _recoveries = 0;
+    // Nothing left to ask: no camera needed.
+    if (currentTurn.results.length >= questionsPerTurn) {
+      await _endTurn();
+      return;
+    }
     final e = _epoch;
     if (!await _startSdk(fromOffline: true) || e != _epoch) return;
     _lastSampleMs = nowMs;
     live.sample = null;
+    // Leave E5 as soon as the camera is back, so it never runs behind E5
+    // while the mic starts. The new question is set up before the ticker,
+    // so a tick can't move the old one on.
+    questionIndex = currentTurn.results.length;
+    _beginQuestion(repeat: mode == GameMode.solo ? questionText : null);
     _startTicker();
     await _startListening();
-    if (e != _epoch) return;
-    if (currentTurn.results.length >= questionsPerTurn) {
-      await _endTurn();
-    } else {
-      questionIndex = currentTurn.results.length;
-      _beginQuestion(repeat: mode == GameMode.solo ? questionText : null);
-    }
   }
 
   /// E5 "Back to lobby" and the consent back button.
@@ -1500,9 +1528,16 @@ class GameController extends ChangeNotifier {
     if (!paused) return;
     final restart = _needsRestart;
     final pausedFor = nowMs - _pausedAtMs;
+    // The interrupted question starts over: while the camera restarts, its
+    // window is broken, so a tap on it mustn't end or score it.
+    if (restart &&
+        (phase == GamePhase.ask ||
+            phase == GamePhase.answer ||
+            phase == GamePhase.settle)) {
+      detector = null;
+    }
     _clearPause();
-    // The room's vote and the drumroll get back the time they lost.
-    if (phase == GamePhase.callIt) callItDeadlineMs += pausedFor;
+    // The drumroll gets back the time it lost.
     if (phase == GamePhase.countdown) _countdownNextAt += pausedFor;
     notifyListeners();
     if (restart) {
@@ -1518,6 +1553,11 @@ class GameController extends ChangeNotifier {
         phase == GamePhase.settle) {
       _beginQuestion(repeat: mode == GameMode.solo ? questionText : null);
     }
+    // A restart after a short trip gives up if Pause comes first, with the
+    // camera back but not the ticker. Start it here, after the question is
+    // set up again, or nothing would close the settle window or watch the
+    // camera.
+    if (_sdkShouldRun && !paused && _ticker == null) _startTicker();
   }
 
   /// Starts the camera, the mic and then the ticker again after the app was
@@ -1695,8 +1735,8 @@ class GameController extends ChangeNotifier {
       case SpeechStateChange():
         break;
       case SpeechError():
-        // Each of these leaves the mic dead: say so and go tap-to-advance
-        // rather than wait out the 20 s no-answer timeout on every question.
+        // Each of these leaves the mic dead: say so, and stop expecting
+        // transcripts.
         // Outside a turn the mic belongs to someone else (Settings' signal
         // check), so leave it alone.
         // While the app is away the mic is being shut down on purpose, and
@@ -1722,7 +1762,6 @@ class GameController extends ChangeNotifier {
     }
     final askerFrom = _askerFromSeg;
     if (askerFrom != null && e.segment < askerFrom) return;
-    final held = soloHoldsQuestion;
     final answerFrom = _answerFromSeg;
     // Text from before the answer's segment is the tail of the question.
     // In solo mode there's no human asker: early speech is the answer.
@@ -1739,15 +1778,14 @@ class GameController extends ChangeNotifier {
       live.answerText = _answerTranscript.text;
     }
     if (!paused) _apply(detector?.onSpeech(e.tMs) ?? const []);
-    _redrawIfReleased(held);
     live.notify();
   }
 
   // ---------------------------------------------------------------------------
   // Ticker (~10 Hz while a turn runs) and self-healing
 
-  /// Whether the ticker runs. Everything that moves a turn on (timeouts,
-  /// the watchdog, Call it!, the countdown) runs on it.
+  /// Whether the ticker runs. Everything timed in a turn (calibration, the
+  /// settle window, the watchdog, the countdown) runs on it.
   @visibleForTesting
   bool get tickerRunning => _ticker != null;
 
@@ -1768,7 +1806,8 @@ class GameController extends ChangeNotifier {
       case GamePhase.calibrate:
         _tickCalibration(now);
       case GamePhase.ask:
-        // Host voice off: the question "ends" after a rough reading time.
+        // Host voice off: the solo question "ends" after a rough reading
+        // time. Only the measurement moves on; the card stays up.
         if (mode == GameMode.solo &&
             !settings.hostVoice &&
             now >= _soloReadEndsAt) {
@@ -1782,8 +1821,6 @@ class GameController extends ChangeNotifier {
       case GamePhase.settle:
         _tickSettle(now);
         notifyListeners();
-      case GamePhase.callIt:
-        if (now >= callItDeadlineMs) reveal();
       case GamePhase.countdown:
         _tickCountdown(now);
       default:

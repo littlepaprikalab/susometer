@@ -95,8 +95,12 @@ void abuse(
     (fw(4, 10), () => g.agreeToMeasure()),
     (fw(2, 1), () => g.skipTurn()),
     (fw(2, 1), g.skipWarmup),
+    (fw(3, 8), g.nextWarmup),
+    (fw(3, 8), g.startQuestions),
     (fw(4, 12), g.doneAsking),
-    (fw(4, 12), g.finalAnswer),
+    // Nothing ends by itself (decision 76), so the biased player taps
+    // Final answer and Reveal more often than the timers used to fire.
+    (fw(4, 18), g.finalAnswer),
     (fw(2, 1), g.differentQuestion),
     (fw(2, 4), g.readyToAnswer),
     (
@@ -108,7 +112,7 @@ void abuse(
         }
       },
     ),
-    (fw(3, 8), g.reveal),
+    (fw(3, 20), g.reveal),
     (fw(4, 14), () => g.nextQuestion()),
     (fw(2, 2), () => g.endTurn()),
     (fw(2, 1), () => g.skipQuestion()),
@@ -142,6 +146,9 @@ void abuse(
             expect(w.host.said.length, said, reason: 'host spoke while away');
           },
         );
+        // Time away isn't a stall: the turn was paused, and the clock for
+        // getting the ticker back starts on return.
+        _stalledSince[w] = null;
       },
     ),
     // Native starts that take a while, so trips land while they run.

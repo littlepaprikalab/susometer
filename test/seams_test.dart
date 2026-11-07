@@ -91,10 +91,12 @@ void main() {
     });
   });
 
-  test('a long warm-up answer is not cut off; a stuck talking flag still '
-      'moves on', () {
+  test('a warm-up waits for Next: a long answer is never cut off, a stuck '
+      'talking flag never moves it on', () {
     fakeAsync((async) {
-      final w = World(async)..autoAnswerWarmups = false;
+      final w = World(async)
+        ..autoAnswerWarmups = false
+        ..autoTaps = false;
       w.startGame(['Sam', 'Alex']);
       w.game.agreeToMeasure();
       w.until(
@@ -102,32 +104,40 @@ void main() {
         what: 'the chat phase',
       );
 
-      // Warm-up 1: talks for 16 s, well past the 12 s limit.
+      // Warm-up 1: talks for 16 s, then a long silence.
       final first = w.game.currentWarmup!;
       w.elapse(800);
       w.talk(true);
       w.elapse(16000);
-      expect(first.done, isFalse, reason: 'still talking at 16.8 s');
       w.talk(false);
-      w.until(() => first.done, maxMs: 3000, what: 'warm-up 1 to end');
+      final quiet = w.now;
+      w.elapse(30000);
+      expect(first.done, isFalse, reason: 'nothing moves on by itself');
+      w.game.nextWarmup();
+      expect(first.done, isTrue);
       expect(first.latencyS, closeTo(0.8, 0.3));
+      expect(first.doneAtMs, quiet, reason: 'it ended when the talk did');
       expect(
         first.timingUntil(w.now)!.tA1 - first.askedAtMs,
         greaterThan(16000),
         reason: 'its window covers the whole answer',
       );
 
-      // Warm-up 2: the talking flag sticks on; it moves on at 25 s anyway.
+      // Warm-up 2: the talking flag sticks on; still there a minute later.
       final second = w.game.currentWarmup!;
       expect(identical(second, first), isFalse);
       w.elapse(800);
       w.talk(true);
-      w.until(() => second.done, maxMs: 26000, what: 'warm-up 2 to end');
-      expect(w.now - second.askedAtMs, inInclusiveRange(25000, 25500));
+      w.elapse(60000);
+      expect(second.done, isFalse);
+      w.game.nextWarmup();
+      expect(second.doneAtMs, w.now, reason: 'still talking: at the tap');
       w.talk(false);
 
       // And calibration still finishes (a third warm-up, answered).
-      w.autoAnswerWarmups = true;
+      w
+        ..autoAnswerWarmups = true
+        ..autoTaps = true;
       w.until(
         () => w.game.phase == GamePhase.ask,
         what: 'calibration to finish',

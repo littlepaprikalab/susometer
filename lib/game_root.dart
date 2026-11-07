@@ -23,7 +23,7 @@ class GameRoot extends StatefulWidget {
 
 /// After any phase change, taps are ignored this long: the second tap of a
 /// double tap would otherwise land on whatever the new phase put in the same
-/// spot ("Tap when done asking" → "Final answer", "Got it" → "I agree").
+/// spot ("Done asking" → "Final answer", "Got it" → "I agree").
 const phaseTapGuard = Duration(milliseconds: 450);
 
 /// The guard's [IgnorePointer], so tests can wait it out.

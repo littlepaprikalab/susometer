@@ -5,7 +5,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:susometer/game/game_controller.dart';
 import 'package:susometer/presage/presage_models.dart';
 import 'package:susometer/voice/speech_service.dart';
-import 'package:susometer/voice/turn_detector.dart';
 
 import 'rig.dart';
 
@@ -51,14 +50,14 @@ void main() {
     await rig.until(() => rig.game.phase == GamePhase.ask, what: 'calibration');
 
     for (var q = 0; q < 3; q++) {
-      expect(find.text('Ask your question!'), findsOneWidget);
+      expect(find.text('Alex, ask your question!'), findsOneWidget);
       rig.say('Have you ever told a fib number ${q + 1}?');
       await rig.wait(300);
       expect(
         find.text('Have you ever told a fib number ${q + 1}?'),
         findsOneWidget,
       );
-      await rig.tap('Tap when done asking');
+      await rig.tap('Done asking');
       expect(find.text('Sam, your answer?'), findsOneWidget);
       rig.presage.talk(true);
       await rig.wait(400);
@@ -144,7 +143,7 @@ void main() {
     expect(find.text('Paused'), findsOneWidget);
     await rig.tap('Resume');
     await rig.wait(300);
-    expect(find.text('Ask your question!'), findsOneWidget);
+    expect(find.text('Alex, ask your question!'), findsOneWidget);
     await rig.finish();
   });
 
@@ -232,6 +231,7 @@ void main() {
     expect(find.text('Skip my turn'), findsOneWidget);
     await rig.tap('Resume');
     await rig.until(() => rig.game.phase == GamePhase.answer);
+    await rig.tap('Ready to answer');
     rig.presage.talk(true);
     await rig.wait(1500);
     rig.presage.talk(false);
@@ -321,9 +321,11 @@ void main() {
     await rig.finish();
   });
 
-  testWidgets('automatic mode: backup copy from the mocks', (tester) async {
-    final rig = Rig(tester);
-    await rig.pumpApp(turnConfig: const TurnConfig());
+  testWidgets('nothing on screen moves on by itself (decision 76)', (
+    tester,
+  ) async {
+    final rig = Rig(tester)..autoTaps = false;
+    await rig.pumpApp();
     rig.presage.storedKey = 'k';
     rig.game.hasSeenHowToPlay = true;
     await rig.addPlayer('Sam');
@@ -331,16 +333,72 @@ void main() {
     await rig.tap('Start the show');
     await rig.wait(300);
     await rig.tap('I agree, measure me');
-    await rig.until(() => rig.game.phase == GamePhase.ask);
-    expect(find.text('Too loud? Tap when done asking'), findsOneWidget);
+    await rig.until(
+      () => rig.game.calibStage == CalibStage.chat,
+      what: 'warm-ups',
+    );
+
+    // Each warm-up waits for Next, then the questions wait for Start.
+    expect(find.text('Answer out loud, then tap Next.'), findsOneWidget);
+    for (var i = 0; i < 3; i++) {
+      final warmup = rig.game.currentWarmup!;
+      await rig.until(
+        () => warmup.latencyS != null && !rig.presage.talking,
+        what: 'warm-up ${i + 1} answered',
+      );
+      await rig.wait(5000);
+      expect(identical(rig.game.currentWarmup, warmup), isTrue);
+      await rig.tap('Next');
+      await rig.wait(700);
+    }
+    await rig.until(
+      () => rig.game.calibStage == CalibStage.ready,
+      what: 'the normal locked in',
+    );
+    expect(find.text('Start the questions'), findsOneWidget);
+    expect(find.text("That's your normal locked in."), findsOneWidget);
+    await rig.wait(10000);
+    expect(rig.game.phase, GamePhase.calibrate);
+    await rig.tap('Start the questions');
+    await rig.wait(300);
+
+    // Ask: the host names the asker; a pause or a laugh moves nothing.
+    expect(rig.game.phase, GamePhase.ask);
+    expect(find.text('Alex, ask your question!'), findsOneWidget);
+    expect(find.text('Sam: tap Done asking, then answer.'), findsOneWidget);
+    expect(find.text('Too loud? Tap when done asking'), findsNothing);
+    rig.say('Have you ever');
+    await rig.wait(500);
+    rig.presage.talk(true);
+    await rig.wait(600);
+    rig.presage.talk(false);
+    await rig.wait(1500);
+    rig.say('Have you ever lied?');
+    await rig.wait(5000);
+    expect(rig.game.phase, GamePhase.ask);
+    await rig.tap('Done asking');
+    expect(find.text('Q: “Have you ever lied?”'), findsOneWidget);
+    expect(find.text("Tap when you're done"), findsOneWidget);
+
+    // Answer: a long silence gets a nudge, not an ending.
+    await rig.wait(21000);
+    expect(rig.game.phase, GamePhase.answer);
     expect(
-      find.text("Sam: just start answering when you're ready."),
+      find.text('No answer? Tap anyway, or Pause to skip'),
       findsOneWidget,
     );
-    rig.say('Have you ever lied?');
-    await rig.until(() => rig.game.phase == GamePhase.answer, maxMs: 4000);
-    expect(find.text('Or it ends itself after 4s of silence'), findsOneWidget);
-    expect(find.text('Q: “Have you ever lied?”'), findsOneWidget);
+    await rig.tap('Final answer');
+    await rig.until(() => rig.game.phase == GamePhase.callIt);
+
+    // Call it!: no countdown to the reveal.
+    expect(find.text('0 / 1 voted'), findsOneWidget);
+    expect(find.textContaining('Reveal in'), findsNothing);
+    await rig.wait(15000);
+    expect(rig.game.phase, GamePhase.callIt);
+    await rig.tap('Tap to vote');
+    expect(find.text('1 / 1 voted'), findsOneWidget);
+    await rig.tap('Reveal');
+    expect(rig.game.phase, GamePhase.countdown);
     await rig.finish();
   });
 }

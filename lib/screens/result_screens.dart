@@ -25,10 +25,8 @@ class CallItScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final game = GameScope.of(context);
-    final left = ((game.callItDeadlineMs - game.nowMs) / 1000).ceil().clamp(
-      0,
-      10,
-    );
+    // No timer: the reveal waits for the tap (SPEC.md decision 76).
+    final voted = game.pendingVotes.length;
     return ScreenFrame(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -42,7 +40,10 @@ class CallItScreen extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 8),
-              Text('Reveal in ${left}s', style: SusText.display(16)),
+              Text(
+                '$voted / ${game.voters.length} voted',
+                style: SusText.display(16),
+              ),
             ],
           ),
           const SizedBox(height: 14),

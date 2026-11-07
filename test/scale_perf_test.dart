@@ -187,7 +187,8 @@ void main() {
           expect(w.game.soloHoldsQuestion, isTrue, reason: '$at starts held');
           final tQ1 = w.game.detector!.tQ1;
           w.elapse(1000);
-          // Every way out of the hold: the button, the camera, the mic.
+          // Only the button releases the hold, before or after the camera
+          // and the mic hear an answer (decision 76).
           switch ((p * 7 + q) % 3) {
             case 0:
               w.game.readyToAnswer();
@@ -199,6 +200,10 @@ void main() {
               w.talk(true);
           }
           w.elapse(300);
+          if ((p * 7 + q) % 3 != 0) {
+            expect(w.game.soloHoldsQuestion, isTrue, reason: '$at held');
+            w.game.readyToAnswer();
+          }
           expect(w.game.soloHoldsQuestion, isFalse, reason: at);
           expect(w.game.shownPhase, GamePhase.answer, reason: at);
           expect(w.game.detector!.tQ1, tQ1, reason: '$at timing unchanged');

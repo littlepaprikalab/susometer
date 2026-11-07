@@ -34,8 +34,6 @@ class ScoringConfig {
     this.calibMinWarmups = 3,
     this.calibMinChatMs = 15000,
     this.calibMaxWarmups = 3,
-    this.calibWarmupMs = 12000,
-    this.calibWarmupTalkingMs = 25000,
     this.calibMinConfidentPulseMs = 12000,
     this.calibMinFaceFraction = 0.8,
     this.calibHintAfterMs = 45000,
@@ -155,8 +153,8 @@ class ScoringConfig {
   final int calibQuietMs;
 
   /// Warm-up slots to cover before calibration can end: recall, compare
-  /// and light (SPEC.md §11, decision 74). A slot is covered by an answer,
-  /// a time-out, or two skips in a row.
+  /// and light (SPEC.md §11, decision 74). A slot is covered by Next on its
+  /// warm-up, or two skips in a row.
   final int calibMinWarmups;
 
   /// Calibration chats through warm-ups for at least this long (one more
@@ -165,12 +163,6 @@ class ScoringConfig {
   /// sitting still); a shorter chat falls back to the whole calibration.
   final int calibMinChatMs;
   final int calibMaxWarmups;
-
-  /// A warm-up moves on this long after it's asked, unless the player is
-  /// still talking; then it waits up to [calibWarmupTalkingMs]. Warm-ups ask
-  /// for a sentence, so they can be compared with real answers.
-  final int calibWarmupMs;
-  final int calibWarmupTalkingMs;
   final int calibMinConfidentPulseMs;
   final double calibMinFaceFraction;
 
