@@ -359,34 +359,28 @@ final class SpeechBridge {
     }
   }
 
-  /// Best English voice the app can use: premium, then enhanced, then
-  /// standard. iOS only ships the standard ("compact") voices. Enhanced and
-  /// premium ones show up here once the user downloads one in Settings >
-  /// Accessibility > Spoken Content > Voices > English.
-  ///
-  /// Novelty, personal and legacy voices (Albert, Bells, Zarvox, Fred,
-  /// Eloquence's Eddy or Rocko…) are skipped. They're English and the same
-  /// "default" quality as Samantha, so without this filter a tie could land on
-  /// one of them, and they're the robotic ones. Ties go to the user's own
-  /// English variant, then en-US, then the voice iOS uses for that language.
+  /// The host's voice: the most natural British female voice installed, else
+  /// the best English voice (decisions 33 and 72; [HostVoice] has the rules).
   private static func hostVoice() -> AVSpeechSynthesisVoice? {
     let preferred = Locale.current.identifier.replacingOccurrences(of: "_", with: "-")
     let language = preferred.hasPrefix("en") ? preferred : "en-US"
     let systemDefault =
       AVSpeechSynthesisVoice(language: language) ?? AVSpeechSynthesisVoice(language: "en-US")
-    func rank(_ voice: AVSpeechSynthesisVoice) -> (Int, Int, Int) {
-      let place = voice.language == language ? 2 : (voice.language == "en-US" ? 1 : 0)
-      let isSystemDefault = voice.identifier == systemDefault?.identifier ? 1 : 0
-      return (voice.quality.rawValue, place, isSystemDefault)
+    let voices = AVSpeechSynthesisVoice.speechVoices()
+    let candidates = voices.map { voice in
+      HostVoice.Candidate(
+        identifier: voice.identifier,
+        language: voice.language,
+        quality: voice.quality.rawValue,
+        isFemale: voice.gender == .female,
+        isNoveltyOrPersonal: voice.voiceTraits.contains(.isNoveltyVoice)
+          || voice.voiceTraits.contains(.isPersonalVoice))
     }
-    let usable = AVSpeechSynthesisVoice.speechVoices().filter { voice in
-      voice.language.hasPrefix("en")
-        && !voice.voiceTraits.contains(.isNoveltyVoice)
-        && !voice.voiceTraits.contains(.isPersonalVoice)
-        && !voice.identifier.hasPrefix("com.apple.speech.synthesis.voice.")
-        && !voice.identifier.hasPrefix("com.apple.eloquence.")
-    }
-    return usable.max(by: { rank($0) < rank($1) }) ?? systemDefault
+    guard
+      let best = HostVoice.best(
+        candidates, userLanguage: language, systemDefault: systemDefault?.identifier)
+    else { return systemDefault }
+    return voices[best]
   }
 
   /// Plays `assets/sfx/<name>.wav` from the Flutter assets. Missing files are
@@ -751,6 +745,61 @@ final class PlayerDelegate: NSObject, AVAudioPlayerDelegate {
   func audioPlayerDecodeErrorDidOccur(_ player: AVAudioPlayer, error: Error?) {
     let id = ObjectIdentifier(player)
     Task { @MainActor [weak bridge] in bridge?.soundDone(id) }
+  }
+}
+
+/// Which installed voice the host speaks with (SPEC.md decisions 33 and 72).
+/// Pure, so tool/swift_typecheck/HostVoiceTests.swift can check it on Linux.
+///
+/// The host is a British woman: an en-GB female voice beats every other
+/// voice, whatever its quality. Then quality: premium, then enhanced, then
+/// standard. iOS only ships the standard ("compact") voices; enhanced and
+/// premium ones show up once the user downloads one in Settings >
+/// Accessibility > Spoken Content > Voices > English. Ties go to the user's
+/// own English variant, then en-US, then a Siri-derived voice (Martha, say,
+/// which sounds more natural than the older compact ones), then the voice iOS
+/// uses for that language. With no British female voice installed, this is
+/// the old choice: the best English voice.
+///
+/// Novelty, personal and legacy voices (Albert, Bells, Zarvox, Fred,
+/// Eloquence's Eddy, Flo or Shelley…) are never picked. They're English and
+/// the same "default" quality as Samantha, some are British and female, so
+/// without this filter a tie could land on one of them, and they're the
+/// robotic ones.
+enum HostVoice {
+  static let british = "en-GB"
+
+  /// What the choice looks at for one installed voice.
+  struct Candidate {
+    var identifier: String
+    var language: String
+    /// `AVSpeechSynthesisVoiceQuality.rawValue`: 1 default, 2 enhanced,
+    /// 3 premium.
+    var quality: Int
+    var isFemale: Bool
+    var isNoveltyOrPersonal = false
+  }
+
+  static func usable(_ voice: Candidate) -> Bool {
+    voice.language.hasPrefix("en")
+      && !voice.isNoveltyOrPersonal
+      && !voice.identifier.hasPrefix("com.apple.speech.synthesis.voice.")
+      && !voice.identifier.hasPrefix("com.apple.eloquence.")
+  }
+
+  /// Index in [voices] of the one to use, or nil if none is usable.
+  /// [userLanguage] is the user's English variant ("en-AU"), or "en-US".
+  static func best(_ voices: [Candidate], userLanguage: String, systemDefault: String?) -> Int? {
+    func rank(_ voice: Candidate) -> (Int, Int, Int, Int, Int) {
+      let britishFemale = voice.language == british && voice.isFemale ? 1 : 0
+      let place = voice.language == userLanguage ? 2 : (voice.language == "en-US" ? 1 : 0)
+      let siri = voice.identifier.lowercased().contains("siri") ? 1 : 0
+      let isSystemDefault = voice.identifier == systemDefault ? 1 : 0
+      return (britishFemale, voice.quality, place, siri, isSystemDefault)
+    }
+    return voices.indices
+      .filter { usable(voices[$0]) }
+      .max(by: { rank(voices[$0]) < rank(voices[$1]) })
   }
 }
 

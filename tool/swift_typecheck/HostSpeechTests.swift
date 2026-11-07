@@ -6,6 +6,8 @@
 // checks the two things that matter: the mic gate (`busy`) never stays shut
 // for good, and it never opens while a stopped utterance might still play.
 // Dart's reply to each `speak` must come back exactly once.
+//
+// main also runs HostVoiceTests.swift, the host's voice choice.
 
 import Foundation
 
@@ -41,11 +43,12 @@ struct HostSpeechTests {
     lostCallbacksOnEveryUtterance()
     identifiersStayUnique()
     longSessionDoesNotGrow()
-    if failures > 0 {
-      print("HostSpeech: \(failures) check(s) failed")
+    let voiceFailures = HostVoiceTests.run()
+    if failures + voiceFailures > 0 {
+      print("HostSpeech and HostVoice: \(failures + voiceFailures) check(s) failed")
       exit(1)
     }
-    print("HostSpeech: all checks passed")
+    print("HostSpeech and HostVoice: all checks passed")
   }
 
   /// speak → didFinish: gated while speaking, open after, one reply.

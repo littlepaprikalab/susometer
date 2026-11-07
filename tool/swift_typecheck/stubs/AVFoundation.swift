@@ -82,6 +82,7 @@ extension AVAudioSession.CategoryOptions {
 
 public enum AVSpeechBoundary: Int, Sendable { case immediate, word }
 public enum AVSpeechSynthesisVoiceQuality: Int, Sendable { case `default` = 1, enhanced, premium }
+public enum AVSpeechSynthesisVoiceGender: Int, Sendable { case unspecified, male, female }
 public let AVSpeechUtteranceDefaultSpeechRate: Float = 0.5
 
 open class AVSpeechSynthesisVoice: NSObject {
@@ -96,6 +97,7 @@ open class AVSpeechSynthesisVoice: NSObject {
   open var identifier: String { "" }
   open var language: String { "en-US" }
   open var quality: AVSpeechSynthesisVoiceQuality { .default }
+  open var gender: AVSpeechSynthesisVoiceGender { .unspecified }
   open var voiceTraits: Traits { [] }
 }
 
