@@ -1200,10 +1200,66 @@ void main() {
         for (final x in w.game.warmups)
           if (!x.skipped) x.question,
       ];
-      expect(asked.length, greaterThanOrEqualTo(2));
+      expect(
+        asked.length,
+        greaterThanOrEqualTo(3),
+        reason: 'the skip is not one of the three',
+      );
       expect(slot(WarmupSlot.recall), contains(asked[0]));
       expect(slot(WarmupSlot.compare), contains(asked[1]));
-      if (asked.length > 2) expect(slot(WarmupSlot.light), contains(asked[2]));
+      expect(slot(WarmupSlot.light), contains(asked[2]));
+      w.dispose();
+    });
+  });
+
+  test('two skips in a row move on to the next slot', () {
+    fakeAsync((async) {
+      final w = World(async);
+      w.startGame(['Sam', 'Alex']);
+      w.game.agreeToMeasure();
+      Set<String> slot(WarmupSlot s) => {
+        for (final d in DeckLibrary.fallback.warmup)
+          if (d.slot == s) d.text,
+      };
+      for (final expected in [WarmupSlot.recall, WarmupSlot.recall]) {
+        w.until(() => w.game.currentWarmup != null, what: 'a warm-up');
+        expect(slot(expected), contains(w.game.currentWarmup!.question));
+        expect(w.game.chatBlocks, 1, reason: 'a skip fills nothing');
+        expect(w.game.warmupNumber, 1);
+        w.game.skipWarmup();
+      }
+      w.until(() => w.game.currentWarmup != null, what: 'a warm-up');
+      expect(
+        slot(WarmupSlot.compare),
+        contains(w.game.currentWarmup!.question),
+      );
+      expect(w.game.chatBlocks, 3);
+      expect(w.game.warmupNumber, 2);
+      w.dispose();
+    });
+  });
+
+  test('calibration asks all three warm-up slots, even after 15 s of chat', () {
+    fakeAsync((async) {
+      final w = World(async);
+      w.startGame(['Sam', 'Alex']);
+      w.calibrate();
+      final asked = [
+        for (final x in w.game.warmups)
+          if (!x.skipped) x.question,
+      ];
+      expect(
+        asked.length,
+        greaterThanOrEqualTo(3),
+        reason: 'more only while the baseline is not clean yet',
+      );
+      for (final (i, s) in WarmupSlot.values.indexed) {
+        expect({
+          for (final d in DeckLibrary.fallback.warmup)
+            if (d.slot == s) d.text,
+        }, contains(asked[i]));
+      }
+      expect(w.game.chatBlocks, 6);
       w.dispose();
     });
   });

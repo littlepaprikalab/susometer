@@ -518,6 +518,26 @@ class GameController extends ChangeNotifier {
   Warmup? get currentWarmup =>
       warmups.isEmpty || warmups.last.done ? null : warmups.last;
   int get warmupsDone => warmups.where((w) => w.done).length;
+
+  /// Warm-up slots covered so far (SPEC.md §11, decision 74). A slot is
+  /// covered once its warm-up is answered or times out. A skip gets one
+  /// replacement from the same slot; a second skip in a row moves on, so a
+  /// player who skips everything still gets through calibration.
+  int get warmupSlotsDone {
+    var slots = 0;
+    var skips = 0;
+    for (final w in warmups) {
+      if (!w.done) continue;
+      if (w.skipped && ++skips < 2) continue;
+      slots++;
+      skips = 0;
+    }
+    return slots;
+  }
+
+  /// "Warm-up N of 3": the slot being asked, or the last one covered.
+  int get warmupNumber => (warmupSlotsDone + (currentWarmup == null ? 0 : 1))
+      .clamp(1, config.calibMaxWarmups);
   Baseline? get calibBaseline => _calibBaseline;
 
   /// Calibrate progress: 0–4 "sit still" blocks.
@@ -531,13 +551,13 @@ class GameController extends ChangeNotifier {
     return ((nowMs - start) / step).floor().clamp(0, 4);
   }
 
-  /// Calibrate progress: 0–6 "chat a bit" blocks (2 per warm-up).
+  /// Calibrate progress: 0–6 "chat a bit" blocks, 2 per covered slot and 1
+  /// for a warm-up being asked. A skip fills nothing until its slot is
+  /// covered.
   int get chatBlocks {
-    var n = 0;
-    for (final w in warmups.take(config.calibMaxWarmups)) {
-      n += w.done ? 2 : 1;
-    }
-    return n.clamp(0, config.calibMaxWarmups * 2);
+    final max = config.calibMaxWarmups;
+    final slots = warmupSlotsDone.clamp(0, max);
+    return slots * 2 + (currentWarmup != null && slots < max ? 1 : 0);
   }
 
   Future<void> _beginCalibration() async {
@@ -757,7 +777,7 @@ class GameController extends ChangeNotifier {
   Future<void> _askWarmup() async {
     // Same slots in the same order for everyone; a skip is replaced from
     // its own slot (SPEC.md §11).
-    final question = _warmups.next(warmups.where((w) => !w.skipped).length);
+    final question = _warmups.next(warmupSlotsDone);
     final w = Warmup(question, nowMs);
     warmups.add(w);
     notifyListeners();
@@ -795,7 +815,8 @@ class GameController extends ChangeNotifier {
   bool _calibrationReady(int now) {
     final chat = chatStartMs;
     return scoring.baselineValid(_calibBaseline) &&
-        warmupsDone >= config.calibMinWarmups &&
+        // Every slot covered (decision 74).
+        warmupSlotsDone >= config.calibMinWarmups &&
         chat != null &&
         now - chat >= config.calibMinChatMs;
   }
