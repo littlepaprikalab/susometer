@@ -56,7 +56,7 @@ Two screens are **not mocked**, so build them in the same style:
 ### Screen notes
 - **1 Lobby:** players list (2–8), add/remove, a **Party / Solo · host asks** switch, questions per turn (3 / 5 / 7, default 5), a deck choice (Mild / Spicy, default Mild), and "Start the show". The line "For fun only. Measures stress reactions, not truth." is always visible.
 - **2 Consent:** "Pass the phone to {name}". It lists what the camera reads and what happens to the data, then "I agree, measure me" or "Skip my turn". **Consent is collected per player, per game, from the person being measured.** In the lobby, a one-line note says that voices are transcribed on-device for everyone at the table.
-- **3 Calibrate:** two-part progress: **Sit still** (about 20 s quiet), then **Chat a bit** (2–3 warm-ups read by the host, answered out loud). Face and light chips, live BPM and waveform, a "Doesn't apply? Next one" button. It auto-advances once the baseline is valid (§5.2).
+- **3 Calibrate:** two-part progress: **Sit still** (about 20 s quiet), then **Chat a bit** (3 warm-ups read by the host, one of each slot in §11, answered out loud). Face and light chips, live BPM and waveform, a "Doesn't apply? Next one" button. It auto-advances once the baseline is valid (§5.2).
 - **4a Party:** the host says "Ask your question!" The asker's speech is transcribed live. The camera is visible with "Measuring" and live BPM. A hint reads "{name}: just start answering when you're ready." Backup button: "Too loud? Tap when done asking." Pause button.
 - **4a Solo:** the host reads a question from the selected deck, shown on a tomato card. A "Different question" button skips it. The card stays on screen after the host finishes, until the player starts answering or taps "Ready to answer" (see decision 58). Otherwise identical.
 - **4b:** the question is pinned, the host says "{name}, your answer?", and the answer is transcribed live under "Hot seat · talking" (or "· listening"). A hesitation chip shows "Took X.Xs to start answering". Live pulse and blink cards. A huge **Final answer** button covers most of the bottom area. It auto-ends after 4 s of silence.
@@ -107,7 +107,7 @@ Accessibility: touch targets ≥ 44 pt. Never put small text in tomato. Icons ar
 Lobby
  └─ start → [first game? HowToPlay] → for each player in order:
      Consent ──skip──▶ next player
-       └─ agree → Calibrate(quiet 20s → warm-ups x2–3) ──invalid──▶ stay / show E3 hints
+       └─ agree → Calibrate(quiet 20s → warm-ups x3)   ──invalid──▶ stay / show E3 hints
             └─ baseline valid → for q in 1..N:
                  Ask (party: listen to asker | solo: host reads deck question)
                    └─ question end detected (§7) → Answer
@@ -135,7 +135,7 @@ Breathing is collected but **not scored**, because talking hurts breathing accur
 
 ### 5.2 Baseline (per player, per game)
 - **Quiet phase (about 20 s):** collect pulse samples that pass the confidence check, and the blink rate.
-- **Chat phase (2–3 warm-ups):** collect the same, plus the expression probability mean, the talking blink rate and the answer latency for each warm-up.
+- **Chat phase (3 warm-ups, one per slot):** collect the same, plus the expression probability mean, the talking blink rate and the answer latency for each warm-up.
 - **Baseline is valid** when it has ≥ 12 s of confident pulse samples **and** the face is present ≥ 80% of the time. Otherwise, keep calibrating and show E3 hints.
 - Store: `basePulse` (median), `baseBlinkRate` (blinks/min while chatting, decision 65), `baseExprPeak[category]` (the warm-ups' peak, decision 65), `baseLatency` (median warm-up latency, default 1.0 s).
 
@@ -284,11 +284,26 @@ Long-press the logo (or tap it 5 times) to toggle a translucent overlay on every
 
 ## 11. Content: question decks (`assets/decks/*.json`)
 
-- **warmup.json (about 30):** neutral and easy for anyone to answer: "What did you have for breakfast?", "What's the weather like today?", "Name something you can see that's blue."
-- **mild.json (about 40):** "Have you ever re-gifted a present?", "Do you floss every day?", "Have you ever pretended to like a gift?"
-- **spicy.json (about 40):** **PG-13.** Awkward and funny, never sexual, cruel, or about health, relationships, money, crime or real third parties. "Have you ever read someone's texts?", "Do you actually like your boss?"
+Each entry is a plain string or an object with tags (decision 74). A plain string is heat 2, not a room question, and fits any warm-up slot.
 
-Shuffle without repeats within a game. Party mode uses the decks only for warm-ups. Solo mode uses the selected deck for the main questions.
+- **warmup.json (about 36):** neutral, quick to start answering, asking for a sentence, and fine for anyone, anywhere, at any time of day. Three slots, asked in this order to every player (`"slot"`):
+    - **recall:** something recent. "Tell me what you had for breakfast today."
+    - **compare:** a known-true answer in the real questions' format, with nothing at stake. "Have you ever been caught in the rain? Tell me what happened."
+    - **light:** an either/or with a reason. "Cats or dogs? Tell me why."
+
+  A skipped warm-up gets one replacement from the same slot; a second skip moves on to the next slot. Calibration ends only once every slot is covered (§5.2). No prompts with a pause built in (finding words, looking around the room, listening).
+- **mild.json (about 40):** the small fibs most people tell: "What's a gift you pretended to like?", "Be honest: do you floss every day?"
+- **spicy.json (about 40):** **PG-13.** Awkward and funny, never sexual, cruel, or about health, relationships, money, crime or named people. "Be honest: have you ever read someone's texts without asking?"
+- **Heat (main decks, `"heat": 1–3`):** 1 opens a turn, 3 ends it. A turn deals its first third at heat 1, the middle third at 2 and the last third at 3, and the last question is always 3: 3 questions go 1-2-3, 5 go 1-1-2-2-3, 7 go 1-1-1-2-2-3-3. Every player gets the same curve.
+- **Room questions (`"room": true`, heat 3 only):** about the player's own small fibs toward "someone in this room" or "someone here". Only dealt when other contestants are playing. They never name, rank or judge anyone, or ask the player to.
+- **Writing a question:**
+    - Easy to follow when heard once: hesitation counts from the end of the reading.
+    - Something most people have done but would rather not admit.
+    - A specific memory moves people more than a habit.
+    - A short follow-up ("Which one?", "What was it?") keeps the answer talking, like the warm-ups.
+    - Nothing gross: a disgusted face is a scored expression.
+
+Shuffle without repeats within a game; each heat and each slot has its own pile. Party mode uses the decks only for warm-ups. Solo mode uses the selected deck for the main questions.
 
 ---
 
@@ -567,3 +582,35 @@ Choices made once the real APIs were in hand. Where these differ from the sectio
         - *Seams:* Dart is unchanged. It sends only the text, and its speak timeout (2.5 s + 0.5 s a word, decision 34) leaves room for any voice at the default rate, plus a premium voice's first-line load. Hesitation counts from when the host finishes (`tQ1`, decision 36), so a voice's speed doesn't change scores. The half-duplex gate (decision 71) doesn't depend on the voice. A trip out of the app (decision 72) only marks the choice stale, so the next line reads the list once, as every line used to.
         - *Tests:* `HostVoiceTests.swift` adds voices with no gender (Martha and "Serena (Premium)" by name; an unknown British man, an Australian Kate and a Kate reported male are not), ties in either order and the 2,001-voice list. Each of five more deliberate bugs (no names, last-of-equals wins, any English counts, men count, the whole name compared) fails it. `test/contract_test.dart` pins the cache: the voice list is read in one place only, each line uses the kept voice, and both notifications mark it stale. Reading the list per line again fails it.
         - *Device only:* whether iOS reports a gender for each British voice, and how long a premium voice's first line takes to start.
+74. **Questions built for what moves people.** The decks were reviewed against research on stress and deception, and against how the score reads them.
+    - *Warm-ups (§11):* a baseline only helps if the warm-ups look like the real questions minus the stakes. Palena, Caso, Vrij and Orthey (2018) found a small-talk baseline didn't tell truth-tellers from liars, and a "comparable truth" baseline (same kind of question, known to be true) did better, though still imperfectly. No warm-up had the real questions' "Have you ever…?" format. Now every calibration asks in the same order: recall, compare (that format, with a known-true answer), then light. A skipped warm-up is replaced from its own slot (`WarmupDealer`), and a mid-turn recalibration starts again at recall.
+        - *Dropped:*
+            - Prompts with a pause built in: three animals starting with B, what you can hear, something round or blue in the room. `baseLatency` is the median of the warm-up latencies (with two warm-ups, the average), so one slow start muted a player's hesitation for the whole turn.
+            - "A word that makes you smile", the prompt behind decision 65's contempt reading.
+            - Prompts that fail in context: the weather at night, how you got here (for whoever lives there), coffee or tea (for kids).
+        - *Food:* from 10 of 30 to 6 of 36.
+    - *Main decks:* the stress response is biggest when people feel judged and can't control the situation (Dickerson and Kemeny, 2004). Solo, the only mode that uses these decks, has no vote and often no audience, so the questions have to bring the stakes. The aim is what polygraph comparison questions aim for: something most people have done but would rather not admit. People tell about one or two small social lies a day (DePaulo et al., 1996).
+        - *Cut:*
+            - Questions with nothing to admit: shower singing, the door that said pull, mismatched socks.
+            - Questions hard to follow when heard: "finished a book you pretended to have read", "pretended to laugh at your own joke falling flat".
+            - Near-duplicates across the decks: two peeks at the ending, four rehearsals, two typos.
+            - Gross-outs: food off the floor, a shirt worn unwashed. An honest "eww, no" makes a disgusted face, and disgust is a scored expression.
+            - Two that broke §11: "Do you actually like your boss?" is about a real person, and "bought something just because it was on sale" is about money.
+        - *Spicy is spicier:* the mild-level ones (googled yourself, menus in another language, autocorrect) moved to Mild.
+        - *Openers vary:* "Be honest:", "Right now…", "When did you last…", "What's a gift you pretended to like?". "Have you ever" now opens 60 of 82 questions (it was 72 of 80), since the body reacts less to what feels repeated.
+        - *Follow-ups:* about a third ask for one ("Which one?", "What was it?"), so an answer talks like the warm-ups did and isn't a bare "No."
+    - *Heat:* people remember an experience by its peak and its end (Kahneman et al., 1993), and the shuffle could end a turn on its mildest question. Each main question has a heat (`QuestionDealer`, `heatFor`). Every player gets the same curve, so Most sus and Best poker face compare like with like. An empty heat pile falls back to the nearest one, cooler first. A deck of plain strings is all heat 2 and plays as before.
+    - *Room questions:* 8 (2 Mild, 6 Spicy), all heat 3, dealt only when 2+ contestants are playing (`othersPresent`). They relax §11's old "no real third parties" rule: a room question is about the player's own small fib toward someone present and unnamed, never a judgment of anyone.
+    - *Every slot, every time:* calibration used to end after 2 finished warm-ups (decision 65), counting skips. So a player who talked for 15 s never got the light warm-up, and one who skipped recall could finish without the compare warm-up, the one the baseline most needs. Now it ends only once all 3 slots are covered (`calibMinWarmups`, `GameController.warmupSlotsDone`), on top of decision 65's ≥ 15 s of chat and a valid baseline. A slot is covered by an answer or a time-out. A skip gets one replacement from the same slot, and a second skip in a row moves on, so a player who skips everything still gets through (decision 63's all-skipped turn). A skip fills no progress block and doesn't advance "Warm-up N of 3". This adds about one warm-up (~10 s) for players who talk a lot. Found by an automated review on the PR. A first version that simply stopped counting skips never let an all-skipping player finish; the decision 63 test caught it.
+    - *One card, no repeat:* `PileDealer` never deals the same text twice in a row, even from a one-card pile, so *Different question* always changes the card.
+    - *Not changed:* scoring, timing, verdict bands, host lines, and party mode (friends ask their own questions).
+    - *Tests:* `test/decks_awards_test.dart`:
+        - The bundled decks: every warm-up has a slot with ≥ 10 per slot, and every main question has a heat with ≥ 8 per heat a player alone can get.
+        - Room questions are heat 3 only, and no question is in two decks.
+        - Parsing plain strings, tags, bad values and junk.
+        - The curve for 1, 3, 5 and 7 questions, the same for three players.
+        - Room questions held back for a player alone, and the fallbacks.
+        - Slot order and slot-less decks.
+
+      `test/game_controller_test.dart` runs a solo turn through the real controller (heat 1, 1, 2, 2, 3), a calibration whose skipped recall warm-up is replaced by another recall before compare and light, two skips in a row moving on to compare (the progress blocks and "Warm-up N of 3" unchanged by a skip), and one with no skips that asks all three slots even though the chat passed 15 s after two (it fails on the old two-warm-up rule).
+    - *Device only:* whether heat 3 really reads hotter on the meter, and how often players skip room questions. Check both in the next play-test.

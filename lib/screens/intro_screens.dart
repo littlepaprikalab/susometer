@@ -321,10 +321,7 @@ class CalibrateScreen extends StatelessWidget {
     final stage = game.calibStage;
     final warmup = game.currentWarmup;
     final chat = stage == CalibStage.chat || stage == CalibStage.done;
-    final warmupNumber = game.warmups.length.clamp(
-      1,
-      game.config.calibMaxWarmups,
-    );
+    final warmupNumber = game.warmupNumber;
     final bubble = switch (stage) {
       CalibStage.starting => 'Warming up the camera…',
       CalibStage.quiet => 'Sit still and look at the camera.',
