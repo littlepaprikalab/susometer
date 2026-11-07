@@ -349,8 +349,8 @@ class GameController extends ChangeNotifier {
   int questionIndex = 0;
   Awards? awards;
 
-  late DeckDealer _warmups;
-  late DeckDealer _questions;
+  late WarmupDealer _warmups;
+  late QuestionDealer _questions;
 
   PlayerTurn get currentTurn => turns[playerIndex];
   Player get currentPlayer => currentTurn.player;
@@ -456,8 +456,13 @@ class GameController extends ChangeNotifier {
     turns
       ..clear()
       ..addAll(players.map(PlayerTurn.new));
-    _warmups = DeckDealer(_decks.warmup, random: _random);
-    _questions = DeckDealer(_decks.main(deck), random: _random);
+    _warmups = WarmupDealer(_decks.warmup, random: _random);
+    // "Someone in this room" questions need someone else in the room.
+    _questions = QuestionDealer(
+      _decks.main(deck),
+      othersPresent: players.length >= 2,
+      random: _random,
+    );
     playerIndex = 0;
     questionIndex = 0;
     awards = null;
@@ -750,7 +755,9 @@ class GameController extends ChangeNotifier {
   }
 
   Future<void> _askWarmup() async {
-    final question = _warmups.next();
+    // Same slots in the same order for everyone; a skip is replaced from
+    // its own slot (SPEC.md §11).
+    final question = _warmups.next(warmups.where((w) => !w.skipped).length);
     final w = Warmup(question, nowMs);
     warmups.add(w);
     notifyListeners();
@@ -869,7 +876,9 @@ class GameController extends ChangeNotifier {
     _answerFromSeg = null;
     _soloReady = false;
     live.resetQuestion();
-    questionText = mode == GameMode.solo ? (repeat ?? _questions.next()) : '';
+    questionText = mode == GameMode.solo
+        ? (repeat ?? _questions.next(questionIndex, questionsPerTurn))
+        : '';
     _setPhase(GamePhase.ask);
     if (mode == GameMode.party) unawaited(_say('Ask your question!'));
     if (micEnabled) {

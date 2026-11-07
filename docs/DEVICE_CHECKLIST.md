@@ -112,6 +112,11 @@ Settings → **Signal check** → **Start both**. Allow microphone and speech re
 - [ ] Connect or disconnect AirPods mid-question. Within a few seconds your words show up again; if
   the mic can't come back, a "tap-to-advance for this turn" notice shows, and the next player's turn
   has voice again.
+- [ ] **Questions (decision 74):** with one player, no question mentions "someone here" or "this
+  room"; add a second player and, over a few Spicy turns, some do (always at the end of a turn). Each
+  turn's last question should feel like the hottest. **Does the meter read higher on it** than on
+  the first? Note which questions get skipped with *Different question*, and which warm-ups get
+  *Doesn't apply? Next one*.
 
 ## 5. Edge cases
 
