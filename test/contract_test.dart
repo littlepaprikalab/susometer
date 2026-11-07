@@ -442,6 +442,41 @@ void main() {
         expect(speechSwift, contains(s));
       }
     });
+    test('the host voice is chosen once, and again when voices change', () {
+      // HostVoice's ranking is tested by tool/swift_typecheck/run.sh
+      // (HostVoiceTests.swift). This pins how the bridge caches it: the
+      // voice list is slow to read, so it's never read per line, and a voice
+      // downloaded in Settings is picked up on the next line.
+      expect('speechVoices()'.allMatches(speechSwift).length, 1);
+      final choose = RegExp(
+        r'private static func chooseHostVoice\(\)[^{]*\{([\s\S]*?)\n  \}',
+      ).firstMatch(speechSwift);
+      expect(
+        choose?.group(1),
+        contains('AVSpeechSynthesisVoice.speechVoices()'),
+      );
+      expect(
+        speechSwift,
+        contains(
+          '    if hostVoiceStale {\n'
+          '      hostVoice = Self.chooseHostVoice()\n'
+          '      hostVoiceStale = false\n'
+          '    }\n'
+          '    utterance.voice = hostVoice\n',
+        ),
+      );
+      expect(
+        speechSwift,
+        contains(
+          '      AVSpeechSynthesizer.availableVoicesDidChangeNotification,\n'
+          '      UIApplication.didBecomeActiveNotification,\n',
+        ),
+      );
+      expect(
+        speechSwift,
+        contains('MainActor.assumeIsolated { self?.hostVoiceStale = true }'),
+      );
+    });
     test('a lost callback cannot leave the mic gated (wiring)', () {
       // HostSpeech's behaviour is tested by tool/swift_typecheck/run.sh
       // (HostSpeechTests.swift). This pins how the bridge wires it up.

@@ -95,6 +95,7 @@ open class AVSpeechSynthesisVoice: NSObject {
   public init?(language: String?) { nil }
   open class func speechVoices() -> [AVSpeechSynthesisVoice] { [] }
   open var identifier: String { "" }
+  open var name: String { "" }
   open var language: String { "en-US" }
   open var quality: AVSpeechSynthesisVoiceQuality { .default }
   open var gender: AVSpeechSynthesisVoiceGender { .unspecified }
@@ -115,6 +116,8 @@ public protocol AVSpeechSynthesizerDelegate: NSObjectProtocol {
 }
 
 open class AVSpeechSynthesizer: NSObject {
+  public static let availableVoicesDidChangeNotification = Notification.Name(
+    "AVSpeechSynthesizerAvailableVoicesDidChangeNotification")
   public override init() {}
   open weak var delegate: AVSpeechSynthesizerDelegate?
   open var isSpeaking: Bool { false }
