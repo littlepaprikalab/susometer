@@ -24,6 +24,7 @@ open class AVAudioEngine: NSObject {
   public override init() {}
   open var inputNode: AVAudioInputNode { AVAudioInputNode() }
   open func prepare() {}
+  open var isRunning: Bool { false }
   open func start() throws {}
   open func stop() {}
 }
@@ -106,6 +107,7 @@ open class AVSpeechUtterance: NSObject {
 }
 
 public protocol AVSpeechSynthesizerDelegate: NSObjectProtocol {
+  func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didStart utterance: AVSpeechUtterance)
   func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didFinish utterance: AVSpeechUtterance)
   func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didCancel utterance: AVSpeechUtterance)
 }
@@ -113,6 +115,7 @@ public protocol AVSpeechSynthesizerDelegate: NSObjectProtocol {
 open class AVSpeechSynthesizer: NSObject {
   public override init() {}
   open weak var delegate: AVSpeechSynthesizerDelegate?
+  open var isSpeaking: Bool { false }
   open func speak(_ utterance: AVSpeechUtterance) {}
   @discardableResult open func stopSpeaking(at boundary: AVSpeechBoundary) -> Bool { true }
 }
@@ -125,5 +128,7 @@ public protocol AVAudioPlayerDelegate: NSObjectProtocol {
 open class AVAudioPlayer: NSObject {
   public init(contentsOf url: URL) throws {}
   open weak var delegate: AVAudioPlayerDelegate?
+  open var duration: TimeInterval { 0 }
   open func play() -> Bool { true }
+  open func stop() {}
 }

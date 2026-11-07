@@ -158,14 +158,56 @@ class FakeHostAudio implements HostAudio {
   final List<String> said = [];
   final List<Sfx> played = [];
 
-  @override
-  Future<void> say(String text) async => said.add(text);
+  /// Every call in order: `say:<text>`, `stop`, `play:<name>`.
+  final List<String> calls = [];
+
+  /// When true, lines and sounds keep playing until [finishLine] or
+  /// [finishSounds]; a stop ends every line, like the native bridge.
+  bool hold = false;
+  final Map<int, Completer<void>> _lines = {};
+  final List<Completer<void>> _sounds = [];
 
   @override
-  Future<void> stopSpeaking() async {}
+  Future<void> say(String text) {
+    said.add(text);
+    calls.add('say:$text');
+    if (!hold) return Future.value();
+    final line = Completer<void>();
+    _lines[said.length - 1] = line;
+    return line.future;
+  }
 
   @override
-  Future<void> play(Sfx sfx) async => played.add(sfx);
+  Future<void> stopSpeaking() async {
+    calls.add('stop');
+    for (final line in _lines.values) {
+      if (!line.isCompleted) line.complete();
+    }
+    _lines.clear();
+  }
+
+  @override
+  Future<void> play(Sfx sfx) {
+    played.add(sfx);
+    calls.add('play:${sfx.name}');
+    if (!hold) return Future.value();
+    final sound = Completer<void>();
+    _sounds.add(sound);
+    return sound.future;
+  }
+
+  /// The line at [index] in [said] finishes, if it's still playing.
+  void finishLine(int index) {
+    final line = _lines.remove(index);
+    if (line != null && !line.isCompleted) line.complete();
+  }
+
+  void finishSounds() {
+    for (final sound in _sounds) {
+      if (!sound.isCompleted) sound.complete();
+    }
+    _sounds.clear();
+  }
 }
 
 class FakeHaptics implements HapticsApi {

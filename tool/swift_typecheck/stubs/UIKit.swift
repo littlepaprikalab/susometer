@@ -73,6 +73,7 @@ public struct UIViewAutoresizing: OptionSet, Sendable {
 @preconcurrency @MainActor open class UIApplication: UIResponder {
   public static var shared: UIApplication { fatalError() }
   public static let openSettingsURLString = "app-settings:"
+  public static let didBecomeActiveNotification = Notification.Name("UIApplicationDidBecomeActiveNotification")
   open var isIdleTimerDisabled = false
   open var connectedScenes: Set<UIScene> { [] }
   public struct LaunchOptionsKey: Hashable, Sendable {
