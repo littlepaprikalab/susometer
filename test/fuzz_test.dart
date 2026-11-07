@@ -125,6 +125,33 @@ void abuse(
     (fw(1, 1), () => g.onAppBackgrounded()),
     (fw(1, 1), () => g.onAppResumed()),
     (fw(1, 1), g.onAppInactive),
+    // A trip out of the app in the order Flutter reports it on iOS: a
+    // screenshot (back within the auto-resume window) or a longer one.
+    (
+      fw(2, 2),
+      () {
+        final ms = rng.nextBool()
+            ? rng.nextInt(GameController.autoResumeWithinMs)
+            : GameController.autoResumeWithinMs + rng.nextInt(20000);
+        final said = w.host.said.length;
+        w.leaveApp(
+          ms,
+          whileAway: () {
+            if (!g.paused || !g.cameraStopped) return;
+            expect(w.running, isFalse, reason: 'camera running while away');
+            expect(w.host.said.length, said, reason: 'host spoke while away');
+          },
+        );
+      },
+    ),
+    // Native starts that take a while, so trips land while they run.
+    (
+      fw(1, 1),
+      () {
+        w.startTakesMs = rng.nextInt(3) == 0 ? rng.nextInt(1500) : 0;
+        w.speech.startTakesMs = rng.nextInt(3) == 0 ? rng.nextInt(800) : 0;
+      },
+    ),
     (fw(1, 1), () => g.recheckPermissions()),
     // Environment.
     (fw(2, 1), () => w.emitting = rng.nextInt(biased ? 12 : 4) != 0),
@@ -210,9 +237,25 @@ void abuse(
   }
 }
 
+/// When each world's turn was first seen without its ticker.
+final _stalledSince = Expando<int>();
+
 void checkInvariants(World w, List<Object> errors, String where) {
   final g = w.game;
   if (errors.isNotEmpty) fail('$where: uncaught error ${errors.first}');
+  // Liveness: a question or calibration that isn't paused gets its ticker
+  // back within moments (a slow camera start is the longest wait). Without
+  // it nothing moves the turn on, not even the watchdog.
+  if (measuring.contains(g.phase) && !g.paused && !g.tickerRunning) {
+    final since = _stalledSince[w] ??= w.now;
+    expect(
+      w.now - since,
+      lessThan(5000),
+      reason: '$where: ${g.phase} stalled without its ticker',
+    );
+  } else {
+    _stalledSince[w] = null;
+  }
   if (needsTurns.contains(g.phase)) {
     expect(g.turns, isNotEmpty, reason: '$where: ${g.phase} without a game');
     expect(
@@ -307,6 +350,8 @@ void rescue(World w, int seed) {
     ..code = 'OK'
     ..status = 'running';
   w.presage.startError = null;
+  w.startTakesMs = 0;
+  w.speech.startTakesMs = 0;
   w.device.camera = 'granted';
   // Liveness: with conditions restored, E5 "Try again" must lead back in.
   if (g.phase == GamePhase.sdkOffline && !g.paused) {

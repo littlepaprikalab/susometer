@@ -164,6 +164,21 @@ class Rig {
     }
   }
 
+  /// Leaves the app for [ms] and comes back, the way Flutter reports it on
+  /// iOS (a screenshot's full-screen preview on iOS 26 does the same).
+  Future<void> leaveApp(int ms) async {
+    final binding = tester.binding;
+    binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+    binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
+    binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+    await wait(ms);
+    // Frames only render once the app is back in the foreground.
+    binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
+    binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+    binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    await wait(300);
+  }
+
   void say(String text) => speech.controller.add(
     SpeechText(
       text: text,

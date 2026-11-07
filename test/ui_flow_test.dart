@@ -1,5 +1,6 @@
 import 'dart:math' as math;
 
+import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:susometer/game/game_controller.dart';
 import 'package:susometer/presage/presage_models.dart';
@@ -144,6 +145,128 @@ void main() {
     await rig.tap('Resume');
     await rig.wait(300);
     expect(find.text('Ask your question!'), findsOneWidget);
+    await rig.finish();
+  });
+
+  testWidgets(
+    'coming back: the Pause sheet never flashes up for a short trip',
+    (tester) async {
+      final rig = Rig(tester);
+      await rig.pumpApp();
+      rig.presage.storedKey = 'k';
+      rig.game.hasSeenHowToPlay = true;
+      await rig.addPlayer('Sam');
+      await rig.addPlayer('Alex');
+      await rig.tap('Start the show');
+      await rig.wait(300);
+      await rig.tap('I agree, measure me');
+      await rig.until(() => rig.game.phase == GamePhase.ask);
+      final binding = tester.binding;
+      void out() {
+        binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+        binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
+        binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+      }
+
+      // On the way back in, iOS shows the app (inactive, frames on) a moment
+      // before it's active, and only then does the game carry on.
+      void backInView() {
+        binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
+        binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+      }
+
+      out();
+      await rig.wait(3000);
+      backInView();
+      await tester.pump();
+      expect(
+        find.text('Paused'),
+        findsNothing,
+        reason: 'the sheet flashed up just before the game carried on',
+      );
+      binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      await rig.wait(300);
+      expect(find.text('Paused'), findsNothing);
+      expect(rig.presage.running, isTrue);
+
+      // Away longer: the sheet is there as soon as the app is.
+      out();
+      await rig.wait(GameController.autoResumeWithinMs + 5000);
+      backInView();
+      await tester.pump();
+      expect(find.text('Paused'), findsOneWidget);
+      binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      await rig.wait(300);
+      expect(find.text('Paused'), findsOneWidget);
+      await rig.tap('Resume');
+      await rig.wait(300);
+      expect(rig.presage.running, isTrue);
+      await rig.finish();
+    },
+  );
+
+  testWidgets('leaving the app: the Pause sheet fits the phase', (
+    tester,
+  ) async {
+    final rig = Rig(tester);
+    await rig.pumpApp();
+    rig.presage.storedKey = 'k';
+    rig.game.hasSeenHowToPlay = true;
+    await rig.tap('Solo · host asks');
+    await rig.addPlayer('Sam');
+    await rig.tap('Start the show');
+    await rig.wait(300);
+    await rig.tap('I agree, measure me');
+    await rig.wait(3000);
+    expect(rig.game.phase, GamePhase.calibrate);
+
+    // Calibration starts over: the camera stopped while the app was away.
+    await rig.leaveApp(GameController.autoResumeWithinMs + 5000);
+    expect(
+      find.text(
+        'You left the app, so the camera stopped. '
+        'Calibration starts over when you resume.',
+      ),
+      findsOneWidget,
+    );
+    expect(find.text('Skip my turn'), findsOneWidget);
+    await rig.tap('Resume');
+    await rig.until(() => rig.game.phase == GamePhase.answer);
+    rig.presage.talk(true);
+    await rig.wait(1500);
+    rig.presage.talk(false);
+    await rig.wait(600);
+    await rig.tap('Final answer');
+    await rig.until(() => rig.game.phase == GamePhase.verdict);
+
+    // The verdict: nothing to restart or skip, it just waits.
+    await rig.leaveApp(GameController.autoResumeWithinMs + 5000);
+    expect(find.text('Paused'), findsOneWidget);
+    expect(
+      find.text(
+        'You left the app, so the camera stopped. '
+        'The game picks up where it left off.',
+      ),
+      findsOneWidget,
+    );
+    expect(find.text('Skip question'), findsNothing);
+    expect(find.text('Skip my turn'), findsNothing);
+    await rig.tap('Resume');
+    await rig.wait(300);
+    expect(find.text('Paused'), findsNothing);
+    expect(rig.game.phase, GamePhase.verdict);
+
+    // Pause tapped during a question: no "you left the app".
+    await rig.tap('Next question');
+    await rig.until(() => rig.game.phase == GamePhase.answer);
+    await waitOutTapGuard(tester);
+    await tester.tap(find.bySemanticsLabel('Pause the game'));
+    await rig.wait(200);
+    expect(
+      find.text('The question starts over when you resume.'),
+      findsOneWidget,
+    );
+    await rig.tap('Resume');
     await rig.finish();
   });
 

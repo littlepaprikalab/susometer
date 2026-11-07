@@ -539,6 +539,19 @@ class PauseSheet extends StatelessWidget {
     final game = GameScope.of(context);
     final settings = services.settings;
     final calibrating = game.phase == GamePhase.calibrate;
+    // Leaving the app pauses the reveal too (Call it!, the countdown, the
+    // verdict, No clean read); there's no question to restart or skip there.
+    final inQuestion = game.isMeasuring && !calibrating;
+    final why = game.pausedAway
+        ? 'You left the app, so the camera stopped. '
+        : '';
+    final what = calibrating
+        ? (game.cameraStopped
+              ? 'Calibration starts over when you resume.'
+              : 'Calibration picks up where it left off.')
+        : inQuestion
+        ? 'The question starts over when you resume.'
+        : 'The game picks up where it left off.';
     return SheetCard(
       child: ListenableBuilder(
         listenable: settings,
@@ -555,12 +568,7 @@ class PauseSheet extends StatelessWidget {
               children: [
                 Text('Paused', style: SusText.display(30)),
                 const SizedBox(height: 6),
-                Text(
-                  calibrating
-                      ? 'Calibration picks up where it left off.'
-                      : 'The question starts over when you resume.',
-                  style: SusText.body(15),
-                ),
+                Text('$why$what', style: SusText.body(15)),
                 const SizedBox(height: 14),
                 ChunkyButton(
                   label: 'Resume',
@@ -569,13 +577,15 @@ class PauseSheet extends StatelessWidget {
                   onPressed: game.resume,
                 ),
                 const SizedBox(height: 10),
-                ChunkyButton.light(
-                  label: calibrating ? 'Skip my turn' : 'Skip question',
-                  height: 50,
-                  fontSize: 15,
-                  onPressed: calibrating ? game.skipTurn : game.skipQuestion,
-                ),
-                const SizedBox(height: 10),
+                if (calibrating || inQuestion) ...[
+                  ChunkyButton.light(
+                    label: calibrating ? 'Skip my turn' : 'Skip question',
+                    height: 50,
+                    fontSize: 15,
+                    onPressed: calibrating ? game.skipTurn : game.skipQuestion,
+                  ),
+                  const SizedBox(height: 10),
+                ],
                 ChunkyButton(
                   label: 'End the show',
                   color: SusColors.ink,

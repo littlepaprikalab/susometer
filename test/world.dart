@@ -69,6 +69,18 @@ class World {
 
   // Script knobs.
   bool running = false;
+
+  /// How long the native SDK start takes.
+  int startTakesMs = 0;
+
+  /// While set, the native SDK stop doesn't return.
+  Completer<void>? stopHangs;
+
+  /// The app is in the background (see [leaveApp]).
+  bool away = false;
+
+  /// A camera start that finishes while [away] fails.
+  bool startFailsWhileAway = false;
   bool emitting = true;
   String status = 'running';
   double pulse = 70;
@@ -252,6 +264,42 @@ class World {
 
   void elapse(int ms) => async.elapse(Duration(milliseconds: ms));
 
+  /// Leaves the app for [ms] and comes back, with the lifecycle calls
+  /// GameRoot makes for what Flutter reports on iOS: inactive, hidden, paused
+  /// on the way out; hidden, inactive, resumed on the way back in. A
+  /// screenshot's full-screen preview on iOS 26 does the same.
+  void leaveApp(int ms, {void Function()? whileAway}) {
+    goAway();
+    elapse(ms);
+    whileAway?.call();
+    comeBack();
+    elapse(300);
+  }
+
+  /// Inactive, hidden, paused. iOS won't start the mic for an app in the
+  /// background.
+  void goAway() {
+    away = true;
+    speech.startError = const SpeechException('AUDIO_ERROR', 'background');
+    game
+      ..onAppInactive()
+      ..onAppBackgrounded()
+      ..onAppBackgrounded();
+  }
+
+  /// Hidden, inactive, resumed.
+  void comeBack() {
+    away = false;
+    speech.startError = null;
+    game
+      ..onAppBackgrounded()
+      ..onAppInactive()
+      ..onAppResumed();
+  }
+
+  /// How many times the game called [method] on the SDK.
+  int sdkCalls(String method) => presage.calls.where((c) => c == method).length;
+
   void dispose() {
     _emitter.cancel();
     game.dispose();
@@ -328,6 +376,14 @@ class RunningPresage extends FakePresage {
   @override
   Future<void> start() async {
     await super.start();
+    // The native start takes a while; a stop sent meanwhile can finish
+    // first (each runs in its own Task in PresageBridge.swift).
+    if (world.startTakesMs > 0) {
+      await Future<void>.delayed(Duration(milliseconds: world.startTakesMs));
+    }
+    if (world.away && world.startFailsWhileAway) {
+      throw const PresageException('cameraUnavailable', 'in the background');
+    }
     world.running = true;
     world._frameAt = null;
   }
@@ -335,6 +391,8 @@ class RunningPresage extends FakePresage {
   @override
   Future<void> stop() async {
     await super.stop();
+    final hang = world.stopHangs;
+    if (hang != null) await hang.future;
     world.running = false;
     world._frameAt = null;
   }

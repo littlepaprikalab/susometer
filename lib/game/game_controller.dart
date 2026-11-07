@@ -461,7 +461,7 @@ class GameController extends ChangeNotifier {
     playerIndex = 0;
     questionIndex = 0;
     awards = null;
-    paused = false;
+    _clearPause();
     _voiceLostMidTurn = false;
     notice = micEnabled ? null : 'Playing without voice: tap to move on.';
     unawaited(device.setKeepAwake(true));
@@ -491,7 +491,7 @@ class GameController extends ChangeNotifier {
     final e = _epoch;
     if (phase == GamePhase.calibrate) await _stopMeasuring();
     if (e != _epoch) return;
-    paused = false;
+    _clearPause();
     currentTurn.skipped = currentTurn.results.isEmpty;
     await _nextPlayer();
   }
@@ -586,6 +586,12 @@ class GameController extends ChangeNotifier {
   /// again so the camera never runs outside a turn.
   Future<bool> _startSdk({bool fromOffline = false}) async {
     final epoch = _epoch;
+    // Still stopping from when the app went away: let that finish first, so
+    // it can't land after this start (each native call runs in its own Task).
+    // Bounded, so a native stop that never returns can't hold the game up.
+    if (_awayStop case final stopping?) {
+      await stopping.timeout(_awayStopWait, onTimeout: () {});
+    }
     try {
       try {
         await presage.reset();
@@ -597,13 +603,18 @@ class GameController extends ChangeNotifier {
       // A new session: nothing carries over from the last player or the
       // last attempt.
       live.resetCamera();
-      if (epoch != _epoch || !(_sdkShouldRun || fromOffline)) {
+      // A new game, a phase without the camera, or the app left while the
+      // camera was starting (Resume starts it again).
+      if (epoch != _epoch ||
+          !(_sdkShouldRun || fromOffline) ||
+          _stoppedForAway) {
         await _safeStopSdk();
         return false;
       }
       return true;
     } on PresageException catch (e) {
-      if (epoch != _epoch) return false;
+      // Failing because the app left isn't E5: Resume tries again.
+      if (epoch != _epoch || _stoppedForAway) return false;
       sdkError = PresageErrorInfo(code: e.code, message: e.message);
       _stopTicker();
       _setPhase(GamePhase.sdkOffline);
@@ -624,6 +635,9 @@ class GameController extends ChangeNotifier {
     try {
       await speech.start();
     } on SpeechException catch (e) {
+      // iOS won't start the mic for an app in the background. That's no
+      // reason to drop voice: Resume starts it again.
+      if (_stoppedForAway) return;
       _fallBackToNoVoice(e.code);
     }
   }
@@ -1103,7 +1117,17 @@ class GameController extends ChangeNotifier {
         skipped: true,
       ),
     );
-    paused = false;
+    final restart = _needsRestart;
+    _clearPause();
+    if (restart && !isLastQuestion) {
+      // Skipped from the Pause sheet after the app was away: the next
+      // question needs the camera, the ticker and the mic back.
+      final e = _epoch;
+      await _restartMeasuring();
+      // E5 or a new game takes it from here. If the app left again, the next
+      // question still begins, paused, so Resume restarts that one.
+      if (e != _epoch || phase == GamePhase.sdkOffline) return;
+    }
     await _afterQuestion();
   }
 
@@ -1310,7 +1334,7 @@ class GameController extends ChangeNotifier {
       ..resetBeats()
       ..trace.clear()
       ..sample = null;
-    paused = false;
+    _clearPause();
     sdkError = null;
     if (!keepPlayers) players.clear();
     unawaited(device.setKeepAwake(false));
@@ -1323,7 +1347,7 @@ class GameController extends ChangeNotifier {
     final e = _epoch;
     if (_sdkShouldRun) await _stopMeasuring();
     if (e != _epoch) return;
-    paused = false;
+    _clearPause();
     final anyPlayed = turns.any((t) => t.results.isNotEmpty);
     if (anyPlayed) {
       _showLeaderboard();
@@ -1383,34 +1407,81 @@ class GameController extends ChangeNotifier {
   // ---------------------------------------------------------------------------
   // Pause and app lifecycle
 
+  /// Back within this long (a screenshot's full-screen preview, a glance at
+  /// a message), the game carries on by itself; away longer, the Pause sheet
+  /// waits for Resume.
+  static const autoResumeWithinMs = 15000;
+
   bool _needsRestart = false;
 
+  /// The game paused because the app left the screen, not because someone
+  /// tapped Pause. The Pause sheet says so.
+  bool get pausedAway => _pausedAway;
+  bool _pausedAway = false;
+
+  /// The camera was stopped while the app was away, so Resume starts it again
+  /// (and calibration starts over).
+  bool get cameraStopped => _needsRestart;
+
+  /// Paused with the camera, mic and host stopped for a trip out of the app.
+  /// Anything that fails or finishes meanwhile is left for Resume.
+  bool get _stoppedForAway => paused && _needsRestart;
+
+  /// Whether the Pause sheet shows. Not while the app comes back from a short
+  /// trip: iOS shows the app a moment before it's active, and the game
+  /// carries on by itself once it is, so the sheet would only flash up.
+  bool get showPauseSheet {
+    final since = _awaySinceMs;
+    return paused &&
+        !(_pausedAway && since != null && nowMs - since <= autoResumeWithinMs);
+  }
+
+  static const _awayStopWait = Duration(seconds: 2);
+
+  int _pausedAtMs = 0;
+
+  /// When the app went to the background; null while it's in front.
+  int? _awaySinceMs;
+
+  /// Stopping the camera, mic and host when the app went away. A restart
+  /// waits for it, so a late stop can't end the new session.
+  Future<void>? _awayStop;
+
   void pause() {
-    if (!inGame || !isMeasuring) return;
+    if (!inGame || !isMeasuring || paused) return;
     paused = true;
+    _pausedAway = false;
+    _pausedAtMs = nowMs;
     unawaited(host.stopSpeaking().catchError((Object _) {}));
     notifyListeners();
+  }
+
+  /// Leaves Pause. Every way out goes through here, so nothing from one
+  /// pause carries into the next.
+  void _clearPause() {
+    paused = false;
+    _pausedAway = false;
+    _needsRestart = false;
   }
 
   /// Pause "Resume". A question that was interrupted starts over, since its
   /// measurement window was broken.
   Future<void> resume() async {
     if (!paused) return;
-    paused = false;
+    final restart = _needsRestart;
+    final pausedFor = nowMs - _pausedAtMs;
+    _clearPause();
+    // The room's vote and the drumroll get back the time they lost.
+    if (phase == GamePhase.callIt) callItDeadlineMs += pausedFor;
+    if (phase == GamePhase.countdown) _countdownNextAt += pausedFor;
     notifyListeners();
-    if (_needsRestart) {
-      _needsRestart = false;
+    if (restart) {
       if (phase == GamePhase.calibrate) {
         await _beginCalibration();
         return;
       }
-      final e = _epoch;
-      if (!await _startSdk() || e != _epoch) return;
-      _lastSampleMs = nowMs;
-      live.sample = null;
-      _startTicker();
-      await _startListening();
-      if (e != _epoch) return;
+      // The app may have left again meanwhile; its Resume carries on.
+      if (!await _restartMeasuring()) return;
     }
     if (phase == GamePhase.ask ||
         phase == GamePhase.answer ||
@@ -1419,35 +1490,79 @@ class GameController extends ChangeNotifier {
     }
   }
 
+  /// Starts the camera, the mic and then the ticker again after the app was
+  /// away. False if the SDK didn't start (E5), the game moved on, or the app
+  /// left again meanwhile.
+  ///
+  /// The ticker comes last: until the caller sets the question up again, the
+  /// old one's detector and settle window are still live, and a tick would
+  /// move it on (score a question being skipped or restarted). Callers set
+  /// it up straight after, with no await in between.
+  Future<bool> _restartMeasuring() async {
+    final e = _epoch;
+    if (!await _startSdk() || e != _epoch) return false;
+    _lastSampleMs = nowMs;
+    live.sample = null;
+    await _startListening();
+    if (e != _epoch || paused) return false;
+    _startTicker();
+    return true;
+  }
+
   /// The app went to the background: iOS stops the camera, so stop cleanly
   /// and restart on resume.
   Future<void> onAppBackgrounded() async {
     _appActive = false;
-    if (!_sdkShouldRun) return;
+    _awaySinceMs ??= nowMs;
+    // Flutter reports hidden, then paused on the way out, and hidden again
+    // on the way back in. Stop once: a second stop on the way back in could
+    // land after Resume had started the camera again.
+    if (!_sdkShouldRun || _stoppedForAway) return;
+    if (!paused) {
+      _pausedAway = true;
+      _pausedAtMs = nowMs;
+    }
     paused = true;
     _needsRestart = true;
     _stopTicker();
     live.resetCamera();
+    notifyListeners();
+    await (_awayStop = _stopForAway());
+  }
+
+  Future<void> _stopForAway() async {
     if (micEnabled) await speech.stop().catchError((Object _) {});
     await host.stopSpeaking().catchError((Object _) {});
-    try {
-      await presage.stop();
-    } on PresageException {
-      // Already stopped.
-    }
-    notifyListeners();
+    await _safeStopSdk();
   }
 
   Future<void> onAppResumed() async {
     _appActive = true;
     _activeSinceMs = nowMs;
+    final awaySince = _awaySinceMs;
+    _awaySinceMs = null;
     if (phase == GamePhase.permissions) await recheckPermissions();
+    // A short trip out of the app (iOS 26's full-screen screenshot preview
+    // counts as one) carries on without the Pause sheet. The question still
+    // starts over: the camera was off meanwhile.
+    if (_pausedAway &&
+        awaySince != null &&
+        nowMs - awaySince <= autoResumeWithinMs) {
+      await resume();
+    } else if (paused) {
+      notifyListeners();
+    }
   }
 
   /// Control Center, Notification Center, the app switcher or a system
   /// alert is over the app. iOS may hold the camera until it's back, so a
   /// camera with no new frames isn't frozen yet.
-  void onAppInactive() => _appActive = false;
+  void onAppInactive() {
+    _appActive = false;
+    // On the way back in from the background: after a long trip the Pause
+    // sheet is there as soon as the app is in view.
+    if (_awaySinceMs != null && paused) notifyListeners();
+  }
 
   bool _appActive = true;
   int _activeSinceMs = 0;
@@ -1554,7 +1669,10 @@ class GameController extends ChangeNotifier {
         // rather than wait out the 20 s no-answer timeout on every question.
         // Outside a turn the mic belongs to someone else (Settings' signal
         // check), so leave it alone.
+        // While the app is away the mic is being shut down on purpose, and
+        // Resume starts it again.
         if (_sdkShouldRun &&
+            !_stoppedForAway &&
             (e.code == 'RECOGNIZER_FAILING' ||
                 e.code == 'ON_DEVICE_UNAVAILABLE' ||
                 e.code == 'AUDIO_RESTART_FAILED')) {
@@ -1597,6 +1715,11 @@ class GameController extends ChangeNotifier {
 
   // ---------------------------------------------------------------------------
   // Ticker (~10 Hz while a turn runs) and self-healing
+
+  /// Whether the ticker runs. Everything that moves a turn on (timeouts,
+  /// the watchdog, Call it!, the countdown) runs on it.
+  @visibleForTesting
+  bool get tickerRunning => _ticker != null;
 
   void _startTicker() {
     _ticker?.cancel();
@@ -1731,7 +1854,8 @@ class GameController extends ChangeNotifier {
   Future<void> _say(String text) async {
     hostLine = text;
     notifyListeners();
-    if (!settings.hostVoice) return;
+    // A game that's away stays quiet; Resume says it again.
+    if (!settings.hostVoice || _stoppedForAway) return;
     try {
       await host.say(text);
     } catch (_) {
