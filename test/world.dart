@@ -252,6 +252,27 @@ class World {
 
   void elapse(int ms) => async.elapse(Duration(milliseconds: ms));
 
+  /// Leaves the app for [ms] and comes back, with the lifecycle calls
+  /// GameRoot makes for what Flutter reports on iOS: inactive, hidden, paused
+  /// on the way out; hidden, inactive, resumed on the way back in. A
+  /// screenshot's full-screen preview on iOS 26 does the same.
+  void leaveApp(int ms, {void Function()? whileAway}) {
+    game
+      ..onAppInactive()
+      ..onAppBackgrounded()
+      ..onAppBackgrounded();
+    elapse(ms);
+    whileAway?.call();
+    game
+      ..onAppBackgrounded()
+      ..onAppInactive()
+      ..onAppResumed();
+    elapse(300);
+  }
+
+  /// How many times the game called [method] on the SDK.
+  int sdkCalls(String method) => presage.calls.where((c) => c == method).length;
+
   void dispose() {
     _emitter.cancel();
     game.dispose();

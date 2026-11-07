@@ -568,6 +568,151 @@ void main() {
     });
   });
 
+  group('leaving the app', () {
+    /// Party question 1, answered, up to Call it!.
+    void answerToCallIt(World w) {
+      expect(w.game.phase, GamePhase.ask);
+      w.elapse(300);
+      w.say('Have you ever re-gifted a present?');
+      w.elapse(1500);
+      w.game.doneAsking();
+      w.elapse(1300);
+      w.talk(true);
+      w.elapse(300);
+      w.say('No way.');
+      w.elapse(2500);
+      w.talk(false);
+      w.elapse(800);
+      w.game.finalAnswer();
+      w.until(() => w.game.phase != GamePhase.settle, what: 'settle');
+      expect(w.game.phase, GamePhase.callIt);
+    }
+
+    test('a short trip (a screenshot) carries on by itself', () {
+      fakeAsync((async) {
+        final w = World(async);
+        w.startGame(['Sam', 'Alex']);
+        w.calibrate();
+        w.elapse(2000);
+        final asked = w.game.questionStartMs;
+        final starts = w.sdkCalls('start');
+        final stops = w.sdkCalls('stop');
+        w.leaveApp(
+          3000,
+          whileAway: () {
+            expect(w.game.paused, isTrue);
+            expect(w.game.pausedAway, isTrue);
+            expect(w.running, isFalse, reason: 'camera stops while away');
+          },
+        );
+        expect(w.game.paused, isFalse, reason: 'no Pause sheet to dismiss');
+        expect(w.game.pausedAway, isFalse);
+        expect(w.running, isTrue);
+        expect(w.sdkCalls('start'), starts + 1);
+        expect(
+          w.sdkCalls('stop'),
+          stops + 1,
+          reason: 'hidden on the way back in stopped the camera again',
+        );
+        expect(w.game.phase, GamePhase.ask);
+        expect(
+          w.game.questionStartMs,
+          greaterThan(asked),
+          reason: 'the question starts over',
+        );
+        expect(w.game.paused, isFalse);
+        expect(w.askAndAnswer().verdict, isNotNull, reason: 'still plays');
+        w.dispose();
+      });
+    });
+
+    test('a long trip waits on the Pause sheet, marked as away', () {
+      fakeAsync((async) {
+        final w = World(async);
+        w.startGame(['Sam', 'Alex']);
+        w.calibrate();
+        w.leaveApp(GameController.autoResumeWithinMs + 5000);
+        expect(w.game.paused, isTrue);
+        expect(w.game.pausedAway, isTrue);
+        expect(w.game.cameraStopped, isTrue);
+        expect(w.running, isFalse);
+        w.elapse(30000);
+        expect(w.game.phase, GamePhase.ask, reason: 'no E5 while paused');
+        w.game.resume();
+        w.elapse(300);
+        expect(w.game.paused, isFalse);
+        expect(w.game.pausedAway, isFalse);
+        expect(w.game.cameraStopped, isFalse);
+        expect(w.running, isTrue);
+        expect(w.askAndAnswer().verdict, isNotNull);
+        w.dispose();
+      });
+    });
+
+    test('a pause someone chose survives a short trip', () {
+      fakeAsync((async) {
+        final w = World(async);
+        w.startGame(['Sam', 'Alex']);
+        w.calibrate();
+        w.game.pause();
+        w.elapse(100);
+        w.leaveApp(2000);
+        expect(w.game.paused, isTrue, reason: 'only Resume ends this pause');
+        expect(w.game.pausedAway, isFalse, reason: 'someone tapped Pause');
+        expect(w.game.cameraStopped, isTrue);
+        expect(w.running, isFalse);
+        w.game.resume();
+        w.elapse(300);
+        expect(w.running, isTrue);
+        expect(w.game.phase, GamePhase.ask);
+        w.dispose();
+      });
+    });
+
+    test('Skip question after a long trip brings the camera back', () {
+      fakeAsync((async) {
+        final w = World(async);
+        w.startGame(['Sam', 'Alex']);
+        w.calibrate();
+        w.leaveApp(GameController.autoResumeWithinMs + 5000);
+        expect(w.game.paused, isTrue);
+        w.game.skipQuestion();
+        w.elapse(300);
+        expect(w.game.questionIndex, 1);
+        expect(w.game.phase, GamePhase.ask);
+        expect(w.game.paused, isFalse);
+        expect(w.game.cameraStopped, isFalse);
+        expect(w.running, isTrue, reason: 'the next question needs the camera');
+        // It plays: without the ticker, settle would never end.
+        expect(w.askAndAnswer().verdict, isNotNull);
+        w.dispose();
+      });
+    });
+
+    test('Call it! keeps the rest of its vote time', () {
+      fakeAsync((async) {
+        final w = World(async);
+        w.startGame(['Sam', 'Alex']);
+        w.calibrate();
+        answerToCallIt(w);
+        w.elapse(4000);
+        final left = w.game.callItDeadlineMs - w.now;
+        w.leaveApp(8000);
+        expect(w.game.paused, isFalse);
+        expect(w.running, isTrue);
+        expect(
+          w.game.phase,
+          GamePhase.callIt,
+          reason: 'the vote ran out while the app was away',
+        );
+        expect(w.game.callItDeadlineMs - w.now, closeTo(left - 300, 150));
+        w.until(() => w.game.phase == GamePhase.countdown, maxMs: 7000);
+        w.until(() => w.game.phase == GamePhase.verdict, maxMs: 5000);
+        w.dispose();
+      });
+    });
+  });
+
   test('no clean read: E4, Ask it again, then Skip it', () {
     fakeAsync((async) {
       final w = World(async);

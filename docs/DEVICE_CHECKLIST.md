@@ -121,8 +121,12 @@ Settings → **Signal check** → **Start both**. Allow microphone and speech re
 - [ ] **Offline mid-game:** start a turn online, then switch on Airplane Mode. **Does measuring
   carry on, or does E5 appear after a while?** (SPEC §16: does the SDK need the network after
   sign-in?)
-- [ ] **Background:** mid-question, swipe home and come back: the Pause sheet shows; Resume
-  restarts the question.
+- [ ] **Background:** mid-question, swipe home and come back within a few seconds: the question
+  starts over by itself, with no Pause sheet. Stay away 20 s: the Pause sheet says "You left the
+  app, so the camera stopped."; Resume restarts the question.
+- [ ] **Screenshot:** mid-question and during Call it!, take a screenshot and close the preview:
+  the game carries on (the question starts over; the vote keeps its time). **Does the full-screen
+  preview send the app to the background on your iOS version?** (SPEC decision 72.)
 - [ ] **Hand-held:** play one turn holding the phone in your hand. **How often does "Hold still"
   appear?** (SPEC §16.)
 - [ ] **Frozen camera:** with the Proof Panel on, watch `cam` after the validation code through a
