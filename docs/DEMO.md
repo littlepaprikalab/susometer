@@ -7,6 +7,11 @@ The video must show the **live Presage signals** working. Turn the Proof Panel o
 To also capture the table, film with a second phone, or use a split: screen recording plus a
 handheld shot of the players. Good, even light on the hot seat.
 
+**Screenshots:** on iOS 26 a screenshot opens a full-screen preview that sends the app to the
+background, so a question in progress starts over (the game resumes by itself if you're back
+within 15 s). To keep a question running while you take stills, turn off Settings → General →
+Screen Capture → *Full-Screen Previews* first.
+
 | # | Time | Shot | What to show / say |
 |---|---|---|---|
 | 1 | 0:00–0:08 | **Hook** | A Sus! verdict: buzzer, red scoreboard, applause meter full. |

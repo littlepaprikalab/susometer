@@ -360,7 +360,7 @@ final class SpeechBridge {
   }
 
   /// The host's voice: the most natural British female voice installed, else
-  /// the best English voice (decisions 33 and 72; [HostVoice] has the rules).
+  /// the best English voice (decisions 33 and 73; [HostVoice] has the rules).
   private static func hostVoice() -> AVSpeechSynthesisVoice? {
     let preferred = Locale.current.identifier.replacingOccurrences(of: "_", with: "-")
     let language = preferred.hasPrefix("en") ? preferred : "en-US"
@@ -748,7 +748,7 @@ final class PlayerDelegate: NSObject, AVAudioPlayerDelegate {
   }
 }
 
-/// Which installed voice the host speaks with (SPEC.md decisions 33 and 72).
+/// Which installed voice the host speaks with (SPEC.md decisions 33 and 73).
 /// Pure, so tool/swift_typecheck/HostVoiceTests.swift can check it on Linux.
 ///
 /// The host is a British woman: an en-GB female voice beats every other

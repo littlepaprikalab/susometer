@@ -1,5 +1,5 @@
 // Behaviour tests for HostVoice, the host's voice choice in
-// ios/Runner/Voice/SpeechBridge.swift (SPEC.md decisions 33 and 72).
+// ios/Runner/Voice/SpeechBridge.swift (SPEC.md decisions 33 and 73).
 // run.sh builds them with HostSpeechTests.swift, whose main runs them.
 //
 // The voices below use the identifiers iOS reports, so the filters on
@@ -108,7 +108,7 @@ enum HostVoiceTests {
     check(pick([fred, flo]) == nil, "only robotic voices: none")
   }
 
-  /// No British female voice: the best English one, as before decision 72.
+  /// No British female voice: the best English one, as before decision 73.
   static func fallsBackToBestEnglish() {
     check(pick([samantha, daniel, avaPremium, amelie]) == avaPremium.identifier, "premium first")
     check(pick([daniel, samantha]) == samantha.identifier, "en-US user: Samantha")

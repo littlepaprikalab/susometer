@@ -438,14 +438,31 @@ void main() {
       isFalse,
       reason: 'camera stops in the background',
     );
-    // Frames only render once the app is back in the foreground.
+    // Back after a moment (a screenshot): no Pause sheet to dismiss.
     tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
     tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
     tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
-    await rig.wait(300);
+    await rig.wait(500);
+    expect(find.text('Paused'), findsNothing);
+    expect(rig.presage.running, isTrue);
+    expect(rig.game.phase, GamePhase.ask);
+
+    // Away longer: the Pause sheet waits, and says why it's there.
+    await rig.leaveApp(GameController.autoResumeWithinMs + 5000);
     expect(find.text('Paused'), findsOneWidget);
+    expect(
+      find.text(
+        'You left the app, so the camera stopped. '
+        'The question starts over when you resume.',
+      ),
+      findsOneWidget,
+    );
+    expect(find.text('Skip question'), findsOneWidget);
+    expect(rig.presage.running, isFalse);
+    await checkScreen(tester, 'paused away');
     await rig.tap('Resume');
     await rig.wait(500);
+    expect(find.text('Paused'), findsNothing);
     expect(rig.presage.running, isTrue);
     expect(rig.game.phase, GamePhase.ask);
     await rig.finish();
