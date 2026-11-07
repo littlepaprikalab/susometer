@@ -1050,7 +1050,7 @@ void main() {
       w.elapse(100);
       expect(w.game.phase, GamePhase.answer);
       final q = w.game.questionText;
-      expect(DeckLibrary.fallback.mild, contains(q));
+      expect([for (final d in DeckLibrary.fallback.mild) d.text], contains(q));
       expect(w.host.said.any((l) => l.contains(q)), isTrue);
       expect(
         w.game.soloHoldsQuestion,
@@ -1137,6 +1137,129 @@ void main() {
       expect(w.game.soloHoldsQuestion, isFalse);
       expect(w.game.shownPhase, GamePhase.answer);
       expect(redraws, greaterThan(0), reason: 'redraws without waiting');
+      w.dispose();
+    });
+  });
+
+  test('solo: a turn climbs the heat curve and ends on the hottest', () {
+    fakeAsync((async) {
+      final w = World(async);
+      w.game.setMode(GameMode.solo);
+      w.startGame(['Sam'], questions: 5);
+      w.calibrate();
+      Set<String> heat(int h) => {
+        for (final d in DeckLibrary.fallback.mild)
+          if (d.heat == h) d.text,
+      };
+      final asked = <String>[];
+      for (var q = 0; q < 5; q++) {
+        w.until(() => w.game.phase == GamePhase.answer);
+        asked.add(w.game.questionText);
+        w.game.finalAnswer();
+        w.until(
+          () =>
+              w.game.phase == GamePhase.verdict ||
+              w.game.phase == GamePhase.redo,
+        );
+        if (w.game.phase == GamePhase.redo) {
+          w.game.skipQuestion();
+        } else {
+          w.game.nextQuestion();
+        }
+        w.elapse(100);
+      }
+      expect(heat(1), containsAll(asked.sublist(0, 2)));
+      expect(heat(2), containsAll(asked.sublist(2, 4)));
+      expect(heat(3), contains(asked[4]));
+      w.dispose();
+    });
+  });
+
+  test('warm-ups come in slot order, and a skip is replaced from its slot', () {
+    fakeAsync((async) {
+      final w = World(async);
+      w.startGame(['Sam', 'Alex']);
+      w.game.agreeToMeasure();
+      w.until(() => w.game.currentWarmup != null, what: 'the first warm-up');
+      Set<String> slot(WarmupSlot s) => {
+        for (final d in DeckLibrary.fallback.warmup)
+          if (d.slot == s) d.text,
+      };
+      final first = w.game.currentWarmup!.question;
+      expect(slot(WarmupSlot.recall), contains(first));
+      w.game.skipWarmup();
+      w.until(() => w.game.currentWarmup != null, what: 'the next warm-up');
+      final second = w.game.currentWarmup!.question;
+      expect(slot(WarmupSlot.recall), contains(second));
+      expect(second, isNot(first));
+      w.until(
+        () => w.game.phase == GamePhase.ask,
+        what: 'calibration to finish',
+      );
+      final asked = [
+        for (final x in w.game.warmups)
+          if (!x.skipped) x.question,
+      ];
+      expect(
+        asked.length,
+        greaterThanOrEqualTo(3),
+        reason: 'the skip is not one of the three',
+      );
+      expect(slot(WarmupSlot.recall), contains(asked[0]));
+      expect(slot(WarmupSlot.compare), contains(asked[1]));
+      expect(slot(WarmupSlot.light), contains(asked[2]));
+      w.dispose();
+    });
+  });
+
+  test('two skips in a row move on to the next slot', () {
+    fakeAsync((async) {
+      final w = World(async);
+      w.startGame(['Sam', 'Alex']);
+      w.game.agreeToMeasure();
+      Set<String> slot(WarmupSlot s) => {
+        for (final d in DeckLibrary.fallback.warmup)
+          if (d.slot == s) d.text,
+      };
+      for (final expected in [WarmupSlot.recall, WarmupSlot.recall]) {
+        w.until(() => w.game.currentWarmup != null, what: 'a warm-up');
+        expect(slot(expected), contains(w.game.currentWarmup!.question));
+        expect(w.game.chatBlocks, 1, reason: 'a skip fills nothing');
+        expect(w.game.warmupNumber, 1);
+        w.game.skipWarmup();
+      }
+      w.until(() => w.game.currentWarmup != null, what: 'a warm-up');
+      expect(
+        slot(WarmupSlot.compare),
+        contains(w.game.currentWarmup!.question),
+      );
+      expect(w.game.chatBlocks, 3);
+      expect(w.game.warmupNumber, 2);
+      w.dispose();
+    });
+  });
+
+  test('calibration asks all three warm-up slots, even after 15 s of chat', () {
+    fakeAsync((async) {
+      final w = World(async);
+      w.startGame(['Sam', 'Alex']);
+      w.calibrate();
+      final asked = [
+        for (final x in w.game.warmups)
+          if (!x.skipped) x.question,
+      ];
+      expect(
+        asked.length,
+        greaterThanOrEqualTo(3),
+        reason: 'more only while the baseline is not clean yet',
+      );
+      for (final (i, s) in WarmupSlot.values.indexed) {
+        expect({
+          for (final d in DeckLibrary.fallback.warmup)
+            if (d.slot == s) d.text,
+        }, contains(asked[i]));
+      }
+      expect(w.game.chatBlocks, 6);
       w.dispose();
     });
   });

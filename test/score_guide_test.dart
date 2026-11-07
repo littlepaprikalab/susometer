@@ -100,6 +100,11 @@ void main() {
       findsOneWidget,
     );
     expect(find.textContaining('more than 40% of a question'), findsOneWidget);
+    expect(
+      find.textContaining('chat through ${c.calibMaxWarmups} easy warm-ups'),
+      findsOneWidget,
+      reason: 'every warm-up slot is asked (decision 74), so no "3–3"',
+    );
     expect(find.textContaining('The first extra second is free'), findsOne);
     expect(
       find.textContaining('0 to 100, curved so a small reaction still shows.'),
@@ -145,6 +150,8 @@ void main() {
         minCleanFraction: 0.75,
         hesitationGraceS: 1.5,
         calibQuietMs: 15000,
+        calibMinWarmups: 2,
+        calibMaxWarmups: 4,
         exprCategories: ['fear', 'surprise'],
       ),
     );
@@ -169,6 +176,7 @@ void main() {
       findsOneWidget,
     );
     expect(find.textContaining('about 15 seconds'), findsOneWidget);
+    expect(find.textContaining('chat through 2–4 easy warm-ups'), findsOne);
     expect(find.textContaining('Fear or surprise going past'), findsOneWidget);
     expect(stamps(tester, stress: true), ['fear', 'surprise']);
     expect(stamps(tester, stress: false), hasLength(6));

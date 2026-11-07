@@ -47,7 +47,7 @@ status (face position, lighting, motion).
 
 **How the game reacts in real time:**
 
-- **Calibration** learns each player's normal: about 20 s sitting still, then 2–3 easy warm-ups
+- **Calibration** learns each player's normal: about 20 s sitting still, then 3 easy warm-ups
   the host reads aloud. It finishes by itself once it has 12 s of confident pulse with the face
   present 80% of the time.
 - **Questions:** each window scores four signals against that baseline: pulse rise (45%), blink

@@ -11,7 +11,7 @@ import 'result_screens.dart' show verdictColor;
 
 /// How it's scored: the Sus score, the verdict bands and the expression
 /// #tags, in plain words. Opened from the lobby's ? button, next to the gear
-/// (SPEC.md decision 74).
+/// (SPEC.md decision 75).
 ///
 /// Every number comes from the game's [ScoringConfig], so the page can't
 /// drift from the scoring.
@@ -24,6 +24,10 @@ class ScoreGuideScreen extends StatelessWidget {
     // needn't rebuild every time the game notifies.
     final c = AppScope.of(context).game.config;
     final quietS = (c.calibQuietMs / 1000).round();
+    // "3", or "2–3" while calibration may end before its last warm-up.
+    final warmups = c.calibMinWarmups >= c.calibMaxWarmups
+        ? '${c.calibMaxWarmups}'
+        : '${c.calibMinWarmups}–${c.calibMaxWarmups}';
     final noReadPct = ((1 - c.minCleanFraction) * 100).round();
     final grace = _grace(c.hesitationGraceS);
     final curve = c.scoreExponent < 1
@@ -69,8 +73,8 @@ class ScoreGuideScreen extends StatelessWidget {
               children: [
                 Text(
                   'Before your questions you sit still for about $quietS '
-                  'seconds, then chat through ${c.calibMinWarmups}–'
-                  '${c.calibMaxWarmups} easy warm-ups. That sets your usual '
+                  'seconds, then chat through $warmups easy warm-ups. That '
+                  'sets your usual '
                   'pulse, how often you blink while talking, how much your '
                   'face moves and how quickly you start answering. You are '
                   'only ever compared with you.',
