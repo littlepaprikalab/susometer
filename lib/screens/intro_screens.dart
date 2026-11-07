@@ -309,6 +309,15 @@ class _BreatherNote extends StatelessWidget {
 class CalibrateScreen extends StatelessWidget {
   const CalibrateScreen({super.key});
 
+  /// The host bubble is always this many lines tall, so the camera below
+  /// never moves when a warm-up (or the lock-in) replaces "Sit still".
+  static const bubbleLines = 3;
+
+  /// ...and its text shrinks no smaller than this. Every warm-up fits whole
+  /// on the smallest phone at the largest text size (a test checks the
+  /// deck).
+  static const bubbleMinFontSize = 14.0;
+
   @override
   Widget build(BuildContext context) {
     final game = GameScope.of(context);
@@ -377,9 +386,11 @@ class CalibrateScreen extends StatelessWidget {
             style: SusText.label,
           ),
           const SizedBox(height: 6),
-          // Two lines tall at every step, so the camera below never moves
-          // when a warm-up (or the lock-in) replaces "Sit still".
-          HostBubble(text: bubble, lines: 2),
+          HostBubble(
+            text: bubble,
+            lines: bubbleLines,
+            minFontSize: bubbleMinFontSize,
+          ),
           const SizedBox(height: 12),
           const Expanded(child: _CalibCamera()),
           const SizedBox(height: 12),

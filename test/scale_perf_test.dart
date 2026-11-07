@@ -251,6 +251,37 @@ void main() {
   });
 
   group('performance', () {
+    test('ten minutes of asking, or a warm-up stuck talking, still score '
+        'quickly (decision 76)', () {
+      fakeAsync((async) {
+        final w = World(async);
+        w.heart = (_) => 72;
+        w.startGame(['Sam', 'Alex'], questions: 2);
+        w.calibrate();
+        w.askAndAnswer(); // warms up the JIT
+        w.game.nextQuestion();
+        for (var i = 0; i < 600; i++) {
+          w.say('chatter $i');
+          w.elapse(1000);
+        }
+        w.game.doneAsking();
+        w.elapse(800);
+        w.talk(true);
+        w.elapse(2000);
+        w.talk(false);
+        w.elapse(500);
+        w.game.finalAnswer();
+        w.until(() => w.game.phase == GamePhase.settle, maxMs: 100);
+        final sw = Stopwatch()..start();
+        w.until(() => w.game.phase != GamePhase.settle);
+        final t = w.game.currentResult!.timing!;
+        expect(t.windowEnd(12000) - t.tQ0, lessThanOrEqualTo(72000));
+        // Measured: ~10 ms, with the settle ticks (was ~200 ms uncapped).
+        expect(sw.elapsedMilliseconds, lessThan(100));
+        w.dispose();
+      });
+    });
+
     test('a step left waiting stays cheap, and a late tap scores quickly '
         '(decision 76)', () {
       fakeAsync((async) {

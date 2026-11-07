@@ -41,6 +41,7 @@ class HostBubble extends StatelessWidget {
     this.fontSize = 20,
     this.singleLine = false,
     this.lines,
+    this.minFontSize = 16,
   });
 
   final String text;
@@ -52,6 +53,9 @@ class HostBubble extends StatelessWidget {
   /// Always this many full-size lines tall: shorter text sits in the middle,
   /// longer text shrinks to fit, so the bubble's height never changes.
   final int? lines;
+
+  /// With [lines]: the smallest size the text shrinks to, 2 pt at a time.
+  final double minFontSize;
 
   double _lineHeight(BuildContext context) {
     final ambient = DefaultTextStyle.of(context);
@@ -130,7 +134,14 @@ class HostBubble extends StatelessWidget {
                         alignment: Alignment.centerLeft,
                         child: FitText(
                           text,
-                          sizes: [fontSize, fontSize - 2, fontSize - 4],
+                          sizes: [
+                            for (
+                              var size = fontSize;
+                              size >= minFontSize;
+                              size -= 2
+                            )
+                              size,
+                          ],
                           overflow: FitOverflow.keepStart,
                           style: SusText.display,
                         ),

@@ -3,15 +3,19 @@
 // targets (iOS), labelled tap targets, and WCAG text contrast measured on
 // the rendered pixels.
 
+import 'dart:convert';
+import 'dart:io';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:susometer/game/decks.dart';
 import 'package:susometer/game/game_controller.dart';
 import 'package:susometer/game/models.dart';
 import 'package:susometer/presage/camera_preview.dart';
 import 'package:susometer/presage/presage_models.dart';
+import 'package:susometer/screens/intro_screens.dart';
 import 'package:susometer/settings/app_settings.dart';
 import 'package:susometer/theme/expression_stamp.dart';
 import 'package:susometer/theme/game_widgets.dart';
@@ -1057,4 +1061,92 @@ void main() {
       });
     }
   }
+
+  testWidgets('every warm-up and calibration line fits the Calibrate bubble '
+      'whole, on both phones at both text sizes', (tester) async {
+    final lines = [
+      for (final q
+          in (jsonDecode(File('assets/decks/warmup.json').readAsStringSync())
+                  as Map)['questions']
+              as List)
+        (q as Map)['q'] as String,
+      for (final w in DeckLibrary.fallback.warmup) w.text,
+      'Warming up the camera…',
+      'Sit still and look at the camera.',
+      'Christopher-Alexand, sit still and look at the camera.',
+      "That's your normal locked in.",
+    ];
+    for (final screen in const [Size(390, 844), Size(375, 667)]) {
+      for (final scale in [1.0, 1.3]) {
+        useRealPhone(tester, screen);
+        tester.platformDispatcher.textScaleFactorTestValue = scale;
+        for (final text in lines) {
+          await tester.pumpWidget(
+            MaterialApp(
+              theme: buildSusTheme(),
+              home: Scaffold(
+                body: ScreenFrame(
+                  child: Column(
+                    children: [
+                      HostBubble(
+                        text: text,
+                        lines: CalibrateScreen.bubbleLines,
+                        minFontSize: CalibrateScreen.bubbleMinFontSize,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          );
+          expect(
+            find.descendant(
+              of: find.byType(HostBubble),
+              matching: find.byType(ClipRect),
+            ),
+            findsNothing,
+            reason: '"$text" was cut at ×$scale on $screen',
+          );
+        }
+      }
+    }
+    tester.platformDispatcher.clearTextScaleFactorTestValue();
+  });
+
+  testWidgets('voting near the bottom of the list keeps its place', (
+    tester,
+  ) async {
+    final rig = Rig(tester);
+    await rig.pumpApp(size: const Size(375, 667));
+    await rig.startParty([
+      'Sam',
+      'Alex',
+      'Priya',
+      'Jordan',
+      'Kai',
+      'Mo',
+      'Lee',
+    ]);
+    await rig.tap('I agree, measure me');
+    await rig.until(() => rig.game.phase == GamePhase.ask);
+    rig.game.doneAsking();
+    await rig.wait(200);
+    await rig.tap('Final answer');
+    await rig.until(() => rig.game.phase == GamePhase.callIt);
+    await waitOutTapGuard(tester);
+    final last = rig.game.voters.last;
+    final pick = find.bySemanticsLabel('${last.name}: Sus');
+    await tester.ensureVisible(pick);
+    await tester.pump(const Duration(milliseconds: 300));
+    final position = tester
+        .state<ScrollableState>(find.byType(Scrollable).first)
+        .position;
+    final offset = position.pixels;
+    expect(offset, greaterThan(0), reason: 'the list had to scroll');
+    await tester.tap(pick);
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(rig.game.pendingVotes[last.id], Vote.sus);
+    expect(position.pixels, offset, reason: 'the list jumped after the vote');
+    await rig.finish();
+  });
 }

@@ -1502,6 +1502,7 @@ void main() {
       expect(w.game.pendingVotes, {alex: Vote.legit, priya: Vote.sus});
       w.game.castVote(alex, Vote.sus);
       expect(w.game.pendingVotes[alex], Vote.sus, reason: 'switched');
+      w.elapse(700); // not a double tap
       w.game.castVote(priya, Vote.sus);
       expect(w.game.pendingVotes.containsKey(priya), isFalse, reason: 'undone');
       w.game.reveal();

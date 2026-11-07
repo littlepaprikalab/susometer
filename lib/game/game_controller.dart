@@ -710,12 +710,17 @@ class GameController extends ChangeNotifier {
     final w = currentWarmup;
     if (w == null || !_once('nextWarmup')) return;
     final lastEnd = _calibTalk.lastEndMs;
-    // The answer ended when the player stopped talking, not at the tap.
+    // The answer ended when the player stopped talking, not at the tap, and
+    // at most a minute after the warm-up was asked: a talking flag stuck on
+    // until a late Next would otherwise make one long warm-up window.
     final answered =
         w.latencyS != null && !_calibTalk.talking && lastEnd != null;
     w
       ..done = true
-      ..doneAtMs = answered ? lastEnd : nowMs;
+      ..doneAtMs = min(
+        answered ? lastEnd : nowMs,
+        w.askedAtMs + _turnConfig.maxAnswerMs,
+      );
     _afterWarmup();
   }
 
@@ -1214,6 +1219,9 @@ class GameController extends ChangeNotifier {
   void castVote(String voterId, Vote vote) {
     if (phase != GamePhase.callIt) return;
     if (!voters.any((p) => p.id == voterId)) return;
+    // A fast double tap on a pick counts once, so it doesn't undo itself.
+    // Switching to the other pick is a different tap and always works.
+    if (!_once('vote:$voterId:${vote.name}')) return;
     if (pendingVotes[voterId] == vote) {
       pendingVotes.remove(voterId);
     } else {

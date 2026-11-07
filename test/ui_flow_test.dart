@@ -403,9 +403,14 @@ void main() {
     expect(rig.game.pendingVotes[alex], Vote.legit);
     await rig.tap('Sus');
     expect(rig.game.pendingVotes[alex], Vote.sus);
+    // A second tap on the same pick right away is a double tap: it stays.
+    await rig.tap('Sus');
+    expect(rig.game.pendingVotes[alex], Vote.sus);
+    await rig.wait(700);
     await rig.tap('Sus');
     expect(find.text('0 / 1 voted'), findsOneWidget);
     expect(rig.game.pendingVotes, isEmpty);
+    await rig.wait(700);
     await rig.tap('Sus');
     expect(find.text('1 / 1 voted'), findsOneWidget);
     await rig.tap('Reveal');

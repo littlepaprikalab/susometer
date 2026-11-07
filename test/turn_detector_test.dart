@@ -326,6 +326,37 @@ void main() {
       expect(story.detector.tA1, 61000, reason: 'a long story is capped too');
     });
 
+    test('an answer that only starts after the minute is scored as none', () {
+      final s = Script(party());
+      s.speech(1000);
+      s.doneAsking(2000);
+      s.talk(90000, true);
+      s.talk(93000, false);
+      s.finalAnswer(94000);
+      s.run(94000);
+      final t = s.detector.timing();
+      expect(t.tA1, 61000);
+      expect(t.tA0, isNull, reason: 'it started after the scored answer');
+      expect(t.windowEnd(12000) - t.tQ0, lessThanOrEqualTo(60000));
+    });
+
+    test('the scored question starts at most 60 s before it ended', () {
+      final s = Script(party());
+      for (var t = 1000; t <= 600000; t += 1000) {
+        s.speech(t);
+      }
+      s.doneAsking(601000);
+      s.talk(601500, true);
+      s.talk(603000, false);
+      s.finalAnswer(604000);
+      s.run(604000);
+      final t = s.detector.timing();
+      expect(s.detector.tQ0, 1000, reason: 'the detector keeps the real start');
+      expect(t.tQ1, 600000);
+      expect(t.tQ0, 600000 - 60000);
+      expect(t.tA0, 601500);
+    });
+
     test('Final answer straight from Ask ends the question too', () {
       final s = Script(party());
       s.speech(1000);

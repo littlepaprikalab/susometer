@@ -12,6 +12,7 @@ class TurnConfig {
     this.lateWordsMs = 1000,
     this.tapAllowanceMs = 1500,
     this.maxAnswerMs = 60000,
+    this.maxQuestionMs = 60000,
   });
 
   /// SmartSpectra `talking` must hold this long to count as a talk start.
@@ -43,6 +44,11 @@ class TurnConfig {
   /// it a forgotten tap would score (and search for heartbeats in) every
   /// minute since the question, freezing the screen on the tap.
   final int maxAnswerMs;
+
+  /// The scored question starts at most this long before it ended. Nothing
+  /// ends the question on screen either, so a room that chats for minutes
+  /// before Done asking would otherwise be scored as one long question.
+  final int maxQuestionMs;
 }
 
 /// Debounces SmartSpectra `talking` edges into confirmed talk starts/ends.
@@ -255,14 +261,13 @@ class TurnDetector {
   /// Where the scored answer ends for a Final answer tap at [tapMs]: the
   /// tap, or [TurnConfig.answerTailMs] after the player last spoke if that's
   /// sooner, and never more than [TurnConfig.maxAnswerMs] after the question
-  /// ended (or before it, or before the answer started).
+  /// ended. An answer that only started after that is scored as none: the
+  /// window is the minute after the question (see [timing]).
   int _answerEnd(int tapMs) {
-    final end = tQ1!;
-    final cap = math.min(tapMs, end + config.maxAnswerMs);
+    final cap = math.min(tapMs, tQ1! + config.maxAnswerMs);
     final start = tA0;
-    if (start == null || _talk.talking || _talk.rawTalking) {
-      return math.max(cap, start ?? end);
-    }
+    if (start == null || start >= cap) return cap;
+    if (_talk.talking || _talk.rawTalking) return cap;
     final last = math.max(lastPlayerActivityMs ?? start, start);
     return math.max(math.min(cap, last + config.answerTailMs), start);
   }
@@ -322,12 +327,19 @@ class TurnDetector {
     return events;
   }
 
-  /// Timing markers once the answer has ended.
-  QuestionTiming timing() => QuestionTiming(
-    tQ0: tQ0 ?? startMs,
-    tQ1: tQ1 ?? startMs,
-    tA0: tA0,
-    tA1: tA1 ?? tQ1 ?? startMs,
-    hesitationFromMs: hesitationFromMs ?? tQ1 ?? startMs,
-  );
+  /// Timing markers once the answer has ended. An answer that started after
+  /// the scored answer ended ([TurnConfig.maxAnswerMs]) counts as none, and
+  /// the question starts at most [TurnConfig.maxQuestionMs] before its end.
+  QuestionTiming timing() {
+    final end = tA1 ?? tQ1 ?? startMs;
+    final start = tA0;
+    final asked = tQ1 ?? startMs;
+    return QuestionTiming(
+      tQ0: math.max(tQ0 ?? startMs, asked - config.maxQuestionMs),
+      tQ1: asked,
+      tA0: start != null && start <= end ? start : null,
+      tA1: end,
+      hesitationFromMs: hesitationFromMs ?? tQ1 ?? startMs,
+    );
+  }
 }

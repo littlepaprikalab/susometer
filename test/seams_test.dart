@@ -131,7 +131,11 @@ void main() {
       w.elapse(60000);
       expect(second.done, isFalse);
       w.game.nextWarmup();
-      expect(second.doneAtMs, w.now, reason: 'still talking: at the tap');
+      expect(
+        second.doneAtMs,
+        second.askedAtMs + 60000,
+        reason: 'still talking at the tap: a minute after it was asked',
+      );
       w.talk(false);
 
       // And calibration still finishes (a third warm-up, answered).
@@ -265,6 +269,100 @@ void main() {
         expect(w.game.tickerRunning, isTrue);
         final r = w.askAndAnswer();
         expect(r.index, 1);
+        w.dispose();
+      });
+    });
+
+    test('solo: a minute and a half on the card, then an answer: scored as '
+        'the minute after the question, quickly', () {
+      fakeAsync((async) {
+        final w = World(async);
+        w.heart = (_) => 72;
+        w.game.setMode(GameMode.solo);
+        w.startGame(['Sam'], questions: 1);
+        w.calibrate();
+        w.elapse(500);
+        w.elapse(90000);
+        w.game.readyToAnswer();
+        w.elapse(800);
+        w.talk(true);
+        w.elapse(3000);
+        w.talk(false);
+        w.elapse(500);
+        w.game.finalAnswer();
+        w.until(
+          () =>
+              w.game.phase == GamePhase.verdict ||
+              w.game.phase == GamePhase.redo,
+        );
+        final t = w.game.currentResult!.timing!;
+        expect(t.tA0, isNull);
+        expect(t.tA1 - t.tQ1, 60000);
+        expect(t.windowEnd(12000) - t.tQ0, lessThanOrEqualTo(65000));
+        w.dispose();
+      });
+    });
+
+    test('a warm-up whose talking flag sticks until a late Next ends a minute '
+        'after it was asked', () {
+      fakeAsync((async) {
+        final w = World(async)
+          ..autoAnswerWarmups = false
+          ..autoTaps = false;
+        w.startGame(['Sam', 'Alex']);
+        w.game.agreeToMeasure();
+        w.until(() => w.game.calibStage == CalibStage.chat, what: 'chat');
+        final first = w.game.currentWarmup!;
+        w.elapse(800);
+        w.talk(true);
+        w.elapse(10 * 60000);
+        w.game.nextWarmup();
+        w.talk(false);
+        expect(first.doneAtMs! - first.askedAtMs, 60000);
+        w.dispose();
+      });
+    });
+
+    test('a double tap on a pick keeps the vote; switching always works', () {
+      fakeAsync((async) {
+        final w = World(async);
+        w.startGame(['Sam', 'Alex', 'Priya'], questions: 1);
+        w.calibrate();
+        w.elapse(300);
+        w.say('Have you ever lied?');
+        w.elapse(500);
+        w.game.doneAsking();
+        w.elapse(800);
+        w.talk(true);
+        w.elapse(1500);
+        w.talk(false);
+        w.game.finalAnswer();
+        w.until(() => w.game.phase == GamePhase.callIt);
+        final [alex, priya] = [for (final v in w.game.voters) v.id];
+        w.game.castVote(alex, Vote.legit);
+        w.elapse(80);
+        w.game.castVote(alex, Vote.legit);
+        expect(w.game.pendingVotes[alex], Vote.legit, reason: 'double tap');
+        w.game.castVote(alex, Vote.sus);
+        expect(w.game.pendingVotes[alex], Vote.sus, reason: 'switched at once');
+        w.game.castVote(priya, Vote.sus);
+        expect(w.game.pendingVotes[priya], Vote.sus, reason: 'another voter');
+        w.elapse(700);
+        w.game.castVote(alex, Vote.sus);
+        expect(w.game.pendingVotes.containsKey(alex), isFalse, reason: 'undo');
+        // The votes survive a screenshot and a long trip away.
+        w.game.castVote(alex, Vote.legit);
+        w.leaveApp(3000);
+        expect(w.game.phase, GamePhase.callIt);
+        w.leaveApp(GameController.autoResumeWithinMs + 5000);
+        w.game.resume();
+        w.elapse(300);
+        expect(w.game.pendingVotes, {alex: Vote.legit, priya: Vote.sus});
+        w.game.reveal();
+        expect(w.game.currentResult!.votes, {
+          alex: Vote.legit,
+          priya: Vote.sus,
+        });
         w.dispose();
       });
     });
