@@ -462,6 +462,7 @@ class GameController extends ChangeNotifier {
     questionIndex = 0;
     awards = null;
     paused = false;
+    _voiceLostMidTurn = false;
     notice = micEnabled ? null : 'Playing without voice: tap to move on.';
     unawaited(device.setKeepAwake(true));
     _setPhase(hasSeenHowToPlay ? GamePhase.consent : GamePhase.howToPlay);
@@ -550,6 +551,12 @@ class GameController extends ChangeNotifier {
     chatStartMs = null;
     sdkError = null;
     _recoveries = 0;
+    if (_voiceLostMidTurn) {
+      // The mic or recognizer stopped mid-turn: try voice again from here.
+      _voiceLostMidTurn = false;
+      micEnabled = true;
+      notice = null;
+    }
     _setPhase(GamePhase.calibrate);
     final e = _epoch;
     try {
@@ -621,11 +628,20 @@ class GameController extends ChangeNotifier {
     }
   }
 
+  /// Voice went off because the mic or recognizer stopped working mid-turn,
+  /// not because of a permission or the player's choice. The next turn
+  /// tries it again (SPEC.md decision 71).
+  bool _voiceLostMidTurn = false;
+
   void _fallBackToNoVoice(String code) {
     if (!micEnabled) return;
     micEnabled = false;
+    _voiceLostMidTurn =
+        code == 'RECOGNIZER_FAILING' || code == 'AUDIO_RESTART_FAILED';
     notice = code == 'ON_DEVICE_UNAVAILABLE'
         ? "On-device speech isn't available, so it's tap-to-advance now."
+        : _voiceLostMidTurn
+        ? 'Voice recognition stopped, so it\'s tap-to-advance for this turn.'
         : 'Voice recognition stopped, so it\'s tap-to-advance now.';
     unawaited(speech.stop().catchError((Object _) {}));
     notifyListeners();
@@ -820,6 +836,10 @@ class GameController extends ChangeNotifier {
       : (live.askerText.isEmpty ? '' : live.askerText);
 
   void _beginQuestion({String? repeat}) {
+    // Whatever the host was still saying (a verdict line, or the question
+    // being re-asked after a camera restart or a skip) stops here, so the
+    // new reading doesn't queue behind it with the mic gated.
+    unawaited(host.stopSpeaking().catchError((Object _) {}));
     detector = TurnDetector(
       party: mode == GameMode.party,
       micEnabled: micEnabled,
@@ -851,10 +871,15 @@ class GameController extends ChangeNotifier {
 
   Future<void> _soloReadQuestion() async {
     final text = questionText;
+    // The same text can be asked again (camera restart, resume), so the
+    // question is told apart by its detector, not its text.
+    final asked = detector;
     // Fallback timing when the host voice is off: rough reading time.
     _soloReadEndsAt = nowMs + 1500 + 55 * text.length;
     await _say('Here\'s one for you, ${currentPlayer.name}. $text');
-    if (phase == GamePhase.ask && questionText == text && settings.hostVoice) {
+    if (identical(detector, asked) &&
+        phase == GamePhase.ask &&
+        settings.hostVoice) {
       _apply(detector?.onHostFinishedQuestion(nowMs) ?? const []);
     }
   }
@@ -864,7 +889,6 @@ class GameController extends ChangeNotifier {
     if (mode != GameMode.solo) return;
     if (phase != GamePhase.ask && !soloHoldsQuestion) return;
     if (!_once('differentQuestion')) return;
-    unawaited(host.stopSpeaking());
     _beginQuestion();
   }
 
@@ -1159,8 +1183,13 @@ class GameController extends ChangeNotifier {
       Verdict.sus => (Sfx.buzzer, HapticCue.sus),
     };
     _haptic(cue);
+    final shown = currentResult;
     unawaited(() async {
       if (settings.soundEffects) await host.play(sfx);
+      // "Next question" during the sound: don't say it over the next one.
+      if (phase != GamePhase.verdict || !identical(currentResult, shown)) {
+        return;
+      }
       await _say(switch (verdict) {
         Verdict.legit => 'Legit!',
         Verdict.hmm => 'Hmm…',
@@ -1521,8 +1550,14 @@ class GameController extends ChangeNotifier {
       case SpeechStateChange():
         break;
       case SpeechError():
-        if (e.code == 'RECOGNIZER_FAILING' ||
-            e.code == 'ON_DEVICE_UNAVAILABLE') {
+        // Each of these leaves the mic dead: say so and go tap-to-advance
+        // rather than wait out the 20 s no-answer timeout on every question.
+        // Outside a turn the mic belongs to someone else (Settings' signal
+        // check), so leave it alone.
+        if (_sdkShouldRun &&
+            (e.code == 'RECOGNIZER_FAILING' ||
+                e.code == 'ON_DEVICE_UNAVAILABLE' ||
+                e.code == 'AUDIO_RESTART_FAILED')) {
           _fallBackToNoVoice(e.code);
         }
     }

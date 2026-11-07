@@ -99,6 +99,14 @@ Settings → **Signal check** → **Start both**. Allow microphone and speech re
   reopens).
 - [ ] Double-tap *Ready to answer* fast: the answer must **not** end (the second tap lands where
   *Final answer* appears).
+- [ ] Tap *Different question* while the host is reading, twice in a row, then *Ready to answer*
+  mid-sentence on the next one. Answer out loud: your words still show up on every later question
+  (a lost cancel callback used to mute recognition for the rest of the session).
+- [ ] Hold the side button for Siri while the verdict sound plays, then dismiss Siri. On the next
+  question your words still show up (a paused sound used to gate the mic for good).
+- [ ] Connect or disconnect AirPods mid-question. Within a few seconds your words show up again; if
+  the mic can't come back, a "tap-to-advance for this turn" notice shows, and the next player's turn
+  has voice again.
 
 ## 5. Edge cases
 

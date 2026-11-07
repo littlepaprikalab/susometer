@@ -2,6 +2,7 @@ import AVFoundation
 import Flutter
 import Foundation
 import Speech
+import UIKit
 
 /// Native on-device speech recognition (SPEC.md §1, §7, §8).
 ///
@@ -45,10 +46,11 @@ final class SpeechBridge {
   // Host voice and sound effects (half-duplex, SPEC.md §7).
   private let synthesizer = AVSpeechSynthesizer()
   private var synthDelegate: SynthDelegate?
-  private var pendingSpeech: [ObjectIdentifier: FlutterResult] = [:]
+  private var speech = HostSpeech<FlutterResult>()
+  private var settleWork: DispatchWorkItem?
   private var players: [ObjectIdentifier: (AVAudioPlayer, PlayerDelegate, FlutterResult)] = [:]
-  private var hostOutputs = 0
   private var reopenWork: DispatchWorkItem?
+  private var engineRetry: DispatchWorkItem?
 
   private init(messenger: FlutterBinaryMessenger) {
     methodChannel = FlutterMethodChannel(name: Self.methodChannelName, binaryMessenger: messenger)
@@ -121,7 +123,7 @@ final class SpeechBridge {
       speak(text, result: result)
 
     case "stopSpeaking":
-      synthesizer.stopSpeaking(at: .immediate)
+      stopSpeaking()
       result(nil)
 
     case "playSound":
@@ -195,6 +197,8 @@ final class SpeechBridge {
     guard listening else { return }
     listening = false
     paused = false
+    engineRetry?.cancel()
+    engineRetry = nil
     feed.setRequest(nil)
     request?.endAudio()
     request = nil
@@ -256,19 +260,27 @@ final class SpeechBridge {
   /// Recognition hears nothing while the host speaks or a sound plays, and
   /// for 150 ms after (SPEC.md §7), so transcripts never contain the host.
   private func applyGate() {
-    feed.setGated(paused || hostOutputs > 0 || reopenWork != nil)
+    feed.setGated(paused || hostBusy || reopenWork != nil)
   }
 
+  /// Host output that may still be playing: utterances and sounds that
+  /// haven't reported finishing (or been given up on, see [HostSpeech] and
+  /// `playSound`). Read from what's out, not a counter, so a lost callback
+  /// can't hold the gate shut for good.
+  private var hostBusy: Bool { speech.busy || !players.isEmpty }
+
+  /// Call after recording the utterance or sound as out.
   private func beginHostOutput() {
-    hostOutputs += 1
     reopenWork?.cancel()
     reopenWork = nil
     applyGate()
   }
 
+  /// Call after an utterance or sound is no longer out. The mic reopens
+  /// 150 ms after the last host output ends.
   private func endHostOutput() {
-    hostOutputs = max(0, hostOutputs - 1)
-    guard hostOutputs == 0 else { return }
+    guard !hostBusy else { return }
+    reopenWork?.cancel()
     let work = DispatchWorkItem { [weak self] in
       MainActor.assumeIsolated {
         guard let self else { return }
@@ -283,20 +295,68 @@ final class SpeechBridge {
 
   private func speak(_ text: String, result: @escaping FlutterResult) {
     ensurePlaybackSession()
-    beginHostOutput()
     let utterance = AVSpeechUtterance(string: text)
     utterance.voice = Self.hostVoice()
     utterance.rate = AVSpeechUtteranceDefaultSpeechRate
     utterance.pitchMultiplier = 1.05
-    pendingSpeech[ObjectIdentifier(utterance)] = result
+    speech.spoke(utterance, reply: result)
+    beginHostOutput()
     synthesizer.speak(utterance)
+  }
+
+  /// Called by [SynthDelegate] when an utterance starts playing.
+  func utteranceStarted(_ id: ObjectIdentifier) {
+    // It was stopped before it started and iOS played it anyway.
+    if speech.shouldStopAgain(started: id) {
+      synthesizer.stopSpeaking(at: .immediate)
+    }
   }
 
   /// Called by [SynthDelegate] when an utterance finishes or is cancelled.
   func utteranceDone(_ id: ObjectIdentifier) {
-    guard let result = pendingSpeech.removeValue(forKey: id) else { return }
+    let (wasOut, reply) = speech.ended(id)
+    guard wasOut else { return }
     endHostOutput()
-    result(nil)
+    reply?(nil)
+  }
+
+  /// Stops the host mid-sentence (a new question, solo "Ready to answer",
+  /// pause, end of turn, or Dart's speak timeout). Dart's waiting `speak`
+  /// calls complete now; the mic stays gated until the stopped utterances
+  /// report back, or at most about 3 s if they never do (decision 71).
+  private func stopSpeaking() {
+    synthesizer.stopSpeaking(at: .immediate)
+    for reply in speech.stop() {
+      reply(nil)
+    }
+    if speech.stoppedCount > 0 { scheduleSettle(attempt: 1) }
+  }
+
+  private func scheduleSettle(attempt: Int) {
+    settleWork?.cancel()
+    let work = DispatchWorkItem { [weak self] in
+      MainActor.assumeIsolated {
+        guard let self else { return }
+        self.settleWork = nil
+        self.settleStopped(attempt: attempt)
+      }
+    }
+    settleWork = work
+    DispatchQueue.main.asyncAfter(deadline: .now() + 1.0, execute: work)
+  }
+
+  /// A second after a stop: stop again if a stopped utterance is still
+  /// playing, and give up on any that never reported back.
+  private func settleStopped(attempt: Int) {
+    switch speech.settle(synthesizerSpeaking: synthesizer.isSpeaking, lastTry: attempt >= 3) {
+    case .done:
+      break
+    case .stopAgain:
+      synthesizer.stopSpeaking(at: .immediate)
+      scheduleSettle(attempt: attempt + 1)
+    case .dropped:
+      endHostOutput()
+    }
   }
 
   /// Best English voice the app can use: premium, then enhanced, then
@@ -341,13 +401,25 @@ final class SpeechBridge {
       return
     }
     ensurePlaybackSession()
-    beginHostOutput()
     let delegate = PlayerDelegate(bridge: self)
     player.delegate = delegate
     let id = ObjectIdentifier(player)
     players[id] = (player, delegate, result)
+    beginHostOutput()
     if !player.play() {
       soundDone(id)
+      return
+    }
+    // A sound paused by an interruption (a call, Siri) or cut off when the
+    // audio session is deactivated never reports finishing. Give it its
+    // length plus a second, then stop it and stop gating the mic for it.
+    let deadline = player.duration + 1.0
+    DispatchQueue.main.asyncAfter(deadline: .now() + deadline) { [weak self, weak player] in
+      MainActor.assumeIsolated {
+        guard let self, let player, self.players[id]?.0 === player else { return }
+        player.stop()
+        self.soundDone(id)
+      }
     }
   }
 
@@ -487,6 +559,17 @@ final class SpeechBridge {
           }
         }
       })
+    observers.append(
+      center.addObserver(
+        forName: UIApplication.didBecomeActiveNotification, object: nil, queue: .main
+      ) { [weak self] _ in
+        MainActor.assumeIsolated {
+          // iOS doesn't always send an interruption's end. If the engine is
+          // still down once the app is back in front, restart it.
+          guard let self, self.listening, !self.engine.isRunning else { return }
+          self.recoverEngine()
+        }
+      })
   }
 
   private func removeAudioNotifications() {
@@ -496,16 +579,36 @@ final class SpeechBridge {
     observers.removeAll()
   }
 
-  private func recoverEngine() {
+  private func recoverEngine(attempt: Int = 0) {
+    engineRetry?.cancel()
+    engineRetry = nil
     guard listening else { return }
     engine.stop()
     engine.inputNode.removeTap(onBus: 0)
     do {
       try configureAudioSession()
       try startEngine()
-      if !paused { beginSegment() }
+      if !paused {
+        // Close the old segment so its last words still arrive.
+        feed.setRequest(nil)
+        request?.endAudio()
+        beginSegment()
+      }
       sendState(paused ? "paused" : "listening")
     } catch {
+      // A new route can take a moment: the input reads 0 Hz while a headset
+      // switches, and the session can refuse to activate just after an
+      // interruption. Retry for about 4 s before giving up (Dart then goes
+      // tap-to-advance for the rest of the turn).
+      if attempt < 4 {
+        let work = DispatchWorkItem { [weak self] in
+          MainActor.assumeIsolated { self?.recoverEngine(attempt: attempt + 1) }
+        }
+        engineRetry = work
+        DispatchQueue.main.asyncAfter(
+          deadline: .now() + 0.25 * Double(1 << attempt), execute: work)
+        return
+      }
       stream.send([
         "type": "error", "code": "AUDIO_RESTART_FAILED",
         "message": error.localizedDescription, "t": nowMs(),
@@ -611,6 +714,13 @@ final class SynthDelegate: NSObject, AVSpeechSynthesizerDelegate {
   }
 
   func speechSynthesizer(
+    _ synthesizer: AVSpeechSynthesizer, didStart utterance: AVSpeechUtterance
+  ) {
+    let id = ObjectIdentifier(utterance)
+    Task { @MainActor [weak bridge] in bridge?.utteranceStarted(id) }
+  }
+
+  func speechSynthesizer(
     _ synthesizer: AVSpeechSynthesizer, didFinish utterance: AVSpeechUtterance
   ) {
     let id = ObjectIdentifier(utterance)
@@ -641,5 +751,89 @@ final class PlayerDelegate: NSObject, AVAudioPlayerDelegate {
   func audioPlayerDecodeErrorDidOccur(_ player: AVAudioPlayer, error: Error?) {
     let id = ObjectIdentifier(player)
     Task { @MainActor [weak bridge] in bridge?.soundDone(id) }
+  }
+}
+
+/// The host's utterances that are still out, for the half-duplex gate
+/// (SPEC.md §7, decision 71). Pure bookkeeping, so
+/// tool/swift_typecheck/HostSpeechTests.swift can drive it on Linux;
+/// [SpeechBridge] makes the AVSpeechSynthesizer calls it asks for.
+///
+/// An utterance keeps the mic gated from `speak` until the synthesizer says it
+/// finished or was cancelled. iOS promises neither that every utterance a stop
+/// drops reports back, nor that a stopped utterance never starts after all.
+/// So `stop` hands every reply back at once (Dart moves on), the gate stays
+/// shut while a stopped utterance might still play, and `settle` gives up on
+/// the ones that never report back.
+struct HostSpeech<Reply> {
+  private struct Entry {
+    /// Held so its identifier can't be reused while it's out.
+    let utterance: AnyObject
+    /// Dart's waiting `speak` call; nil once the utterance was stopped.
+    var reply: Reply?
+  }
+
+  private var entries: [ObjectIdentifier: Entry] = [:]
+
+  /// Something may still be playing, so the mic stays gated.
+  var busy: Bool { !entries.isEmpty }
+
+  /// Dart is still waiting for one of them.
+  var awaited: Bool { entries.values.contains { $0.reply != nil } }
+
+  /// Stopped utterances that haven't reported back yet.
+  var stoppedCount: Int { entries.values.filter { $0.reply == nil }.count }
+
+  mutating func spoke(_ utterance: AnyObject, reply: Reply) {
+    entries[ObjectIdentifier(utterance)] = Entry(utterance: utterance, reply: reply)
+  }
+
+  /// The synthesizer finished or cancelled [id]. `wasOut` is false for a
+  /// callback that arrives after `settle` gave up on it; `reply` is set if
+  /// Dart is still waiting.
+  mutating func ended(_ id: ObjectIdentifier) -> (wasOut: Bool, reply: Reply?) {
+    guard let entry = entries.removeValue(forKey: id) else { return (false, nil) }
+    return (true, entry.reply)
+  }
+
+  /// [id] started playing. True when it had been stopped already and no
+  /// utterance Dart waits for would be cut off, so the caller stops the
+  /// synthesizer again.
+  func shouldStopAgain(started id: ObjectIdentifier) -> Bool {
+    guard let entry = entries[id], entry.reply == nil else { return false }
+    return !awaited
+  }
+
+  /// The host was told to stop: every waiting reply goes back now. The
+  /// utterances stay out until they report back or `settle` gives up.
+  mutating func stop() -> [Reply] {
+    var replies: [Reply] = []
+    for id in Array(entries.keys) {
+      if let reply = entries[id]?.reply {
+        replies.append(reply)
+        entries[id]?.reply = nil
+      }
+    }
+    return replies
+  }
+
+  enum Settle: Equatable {
+    /// Every stopped utterance has reported back.
+    case done
+    /// Still playing with nothing awaited: stop again and settle later.
+    case stopAgain
+    /// Gave up on the stopped ones that never reported back.
+    case dropped
+  }
+
+  /// A while after a stop, for the stopped utterances still out.
+  mutating func settle(synthesizerSpeaking: Bool, lastTry: Bool) -> Settle {
+    guard stoppedCount > 0 else { return .done }
+    // While Dart waits for a newer utterance, that one holds the gate, and
+    // the synthesizer plays in order, so anything stopped would come out
+    // before it. Otherwise the synthesizer itself says whether it's quiet.
+    if synthesizerSpeaking && !awaited && !lastTry { return .stopAgain }
+    entries = entries.filter { $0.value.reply != nil }
+    return .dropped
   }
 }

@@ -252,7 +252,12 @@ void main() {
         'permission values',
       );
       expectAllIn(
-        ['RECOGNIZER_FAILING', 'ON_DEVICE_UNAVAILABLE', 'MIC_DENIED'],
+        [
+          'RECOGNIZER_FAILING',
+          'ON_DEVICE_UNAVAILABLE',
+          'MIC_DENIED',
+          'AUDIO_RESTART_FAILED',
+        ],
         speechSwift,
         'speech error codes',
       );
@@ -436,6 +441,66 @@ void main() {
       ]) {
         expect(speechSwift, contains(s));
       }
+    });
+    test('a lost callback cannot leave the mic gated (wiring)', () {
+      // HostSpeech's behaviour is tested by tool/swift_typecheck/run.sh
+      // (HostSpeechTests.swift). This pins how the bridge wires it up.
+      String body(String signature) {
+        final m = RegExp(
+          '${RegExp.escape(signature)}[^{]*\\{([\\s\\S]*?)\\n  \\}',
+        ).firstMatch(speechSwift);
+        expect(m, isNotNull, reason: signature);
+        return m!.group(1)!;
+      }
+
+      expect(speechSwift, isNot(contains('hostOutputs')));
+      // The gate reads what's out, never a counter.
+      expect(
+        speechSwift,
+        contains(
+          'private var hostBusy: Bool { speech.busy || !players.isEmpty }',
+        ),
+      );
+      expect(
+        speechSwift,
+        contains('case "stopSpeaking":\n      stopSpeaking()'),
+      );
+      final stop = body('private func stopSpeaking()');
+      expect(stop, contains('synthesizer.stopSpeaking(at: .immediate)'));
+      expect(stop, contains('speech.stop()'));
+      expect(stop, contains('scheduleSettle(attempt: 1)'));
+      final settle = body('private func settleStopped(attempt: Int)');
+      expect(settle, contains('lastTry: attempt >= 3'));
+      expect(settle, contains('endHostOutput()'));
+      // Every synthesizer callback reaches HostSpeech, didStart included.
+      expect(speechSwift, contains('didStart utterance: AVSpeechUtterance'));
+      expect(
+        body('func utteranceStarted('),
+        contains('speech.shouldStopAgain'),
+      );
+      expect(body('func utteranceDone('), contains('speech.ended(id)'));
+      // A sound that never reports finishing is stopped after its length.
+      final sound = body('private func playSound(');
+      expect(sound, contains('player.duration + 1.0'));
+      expect(sound, contains('player.stop()'));
+      expect(sound, contains('self.soundDone(id)'));
+      // A failed engine restart retries before Dart is told.
+      final recover = body('private func recoverEngine(attempt: Int = 0)');
+      expect(recover, contains('if attempt < 4'));
+      expect(recover, contains('AUDIO_RESTART_FAILED'));
+      expect(
+        body('private func stopListening()'),
+        contains('engineRetry?.cancel()'),
+      );
+      expect(
+        speechSwift,
+        contains('UIApplication.didBecomeActiveNotification'),
+      );
+      // The behaviour tests are wired into the Swift check.
+      expect(
+        read('tool/swift_typecheck/run.sh'),
+        contains('HostSpeechTests.swift'),
+      );
     });
     test('decks and fonts are bundled', () {
       final pubspec = read('pubspec.yaml');

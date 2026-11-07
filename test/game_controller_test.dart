@@ -795,6 +795,147 @@ void main() {
     });
   });
 
+  test('a mic that fails to restart: tap-to-advance, voice back next turn', () {
+    fakeAsync((async) {
+      final w = World(async);
+      w.startGame(['Sam', 'Alex'], questions: 1);
+      w.calibrate();
+      w.speech.controller.add(
+        const SpeechError('AUDIO_RESTART_FAILED', 'no input', 0),
+      );
+      w.elapse(100);
+      expect(w.game.micEnabled, isFalse);
+      expect(w.game.notice, contains('tap-to-advance for this turn'));
+      expect(w.speech.calls.last, 'stop');
+      w.askAndAnswer();
+      w.game.endTurn();
+      w.elapse(100);
+      expect(w.game.phase, GamePhase.consent);
+      final startsBefore = w.speech.calls.where((c) => c == 'start').length;
+      w.calibrate();
+      expect(w.game.micEnabled, isTrue, reason: "Alex's turn has voice");
+      expect(w.game.notice, isNull);
+      expect(
+        w.speech.calls.where((c) => c == 'start').length,
+        startsBefore + 1,
+      );
+      w.dispose();
+    });
+  });
+
+  test('no on-device speech stays tap-to-advance for the whole game', () {
+    fakeAsync((async) {
+      final w = World(async);
+      w.startGame(['Sam', 'Alex'], questions: 1);
+      w.calibrate();
+      w.speech.controller.add(
+        const SpeechError('ON_DEVICE_UNAVAILABLE', 'no', 0),
+      );
+      w.elapse(100);
+      w.askAndAnswer();
+      w.game.endTurn();
+      w.elapse(100);
+      w.calibrate();
+      expect(w.game.micEnabled, isFalse);
+      w.dispose();
+    });
+  });
+
+  test('a speech error outside a turn leaves the mic alone', () {
+    fakeAsync((async) {
+      // Settings' signal check listens from the lobby.
+      final w = World(async);
+      w.speech.controller.add(
+        const SpeechError('AUDIO_RESTART_FAILED', 'no input', 0),
+      );
+      w.speech.controller.add(
+        const SpeechError('RECOGNIZER_FAILING', 'nope', 0),
+      );
+      w.elapse(100);
+      expect(w.game.micEnabled, isTrue);
+      expect(w.game.notice, isNull);
+      expect(w.speech.calls, isNot(contains('stop')));
+      w.dispose();
+    });
+  });
+
+  test('a new question stops the host before it speaks', () {
+    fakeAsync((async) {
+      final w = World(async);
+      w.startGame(['Sam', 'Alex'], questions: 2);
+      w.calibrate();
+      w.askAndAnswer();
+      w.game.nextQuestion();
+      w.elapse(100);
+      expect(w.game.phase, GamePhase.ask);
+      final ask = w.host.calls.lastIndexOf('say:Ask your question!');
+      expect(ask, greaterThan(0));
+      expect(
+        w.host.calls[ask - 1],
+        'stop',
+        reason: 'a verdict line still going is cut, not queued ahead',
+      );
+      w.dispose();
+    });
+  });
+
+  test('solo: a camera restart re-asks, and the old reading ends nothing', () {
+    fakeAsync((async) {
+      final w = World(async);
+      w.game.setMode(GameMode.solo);
+      w.startGame(['Sam']);
+      w.calibrate();
+      w.elapse(100);
+      // The host reads slowly from here on.
+      w.host.hold = true;
+      w.elapse(700);
+      w.game.differentQuestion();
+      final first = w.host.said.length - 1;
+      expect(w.game.phase, GamePhase.ask);
+      // The camera stops sending: the question restarts with the same text.
+      w.emitting = false;
+      w.elapse(6500);
+      w.emitting = true;
+      final second = w.host.said.length - 1;
+      expect(second, greaterThan(first), reason: 'the question was re-asked');
+      expect(w.host.said[second], w.host.said[first]);
+      // The first reading ends (stopped, or iOS finally reports it).
+      w.host.finishLine(first);
+      w.elapse(100);
+      expect(
+        w.game.phase,
+        GamePhase.ask,
+        reason: 'the re-asked question is still being read',
+      );
+      expect(w.game.detector!.questionEnded, isFalse);
+      w.host.finishLine(second);
+      w.elapse(100);
+      expect(w.game.phase, GamePhase.answer);
+      expect(w.game.detector!.questionEndReason, QuestionEndReason.hostDone);
+      w.dispose();
+    });
+  });
+
+  test('"Next question" during the verdict sound: no verdict line after', () {
+    fakeAsync((async) {
+      final w = World(async);
+      w.startGame(['Sam', 'Alex'], questions: 2);
+      w.calibrate();
+      w.host.hold = true;
+      w.askAndAnswer();
+      expect(w.game.phase, GamePhase.verdict);
+      w.game.nextQuestion();
+      w.elapse(100);
+      expect(w.game.phase, GamePhase.ask);
+      w.host.finishSounds();
+      w.elapse(100);
+      for (final line in ['Legit!', 'Hmm…', 'Sus!']) {
+        expect(w.host.said, isNot(contains(line)));
+      }
+      w.dispose();
+    });
+  });
+
   test(
     'automatic turns: silence ends the question, host prompts, 4 s silence ends the answer',
     () {
