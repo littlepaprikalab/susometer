@@ -31,7 +31,7 @@ Built for the DEV [Presage SmartSpectra SDK Challenge](https://dev.to/challenges
 ## How a game goes
 
 1. **Lobby:** add 2–8 contestants (or 1+ in *Solo · host asks*), pick 3/5/7 questions per turn
-   and a Mild or Spicy deck.
+   and a Mild or Spicy deck. The **?** next to the gear explains the score and the #tags.
 2. **Consent:** the phone goes to the hot-seat player, who reads what the camera measures and
    what happens to the data, then taps *I agree, measure me* or *Skip my turn*.
 3. **Calibrate:** about 20 s of sitting still, then 3 easy warm-up questions read by the host,
@@ -149,6 +149,11 @@ servers; it switches to tap-to-advance instead.
 - See Presage's [telemetry and privacy page](https://smartspectra.presagetech.com/docs/telemetry-and-privacy).
 
 ## How the score works
+
+The app explains this in plainer words too: tap **?** next to the gear in the lobby for
+*How it's scored* (the four signals and their weights, the verdict bands, No clean read and the
+#tags). Its numbers come from [`ScoringConfig`](lib/game/scoring_config.dart), so it always
+matches the scoring below.
 
 Everything is relative to **your own baseline** from calibration: median pulse, your blink rate
 while chatting through the warm-ups, the strongest each stress expression got in the warm-ups,

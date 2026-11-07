@@ -6,6 +6,7 @@ import '../game/models.dart';
 import '../theme/game_widgets.dart';
 import '../theme/tokens.dart';
 import '../theme/widgets.dart';
+import 'score_guide_screen.dart';
 import 'settings_screen.dart';
 
 /// 1 · Lobby (mock: docs/design/mocks/Main.dc.html).
@@ -80,6 +81,12 @@ class _LobbyScreenState extends State<LobbyScreen> {
     await services.apiKey.refresh();
   }
 
+  void _openScoreGuide() {
+    Navigator.of(
+      context,
+    ).push(MaterialPageRoute<void>(builder: (_) => const ScoreGuideScreen()));
+  }
+
   Future<void> _start(GameController game) async {
     if (_nameController.text.trim().isNotEmpty) _add(game);
     setState(() => _starting = true);
@@ -110,13 +117,23 @@ class _LobbyScreenState extends State<LobbyScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Align(
-              alignment: Alignment.centerRight,
-              child: RoundIconButton(
-                icon: Icons.settings_rounded,
-                tooltip: 'Settings',
-                onPressed: _openSettings,
-              ),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                // Neither opens while the show is starting: the game would
+                // start (or Settings open for a missing key) under the page.
+                RoundIconButton(
+                  icon: Icons.question_mark_rounded,
+                  tooltip: "How it's scored",
+                  onPressed: _starting ? null : _openScoreGuide,
+                ),
+                const SizedBox(width: 10),
+                RoundIconButton(
+                  icon: Icons.settings_rounded,
+                  tooltip: 'Settings',
+                  onPressed: _starting ? null : _openSettings,
+                ),
+              ],
             ),
             const SizedBox(height: 6),
             Expanded(
@@ -264,11 +281,7 @@ class _PlayerRow extends StatelessWidget {
             child: FittedBox(
               fit: BoxFit.scaleDown,
               alignment: Alignment.centerLeft,
-              child: Text(
-                player.name,
-                maxLines: 1,
-                style: SusText.display(21),
-              ),
+              child: Text(player.name, maxLines: 1, style: SusText.display(21)),
             ),
           ),
           IconButton(

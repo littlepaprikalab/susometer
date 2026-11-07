@@ -3,6 +3,7 @@ import 'package:flutter/widgets.dart';
 import 'audio/host_audio.dart';
 import 'device/device_api.dart';
 import 'game/game_controller.dart';
+import 'game/scoring_config.dart';
 import 'presage/presage_channel.dart';
 import 'settings/app_settings.dart';
 import 'voice/speech_service.dart';
@@ -18,6 +19,7 @@ class AppServices {
     HostAudio? host,
     HapticsApi? haptics,
     TurnConfig? turnConfig,
+    ScoringConfig config = const ScoringConfig(),
     int Function()? now,
   }) : device = device ?? MethodChannelDevice(),
        settings = settings ?? AppSettings(),
@@ -31,6 +33,7 @@ class AppServices {
       host: host ?? const SilentHostAudio(),
       haptics: haptics ?? const SystemHaptics(),
       turnConfig: turnConfig ?? const TurnConfig(),
+      config: config,
       now: now,
     );
   }

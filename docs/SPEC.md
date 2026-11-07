@@ -49,6 +49,8 @@ Verify every package name and version on pub.dev before adding it. The choices a
 
 **Settings:** `8 Settings · Presage API key`, opened from the gear button at the top right of the Lobby.
 
+**Score guide:** *How it's scored*, opened from the **?** button next to the gear (decision 75). Not mocked.
+
 Two screens are **not mocked**, so build them in the same style:
 - **Countdown:** full screen, mustard background, flashing marquee bulbs, a giant "3… 2… 1…" in Bowlby, plus a drumroll.
 - **Call it!:** the room vote, see §5.6.
@@ -614,3 +616,20 @@ Choices made once the real APIs were in hand. Where these differ from the sectio
 
       `test/game_controller_test.dart` runs a solo turn through the real controller (heat 1, 1, 2, 2, 3), a calibration whose skipped recall warm-up is replaced by another recall before compare and light, two skips in a row moving on to compare (the progress blocks and "Warm-up N of 3" unchanged by a skip), and one with no skips that asks all three slots even though the chat passed 15 s after two (it fails on the old two-warm-up rule).
     - *Device only:* whether heat 3 really reads hotter on the meter, and how often players skip room questions. Check both in the next play-test.
+75. **How it's scored, in the app.** Players saw a score and #tags with no way to tell where they came from: what the bands mean, why a red #fear can sit beside a Legit, why a teal #happy never moves anything. The answers were only in the README. A **?** button next to the lobby's gear now opens *How it's scored* (`lib/screens/score_guide_screen.dart`), a scrolling page in the Settings style:
+    - *Your normal:* the sit-still and warm-ups, and that you're only compared with you.
+    - *What counts:* pulse, blinks, expressions and pause, each with its share of the score and one line on what moves it, and that only what's past your own normal wobble counts.
+    - *The verdict:* how the four become 0–100, the Legit / Hmm… / Sus! bands in the verdict board's colors (Sus in `tomatoDeep`, since its range is small cream text), what the verdict screen's three tiles mean, and the formula for the curious.
+    - *No clean read:* no score when the face or pulse is missing for too much of a question.
+    - *The #tags:* all eight drawn with the real `ExpressionStamp`, red for the ones the score counts and teal for the rest; that a tag is the live reading, not compared with your normal, so a red one isn't a Sus score; and that it's the camera's best guess and can misread a face (decision 70: Presage publishes no accuracy data for it).
+    - *One source of truth:* every number on the page (weights, bands, curve, the clean-read share, the free pause, the sit-still time, which tags are red) is read from the game's `ScoringConfig`, so tuning a constant updates the page. The red/teal split uses the same list as the camera's stamp.
+    - *Tests:* `test/score_guide_test.dart`: the lobby's ? opens the page and Back returns; the default page shows the real weights, bands, formula and tag split; a page built on a different `ScoringConfig` shows that config's numbers and none of the defaults (so a hard-coded number fails it); tap targets, labels and contrast on every screenful; and no overflow on a 320 pt phone at the largest text size. The lobby's VoiceOver test covers the ? button, and the gallery adds `09-score-guide`.
+    - *Reliability pass (seams):*
+        - *Starting the show:* *Start the show* awaits the Keychain and the permission checks before the game begins. A tap on ? (or the gear) in that gap opened the page, and the game then started under it, so Back landed on How to play; with no key, Settings opened on top of the page. Both buttons now do nothing while the start is in progress (*Warming up…*).
+        - *No rebuilds:* the page read the config through `GameScope`, so it rebuilt every time the game notified. It now reads it through `AppScope` (`AppServices` takes the config, as it does `turnConfig`), which only changes with the services. Nothing on the page runs per tick or per frame; the eight stamps paint once and are cached.
+        - *Double tap:* the route transition swallows the second tap, so a double tap on ? opens one page. Leaving the app with the page open comes back to it in the lobby, with no Pause sheet and no camera.
+        - *The words follow the config too:* the curve sentence and the formula's power follow `scoreExponent` (none at 1, "a big reaction" above 1), and with no free pause the pause line leaves out "the first extra second". The pulse line now says a dip just after the question counts, since the early slowdown is part of the pulse score (decision 63).
+        - *Scale:* the app is iPhone-only and portrait, so 320 × 568 at the largest text size and 390 × 844 cover it.
+        - *Tests:* a start held on the permission check with taps on ? and the gear (nothing opens, then How to play shows uncovered); the page's list is the same widget after the game notifies; a double tap; a trip out of the app; and configs with no curve, a steeper curve and no free pause. Undoing the start guard or reading through `GameScope` again fails its test.
+        - *Merging decision 74:* calibration now asks every warm-up slot, so `calibMinWarmups` equals `calibMaxWarmups` (3). The page said "chat through 3–3 easy warm-ups"; it now says "3", and a range only when calibration can end early. The default-config test checks it, and fails on the old wording.
+        - *Not changed:* after Back, a name field that had the keyboard gets it back, as with Settings.

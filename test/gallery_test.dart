@@ -81,6 +81,14 @@ void main() {
     await shot(tester, key, '08-settings');
     nav.pop();
     await rig.wait(600);
+    await tester.tap(find.byTooltip("How it's scored"));
+    await rig.wait(600);
+    await shot(tester, key, '09-score-guide');
+    await tester.drag(find.byType(Scrollable).first, const Offset(0, -1500));
+    await rig.wait(300);
+    await shot(tester, key, '09b-score-guide-tags');
+    nav.pop();
+    await rig.wait(600);
 
     await rig.tap('Start the show');
     await rig.wait(300);
