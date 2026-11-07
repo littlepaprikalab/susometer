@@ -83,6 +83,7 @@ void main() {
       ];
       w.startGame(names, questions: 7);
       var maxFrames = 0;
+      final asked = <String, int>{};
       for (var p = 0; p < names.length; p++) {
         expect(w.game.phase, GamePhase.consent);
         expect(w.game.currentPlayer.name, names[p]);
@@ -95,6 +96,10 @@ void main() {
         for (var q = 0; q < 7; q++) {
           final voters = w.game.voters.map((v) => v.id).toList();
           expect(voters.length, 7);
+          final asker = w.game.currentAsker!;
+          expect(asker.name, isNot(names[p]), reason: 'nobody asks themselves');
+          expect(w.host.said.last, '${asker.name}, ask your question!');
+          asked[asker.name] = (asked[asker.name] ?? 0) + 1;
           // Every third answer reacts on two signals (a pulse alone can't
           // reach Sus), so some verdicts are Sus and votes can match.
           final stressed = q % 3 == 2;
@@ -113,6 +118,9 @@ void main() {
         }
       }
       expect(w.game.phase, GamePhase.leaderboard);
+      expect(asked, {
+        for (final n in names) n: 7,
+      }, reason: 'everyone asks once in every other turn (decision 76)');
       final awards = w.game.awards!;
       expect(awards.ranked.length, 8);
       expect(
@@ -187,7 +195,8 @@ void main() {
           expect(w.game.soloHoldsQuestion, isTrue, reason: '$at starts held');
           final tQ1 = w.game.detector!.tQ1;
           w.elapse(1000);
-          // Every way out of the hold: the button, the camera, the mic.
+          // Only the button releases the hold, before or after the camera
+          // and the mic hear an answer (decision 76).
           switch ((p * 7 + q) % 3) {
             case 0:
               w.game.readyToAnswer();
@@ -199,6 +208,10 @@ void main() {
               w.talk(true);
           }
           w.elapse(300);
+          if ((p * 7 + q) % 3 != 0) {
+            expect(w.game.soloHoldsQuestion, isTrue, reason: '$at held');
+            w.game.readyToAnswer();
+          }
           expect(w.game.soloHoldsQuestion, isFalse, reason: at);
           expect(w.game.shownPhase, GamePhase.answer, reason: at);
           expect(w.game.detector!.tQ1, tQ1, reason: '$at timing unchanged');
@@ -238,6 +251,80 @@ void main() {
   });
 
   group('performance', () {
+    test('ten minutes of asking, or a warm-up stuck talking, still score '
+        'quickly (decision 76)', () {
+      fakeAsync((async) {
+        final w = World(async);
+        w.heart = (_) => 72;
+        w.startGame(['Sam', 'Alex'], questions: 2);
+        w.calibrate();
+        w.askAndAnswer(); // warms up the JIT
+        w.game.nextQuestion();
+        for (var i = 0; i < 600; i++) {
+          w.say('chatter $i');
+          w.elapse(1000);
+        }
+        w.game.doneAsking();
+        w.elapse(800);
+        w.talk(true);
+        w.elapse(2000);
+        w.talk(false);
+        w.elapse(500);
+        w.game.finalAnswer();
+        w.until(() => w.game.phase == GamePhase.settle, maxMs: 100);
+        final sw = Stopwatch()..start();
+        w.until(() => w.game.phase != GamePhase.settle);
+        final t = w.game.currentResult!.timing!;
+        expect(t.windowEnd(12000) - t.tQ0, lessThanOrEqualTo(72000));
+        // Measured: ~10 ms, with the settle ticks (was ~200 ms uncapped).
+        expect(sw.elapsedMilliseconds, lessThan(100));
+        w.dispose();
+      });
+    });
+
+    test('a step left waiting stays cheap, and a late tap scores quickly '
+        '(decision 76)', () {
+      fakeAsync((async) {
+        final w = World(async);
+        w.heart = (_) => 72;
+        w.startGame(['Sam', 'Alex'], questions: 2);
+        w.calibrate();
+        w.askAndAnswer(); // warms up the JIT
+        w.game.nextQuestion();
+        w.elapse(300);
+        w.say('Have you ever lied?');
+        w.elapse(500);
+        w.game.doneAsking();
+        double usPerTick(int ms) {
+          final sw = Stopwatch()..start();
+          w.elapse(ms);
+          return sw.elapsedMicroseconds / (ms / 100);
+        }
+
+        // Nobody taps Final answer for 20 minutes.
+        usPerTick(10000);
+        w.elapse(20 * 60000);
+        final late = usPerTick(10000);
+        expect(w.game.phase, GamePhase.answer);
+        final sw = Stopwatch()..start();
+        w.game.finalAnswer();
+        final scoreMs = sw.elapsedMilliseconds;
+        expect(w.game.phase, GamePhase.callIt, reason: 'window long closed');
+        final t = w.game.currentResult!.timing!;
+        expect(t.tA1 - t.tQ1, lessThanOrEqualTo(60000), reason: 'capped');
+        // Measured (JIT, cloud container): ~50 µs a tick, ~7 ms to score.
+        expect(late, lessThan(2000), reason: '$late µs a tick');
+        expect(scoreMs, lessThan(100), reason: 'scored in $scoreMs ms');
+        // And nobody taps Reveal for 10 minutes.
+        final voting = usPerTick(10 * 60000);
+        expect(voting, lessThan(2000), reason: '$voting µs a tick');
+        expect(w.game.phase, GamePhase.callIt);
+        w.game.reveal();
+        w.until(() => w.game.phase == GamePhase.verdict);
+        w.dispose();
+      });
+    });
+
     test('a 10-minute stream at 10 Hz ingests and scores quickly', () {
       final samples = synth(
         start: 0,

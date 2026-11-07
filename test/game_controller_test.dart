@@ -261,7 +261,7 @@ void main() {
         2,
         reason: 'one when the question starts, one when the answer starts',
       );
-      expect(w.host.said, contains('Ask your question!'));
+      expect(w.host.said, contains('Alex, ask your question!'));
       expect(w.host.said, contains('Call it! Legit or sus?'));
       expect(w.host.said.last, isIn(['Legit!', 'Hmm…', 'Sus!']));
       expect(w.host.played, contains(Sfx.drumroll));
@@ -346,7 +346,7 @@ void main() {
     },
   );
 
-  test('play without voice: no recognition, tap-to-advance still works', () {
+  test('play without voice: no recognition, the taps still work', () {
     fakeAsync((async) {
       final w = World(async);
       w.speech.permissions = const SpeechPermissions(
@@ -954,24 +954,24 @@ void main() {
       });
     });
 
-    test('Call it! keeps the rest of its vote time', () {
+    test('Call it! waits for Reveal, through a trip away and after', () {
       fakeAsync((async) {
         final w = World(async);
         w.startGame(['Sam', 'Alex']);
         w.calibrate();
         answerToCallIt(w);
         w.elapse(4000);
-        final left = w.game.callItDeadlineMs - w.now;
         w.leaveApp(8000);
         expect(w.game.paused, isFalse);
         expect(w.running, isTrue);
+        w.elapse(60000);
         expect(
           w.game.phase,
           GamePhase.callIt,
-          reason: 'the vote ran out while the app was away',
+          reason: 'the vote has no timer (decision 76)',
         );
-        expect(w.game.callItDeadlineMs - w.now, closeTo(left - 300, 150));
-        w.until(() => w.game.phase == GamePhase.countdown, maxMs: 7000);
+        w.game.reveal();
+        expect(w.game.phase, GamePhase.countdown);
         w.until(() => w.game.phase == GamePhase.verdict, maxMs: 5000);
         w.dispose();
       });
@@ -1055,14 +1055,14 @@ void main() {
       expect(
         w.game.soloHoldsQuestion,
         isTrue,
-        reason: 'the question stays up until the player starts answering',
+        reason: 'the question stays up until Ready to answer',
       );
       w.elapse(5000);
       expect(w.game.soloHoldsQuestion, isTrue);
-      w.talk(true);
-      w.elapse(300);
+      w.game.readyToAnswer();
       expect(w.game.soloHoldsQuestion, isFalse);
-      w.elapse(1700);
+      w.talk(true);
+      w.elapse(2000);
       w.talk(false);
       w.elapse(600);
       w.game.finalAnswer();
@@ -1121,25 +1121,30 @@ void main() {
     });
   });
 
-  test('solo: the answer card shows the moment the player starts', () {
-    fakeAsync((async) {
-      final w = World(async);
-      w.game.setMode(GameMode.solo);
-      w.startGame(['Sam']);
-      w.calibrate();
-      w.elapse(100);
-      expect(w.game.shownPhase, GamePhase.ask);
-      var redraws = 0;
-      w.game.addListener(() => redraws++);
-      // Recognized words, with no tick in between.
-      w.say('Maybe');
-      async.flushMicrotasks();
-      expect(w.game.soloHoldsQuestion, isFalse);
-      expect(w.game.shownPhase, GamePhase.answer);
-      expect(redraws, greaterThan(0), reason: 'redraws without waiting');
-      w.dispose();
-    });
-  });
+  test(
+    'solo: Ready to answer redraws at once, and only it releases the card',
+    () {
+      fakeAsync((async) {
+        final w = World(async);
+        w.game.setMode(GameMode.solo);
+        w.startGame(['Sam']);
+        w.calibrate();
+        w.elapse(100);
+        expect(w.game.shownPhase, GamePhase.ask);
+        // Recognized words and talking don't release it (decision 76).
+        w.say('Maybe');
+        w.talk(true);
+        w.elapse(600);
+        expect(w.game.soloHoldsQuestion, isTrue);
+        var redraws = 0;
+        w.game.addListener(() => redraws++);
+        w.game.readyToAnswer();
+        expect(w.game.shownPhase, GamePhase.answer);
+        expect(redraws, greaterThan(0), reason: 'redraws without waiting');
+        w.dispose();
+      });
+    },
+  );
 
   test('solo: a turn climbs the heat curve and ends on the hottest', () {
     fakeAsync((async) {
@@ -1227,6 +1232,7 @@ void main() {
         expect(w.game.chatBlocks, 1, reason: 'a skip fills nothing');
         expect(w.game.warmupNumber, 1);
         w.game.skipWarmup();
+        w.elapse(700); // two taps, not a double tap
       }
       w.until(() => w.game.currentWarmup != null, what: 'a warm-up');
       expect(
@@ -1313,7 +1319,7 @@ void main() {
     });
   });
 
-  test('voice recognition failing falls back to tap-to-advance', () {
+  test('voice recognition failing: no transcripts, taps as ever', () {
     fakeAsync((async) {
       final w = World(async);
       w.startGame(['Sam', 'Alex']);
@@ -1323,12 +1329,12 @@ void main() {
       );
       w.elapse(100);
       expect(w.game.micEnabled, isFalse);
-      expect(w.game.notice, contains('tap-to-advance'));
+      expect(w.game.notice, contains('no transcripts'));
       w.dispose();
     });
   });
 
-  test('a mic that fails to restart: tap-to-advance, voice back next turn', () {
+  test('a mic that fails to restart: no transcripts, voice back next turn', () {
     fakeAsync((async) {
       final w = World(async);
       w.startGame(['Sam', 'Alex'], questions: 1);
@@ -1338,7 +1344,7 @@ void main() {
       );
       w.elapse(100);
       expect(w.game.micEnabled, isFalse);
-      expect(w.game.notice, contains('tap-to-advance for this turn'));
+      expect(w.game.notice, contains('no transcripts for this turn'));
       expect(w.speech.calls.last, 'stop');
       w.askAndAnswer();
       w.game.endTurn();
@@ -1356,7 +1362,7 @@ void main() {
     });
   });
 
-  test('no on-device speech stays tap-to-advance for the whole game', () {
+  test('no on-device speech stays off for the whole game', () {
     fakeAsync((async) {
       final w = World(async);
       w.startGame(['Sam', 'Alex'], questions: 1);
@@ -1401,7 +1407,7 @@ void main() {
       w.game.nextQuestion();
       w.elapse(100);
       expect(w.game.phase, GamePhase.ask);
-      final ask = w.host.calls.lastIndexOf('say:Ask your question!');
+      final ask = w.host.calls.lastIndexOf('say:Alex, ask your question!');
       expect(ask, greaterThan(0));
       expect(
         w.host.calls[ask - 1],
@@ -1469,11 +1475,49 @@ void main() {
     });
   });
 
-  test(
-    'automatic turns: silence ends the question, host prompts, 4 s silence ends the answer',
-    () {
+  test('voting: pick, switch, take back; only voters, only on Call it! '
+      '(decision 77)', () {
+    fakeAsync((async) {
+      final w = World(async);
+      w.startGame(['Sam', 'Alex', 'Priya'], questions: 1);
+      w.calibrate();
+      final sam = w.game.players[0].id;
+      final alex = w.game.players[1].id;
+      final priya = w.game.players[2].id;
+      w.game.castVote(alex, Vote.sus);
+      expect(w.game.pendingVotes, isEmpty, reason: 'not on Call it! yet');
+      w.elapse(300);
+      w.say('Have you ever lied?');
+      w.elapse(500);
+      w.game.doneAsking();
+      w.elapse(1000);
+      w.talk(true);
+      w.elapse(1500);
+      w.talk(false);
+      w.game.finalAnswer();
+      w.until(() => w.game.phase == GamePhase.callIt);
+      w.game.castVote(sam, Vote.sus);
+      expect(w.game.pendingVotes, isEmpty, reason: 'the hot seat never votes');
+      w.game.castVote(alex, Vote.legit);
+      w.game.castVote(priya, Vote.sus);
+      expect(w.game.pendingVotes, {alex: Vote.legit, priya: Vote.sus});
+      w.game.castVote(alex, Vote.sus);
+      expect(w.game.pendingVotes[alex], Vote.sus, reason: 'switched');
+      w.elapse(700); // not a double tap
+      w.game.castVote(priya, Vote.sus);
+      expect(w.game.pendingVotes.containsKey(priya), isFalse, reason: 'undone');
+      w.game.reveal();
+      expect(w.game.currentResult!.votes, {alex: Vote.sus});
+      w.game.castVote(priya, Vote.legit);
+      expect(w.game.currentResult!.votes, {alex: Vote.sus}, reason: 'closed');
+      w.dispose();
+    });
+  });
+
+  group('only taps move the game on (SPEC.md decision 76)', () {
+    test('silence, talking and the vote all wait for a tap', () {
       fakeAsync((async) {
-        final w = World(async, turnConfig: const TurnConfig());
+        final w = World(async);
         w.startGame(['Sam', 'Alex'], questions: 1);
         w.calibrate();
         expect(w.game.phase, GamePhase.ask);
@@ -1486,69 +1530,251 @@ void main() {
           w.say(part);
           w.elapse(400);
         }
+        // The asker pauses, the player laughs: nothing moves.
+        w.elapse(5000);
+        w.talk(true);
+        w.elapse(800);
+        w.talk(false);
+        w.elapse(30000);
         expect(w.game.phase, GamePhase.ask);
-        w.until(
-          () => w.game.phase == GamePhase.answer,
-          maxMs: 3000,
-          what: 'silence to end the question',
-        );
-        expect(
-          w.game.detector!.questionEndReason,
-          QuestionEndReason.askerSilence,
-        );
-        w.elapse(100);
-        expect(w.host.said, contains('Sam, your answer?'));
-        w.elapse(900);
+        expect(w.host.said, isNot(contains('Sam, your answer?')));
+        w.game.doneAsking();
+        expect(w.game.phase, GamePhase.answer);
+        w.elapse(1000);
         w.talk(true);
         w.elapse(300);
         w.say('Nope.');
         w.elapse(1700);
         w.talk(false);
-        w.until(
-          () => w.game.phase == GamePhase.settle,
-          maxMs: 6000,
-          what: '4 s of silence',
-        );
-        expect(w.game.detector!.answerEndReason, AnswerEndReason.silence);
-        w.until(() => w.game.phase == GamePhase.callIt);
+        // The player thinks, the room chats: the answer stays open.
+        w.elapse(40000);
+        expect(w.game.phase, GamePhase.answer);
+        w.game.finalAnswer();
+        w.until(() => w.game.phase != GamePhase.settle, what: 'settle');
+        expect(w.game.phase, GamePhase.callIt);
+        w.elapse(60000);
+        expect(w.game.phase, GamePhase.callIt);
         w.game.reveal();
         w.until(() => w.game.phase == GamePhase.verdict);
         final r = w.game.currentResult!;
         expect(r.question, 'Have you ever lied?');
         expect(r.answer, 'Nope.');
-        expect(
-          r.features!.hesitationS,
-          closeTo(0.9, 0.3),
-          reason: 'measured from the prompt end',
-        );
+        w.elapse(60000);
+        expect(w.game.phase, GamePhase.verdict);
         w.dispose();
       });
-    },
-  );
+    });
 
-  test(
-    'automatic turns: answering straight away ends the question with no prompt',
-    () {
+    test("a slow Done asking still counts toward the pause", () {
       fakeAsync((async) {
-        final w = World(async, turnConfig: const TurnConfig());
+        final w = World(async);
         w.startGame(['Sam', 'Alex'], questions: 1);
         w.calibrate();
         w.elapse(500);
         w.say('Do you floss?');
-        w.elapse(300);
+        final asked = w.now;
+        // Slow to tap, slower to answer.
+        w.elapse(3000);
+        w.game.doneAsking();
+        w.elapse(1000);
         w.talk(true);
-        w.elapse(400);
-        expect(w.game.phase, GamePhase.answer);
-        expect(
-          w.game.detector!.questionEndReason,
-          QuestionEndReason.playerTalk,
-        );
-        expect(w.host.said, isNot(contains('Sam, your answer?')));
-        expect(w.game.live.hesitationS, 0);
+        w.elapse(300);
+        expect(w.game.detector!.tQ1, asked);
+        // 4 s from the asker's last words, less 1.5 s for the tap.
+        expect(w.game.live.hesitationS, closeTo(2.5, 0.15));
+        w.say('Every day.');
+        w.elapse(1500);
+        w.talk(false);
+        w.elapse(500);
+        w.game.finalAnswer();
+        w.until(() => w.game.phase == GamePhase.callIt);
+        expect(w.game.currentResult!.features!.hesitationS, closeTo(2.5, 0.15));
         w.dispose();
       });
-    },
-  );
+    });
+
+    test(
+      'answering before Done asking: the answer is timed from its start',
+      () {
+        fakeAsync((async) {
+          final w = World(async);
+          w.startGame(['Sam', 'Alex'], questions: 1);
+          w.calibrate();
+          w.elapse(500);
+          w.say('Do you floss?');
+          w.elapse(1200);
+          w.talk(true);
+          final started = w.now;
+          w.elapse(2000);
+          w.talk(false);
+          w.elapse(2000);
+          expect(w.game.phase, GamePhase.ask, reason: 'no tap yet');
+          w.game.doneAsking();
+          expect(w.game.detector!.tA0, started);
+          expect(w.game.live.hesitationS, closeTo(1.2, 0.15));
+          w.dispose();
+        });
+      },
+    );
+
+    test('a late Final answer: the reading ends 4 s after the last words', () {
+      fakeAsync((async) {
+        final w = World(async);
+        w.startGame(['Sam', 'Alex'], questions: 1);
+        w.calibrate();
+        w.elapse(500);
+        w.say('Have you ever lied?');
+        w.elapse(500);
+        w.game.doneAsking();
+        w.elapse(800);
+        w.talk(true);
+        w.elapse(2000);
+        w.talk(false);
+        final quiet = w.now;
+        w.elapse(30000);
+        w.game.finalAnswer();
+        final d = w.game.detector!;
+        expect(d.tA1, closeTo(quiet + 4000, 100));
+        // The window closed long ago: no Locking in.
+        w.elapse(200);
+        expect(w.game.phase, GamePhase.callIt);
+        w.dispose();
+      });
+    });
+
+    test('calibration waits for Next on each warm-up and for Start', () {
+      fakeAsync((async) {
+        final w = World(async)..autoTaps = false;
+        w.startGame(['Sam', 'Alex']);
+        w.game.agreeToMeasure();
+        w.until(() => w.game.calibStage == CalibStage.chat, what: 'chat');
+        final first = w.game.currentWarmup!;
+        // Answered (World talks 0.8–2.8 s after it's asked), then silence.
+        w.elapse(60000);
+        expect(identical(w.game.currentWarmup, first), isTrue);
+        expect(first.done, isFalse);
+        while (w.game.calibStage == CalibStage.chat) {
+          final warmup = w.game.currentWarmup!;
+          w.until(() => warmup.latencyS != null && !w.talking, what: 'answer');
+          w.elapse(1000);
+          w.game.nextWarmup();
+          expect(warmup.done, isTrue);
+          expect(warmup.doneAtMs, lessThan(w.now), reason: 'at the talk end');
+          w.elapse(100);
+        }
+        expect(w.game.calibStage, CalibStage.ready);
+        expect(w.game.warmupSlotsDone, 3);
+        expect(w.host.said.last, "That's your normal locked in.");
+        final baseline = w.game.calibBaseline;
+        expect(baseline, isNotNull);
+        // A double tap on the last Next doesn't start the questions.
+        w.game.startQuestions();
+        expect(w.game.phase, GamePhase.calibrate);
+        w.elapse(60000);
+        expect(w.game.phase, GamePhase.calibrate);
+        expect(
+          identical(w.game.calibBaseline, baseline),
+          isTrue,
+          reason: 'nothing after the lock goes into the normal',
+        );
+        w.game.startQuestions();
+        expect(w.game.phase, GamePhase.ask);
+        expect(w.game.currentTurn.baseline, same(baseline));
+        expect(w.host.said.last, 'Alex, ask your question!');
+        w.dispose();
+      });
+    });
+
+    test('solo: the question card stays up until Ready to answer', () {
+      fakeAsync((async) {
+        final w = World(async);
+        w.game.setMode(GameMode.solo);
+        w.startGame(['Sam'], questions: 1);
+        w.calibrate();
+        w.elapse(500);
+        expect(w.game.phase, GamePhase.answer, reason: 'host finished');
+        w.talk(true);
+        w.elapse(300);
+        w.say('Never.');
+        w.elapse(1500);
+        w.talk(false);
+        w.elapse(30000);
+        expect(w.game.soloHoldsQuestion, isTrue);
+        expect(w.game.shownPhase, GamePhase.ask);
+        expect(w.game.live.answerText, 'Never.');
+        w.game.readyToAnswer();
+        expect(w.game.shownPhase, GamePhase.answer);
+        expect(w.game.phase, GamePhase.answer, reason: 'still answering');
+        w.dispose();
+      });
+    });
+  });
+
+  group('the host says who asks (SPEC.md decision 76)', () {
+    test('the other players take turns, starting after the hot seat', () {
+      fakeAsync((async) {
+        final w = World(async);
+        w.startGame(['Sam', 'Alex', 'Priya'], questions: 3);
+        w.calibrate();
+        final asked = <String>[];
+        for (var q = 0; q < 3; q++) {
+          asked.add(w.game.askLine);
+          expect(w.host.said.last, w.game.askLine);
+          w.askAndAnswer(question: 'Q$q?');
+          if (q < 2) w.game.nextQuestion();
+        }
+        expect(asked, [
+          'Alex, ask your question!',
+          'Priya, ask your question!',
+          'Alex, ask your question!',
+        ]);
+        w.game.nextQuestion();
+        w.elapse(100);
+        expect(w.game.phase, GamePhase.consent);
+        expect(w.game.currentPlayer.name, 'Alex');
+        w.calibrate();
+        expect(w.game.askLine, 'Priya, ask your question!');
+        w.askAndAnswer();
+        w.game.nextQuestion();
+        expect(w.game.askLine, 'Sam, ask your question!');
+        expect(w.host.said.last, 'Sam, ask your question!');
+        w.dispose();
+      });
+    });
+
+    test('a question asked again keeps its asker', () {
+      fakeAsync((async) {
+        final w = World(async);
+        w.startGame(['Sam', 'Alex', 'Priya'], questions: 3);
+        w.calibrate();
+        w.askAndAnswer();
+        w.game.nextQuestion();
+        expect(w.game.currentAsker!.name, 'Priya');
+        // Away long enough that the question starts over.
+        w.leaveApp(GameController.autoResumeWithinMs + 5000);
+        w.game.resume();
+        w.elapse(1500);
+        expect(w.game.phase, GamePhase.ask);
+        expect(w.host.said.last, 'Priya, ask your question!');
+        w.dispose();
+      });
+    });
+
+    test('solo has no asker', () {
+      fakeAsync((async) {
+        final w = World(async);
+        w.game.setMode(GameMode.solo);
+        w.startGame(['Sam'], questions: 1);
+        w.calibrate();
+        expect(w.game.currentAsker, isNull);
+        expect(
+          w.host.said.where((l) => l.contains('ask your question')),
+          isEmpty,
+        );
+        w.dispose();
+      });
+    });
+  });
 
   test('double taps never skip two players or two questions', () {
     fakeAsync((async) {

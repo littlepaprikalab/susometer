@@ -5,6 +5,7 @@ import '../game/game_controller.dart';
 import '../game/scoring.dart';
 import '../presage/camera_preview.dart';
 import '../theme/expression_stamp.dart';
+import '../theme/fit_text.dart';
 import '../theme/game_widgets.dart';
 import '../theme/tokens.dart';
 import '../theme/widgets.dart';
@@ -21,11 +22,11 @@ class HowToPlayScreen extends StatelessWidget {
     ),
     (
       'Asker: say it out loud',
-      'The host listens and writes your question on screen.',
+      'The host says who asks, then writes your question on screen.',
     ),
     (
-      'Hot seat: just answer',
-      'Start talking when ready, then smash Final answer.',
+      'Hot seat: tap, then answer',
+      "Tap when the question's done, answer, then smash Final answer.",
     ),
     (
       'Get your verdict',
@@ -308,6 +309,15 @@ class _BreatherNote extends StatelessWidget {
 class CalibrateScreen extends StatelessWidget {
   const CalibrateScreen({super.key});
 
+  /// The host bubble is always this many lines tall, so the camera below
+  /// never moves when a warm-up (or the lock-in) replaces "Sit still".
+  static const bubbleLines = 3;
+
+  /// ...and its text shrinks no smaller than this. Every warm-up fits whole
+  /// on the smallest phone at the largest text size (a test checks the
+  /// deck).
+  static const bubbleMinFontSize = 14.0;
+
   @override
   Widget build(BuildContext context) {
     final game = GameScope.of(context);
@@ -321,6 +331,7 @@ class CalibrateScreen extends StatelessWidget {
     final stage = game.calibStage;
     final warmup = game.currentWarmup;
     final chat = stage == CalibStage.chat || stage == CalibStage.done;
+    final ready = stage == CalibStage.ready || stage == CalibStage.done;
     final warmupNumber = game.warmupNumber;
     final bubble = switch (stage) {
       CalibStage.starting => 'Warming up the camera…',
@@ -366,31 +377,93 @@ class CalibrateScreen extends StatelessWidget {
             chatDone: game.warmupsDone,
           ),
           const SizedBox(height: 12),
-          Text(
-            chat
+          _OneLine(
+            ready
+                ? 'Warm-ups done · your normal is locked in'
+                : chat
                 ? 'Warm-up $warmupNumber of ${game.config.calibMaxWarmups} · from the easy deck'
                 : 'Step 1 · Sit still for about 20 seconds',
-            style: SusText.label(13),
+            style: SusText.label,
           ),
           const SizedBox(height: 6),
-          HostBubble(text: bubble),
+          HostBubble(
+            text: bubble,
+            lines: bubbleLines,
+            minFontSize: bubbleMinFontSize,
+          ),
           const SizedBox(height: 12),
           const Expanded(child: _CalibCamera()),
           const SizedBox(height: 12),
-          ChunkyButton.light(
-            label: "Doesn't apply? Next one",
-            icon: Icons.skip_next_rounded,
-            height: 52,
-            fontSize: 16,
-            onPressed: warmup == null ? null : game.skipWarmup,
-          ),
+          // Nothing here moves on by itself (SPEC.md decision 76): each
+          // warm-up waits for Next, and the questions for Start.
+          if (ready)
+            ChunkyButton(
+              label: game.currentTurn.results.isEmpty
+                  ? 'Start the questions'
+                  : 'Back to the questions',
+              height: 52,
+              fontSize: 17,
+              onPressed: game.startQuestions,
+            )
+          else
+            Row(
+              children: [
+                Expanded(
+                  child: ChunkyButton.light(
+                    label: "Doesn't apply",
+                    height: 52,
+                    fontSize: 16,
+                    onPressed: warmup == null ? null : game.skipWarmup,
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: ChunkyButton(
+                    label: 'Next',
+                    icon: Icons.skip_next_rounded,
+                    height: 52,
+                    fontSize: 17,
+                    onPressed: warmup == null ? null : game.nextWarmup,
+                  ),
+                ),
+              ],
+            ),
           const SizedBox(height: 6),
-          Text(
-            'The show starts by itself once your normal is locked in.',
+          _OneLine(
+            ready
+                ? 'Tap when ready. The host says who asks first.'
+                : chat
+                ? 'Answer out loud, then tap Next.'
+                : 'Easy warm-up questions come next.',
             textAlign: TextAlign.center,
-            style: SusText.body(13, weight: FontWeight.w600),
+            style: (size) => SusText.body(size, weight: FontWeight.w600),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// A line of Calibrate copy in a slot one line tall, whatever it says: it
+/// shrinks to fit rather than wrap, so the camera below never moves when
+/// the step changes (the sit-still is measured).
+class _OneLine extends StatelessWidget {
+  const _OneLine(this.text, {required this.style, this.textAlign});
+
+  final String text;
+  final TextStyle Function(double size) style;
+  final TextAlign? textAlign;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: MediaQuery.textScalerOf(context).scale(13) * 1.5,
+      child: FitText(
+        text,
+        sizes: const [13, 12, 11],
+        overflow: FitOverflow.keepStart,
+        textAlign: textAlign,
+        style: style,
       ),
     );
   }

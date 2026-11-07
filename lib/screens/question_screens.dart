@@ -39,6 +39,10 @@ class _Header extends StatelessWidget {
   }
 }
 
+/// After this long on the answer with nothing heard, Final answer's hint
+/// suggests tapping anyway or skipping.
+const noAnswerNudgeMs = 20000;
+
 /// Fixed heights that keep the camera card the same size and in the same
 /// place from "Ask your question!" through "Locking in the reading…".
 const _cardHeight = 160.0;
@@ -74,7 +78,7 @@ class HotSeatScreen extends StatelessWidget {
         ? '$name, your answer?'
         : solo
         ? "Here's one for you, $name…"
-        : 'Ask your question!';
+        : game.askLine;
     return ScreenFrame(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -252,11 +256,18 @@ class _Actions extends StatelessWidget {
       case GamePhase.settle:
         return beside(_SettleCard(game: game));
       case GamePhase.answer:
+        // Nothing ends by itself (SPEC.md decision 76), so a long silence
+        // gets a nudge instead.
+        final d = game.detector;
+        final waited = d?.hesitationFromMs == null
+            ? 0
+            : game.nowMs - d!.hesitationFromMs!;
+        final stuck = d?.tA0 == null && waited >= noAnswerNudgeMs;
         return beside(
           _FinalAnswerButton(
             onPressed: game.finalAnswer,
-            hint: game.micEnabled && game.turnConfig.autoAnswerEnd
-                ? 'Or it ends itself after 4s of silence'
+            hint: stuck
+                ? 'No answer? Tap anyway, or Pause to skip'
                 : "Tap when you're done",
           ),
         );
@@ -265,8 +276,8 @@ class _Actions extends StatelessWidget {
         final hint =
             notice ??
             (solo
-                ? "Answer out loud when you're ready."
-                : "${game.currentPlayer.name}: just start answering when you're ready.");
+                ? 'Tap Ready to answer, then answer out loud.'
+                : '${game.currentPlayer.name}: tap Done asking, then answer.');
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
@@ -309,13 +320,6 @@ class _Actions extends StatelessWidget {
                           ),
                         ),
                       ],
-                    )
-                  : game.micEnabled
-                  ? DashedButton(
-                      label: game.turnConfig.autoQuestionEnd
-                          ? 'Too loud? Tap when done asking'
-                          : 'Tap when done asking',
-                      onPressed: game.doneAsking,
                     )
                   : ChunkyButton(
                       label: 'Done asking',

@@ -38,15 +38,19 @@ Built for the DEV [Presage SmartSpectra SDK Challenge](https://dev.to/challenges
    each asking for a sentence. Everyone gets the same three kinds, in order: something recent
    ("Tell me what you had for breakfast"), a "Have you ever…?" with an easy, true answer, like the
    real questions without the stakes, and a light either/or ("Cats or dogs? Tell me why"). A
-   skipped one is replaced by another of the same kind; skip that too and it moves on. This learns *your* normal pulse, blink rate,
+   skipped one is replaced by another of the same kind; skip that too and it moves on. Answer
+   each one out loud, then tap *Next*. This learns *your* normal pulse, blink rate,
    expressions and how fast you usually answer, while talking like you will in the real
-   questions. It ends between warm-ups, never while the host is reading one or you're answering.
-4. **Ask:** a friend asks a question out loud; it appears on screen as they speak. In solo mode
-   the host reads one from the deck, and it stays on screen until you start answering or tap
-   *Ready to answer*. Solo questions get hotter through the turn and end on the hottest, the same
-   way for every player; "someone in this room" questions only come up when others are playing.
-5. **Answer:** the player answers out loud and smashes *Final answer* (or just stops talking).
-6. **Call it!:** everyone else votes Legit or Sus *before* the reveal.
+   questions. Once it's locked in, tap *Start the questions* when everyone's ready.
+4. **Ask:** the host says who asks ("Alex, ask your question!"); everyone else takes turns,
+   starting with the next player. The question appears on screen as they speak, and the player
+   taps *Done asking* when it's over. In solo mode the host reads one from the deck, and it stays
+   on screen until you tap *Ready to answer*. Solo questions get hotter through the turn and end
+   on the hottest, the same way for every player; "someone in this room" questions only come up
+   when others are playing.
+5. **Answer:** the player answers out loud and smashes *Final answer*.
+6. **Call it!:** everyone else picks *Legit* or *Sus* next to their name *before* the reveal
+   (tap your pick again to take it back), then someone taps *Reveal*.
 7. **Countdown → Verdict:** drumroll, 3-2-1, then the scoreboard, applause meter and what moved.
 8. **Leaderboard:** Best poker face, Most sus, Best lie detector, Biggest spike, and a Replay of
    every question. *Wipe everything* clears it all.
@@ -114,7 +118,7 @@ For production, Presage's OAuth (App Attest) option would remove the key entirel
 
 Without the mic you can still play: tap *Done asking*, then *Final answer*, with no transcripts.
 If on-device recognition isn't available for your language, the app never falls back to Apple's
-servers; it switches to tap-to-advance instead.
+servers; it plays on without transcripts instead.
 
 ## Privacy and data handling
 
@@ -249,9 +253,23 @@ premium voice such as Serena sounds best; Settings > Accessibility > Spoken Cont
 Speaker separation uses SmartSpectra's **talking** detection instead of diarization: speech
 while the hot-seat player isn't talking is the question; speech while they are is the answer.
 
-- **Question ends** when the player starts talking, or after 1.5 s of silence following the
-  asker (the host then asks "{name}, your answer?"), or with *Too loud? Tap when done asking*.
-- **Answer ends** with *Final answer*, or 4 s after the player stops talking.
+**Only taps move the game on.** Nothing ends because of a pause, a laugh or a timer: the screen
+waits for *Next* on each warm-up, *Start the questions*, *Done asking*, *Final answer* and
+*Reveal* (solo: *Ready to answer*). The countdown after *Reveal* and the few seconds of *Locking
+in the reading…* (the score needs 12 s after the question) are the only steps that run on their
+own. In party mode the host names who asks each question, taking turns through the room.
+
+The voice and camera still say *when* things happened, so a slow tap doesn't change the score:
+
+- **The question ends** with the asker's last words, not the *Done asking* tap. The pause before
+  answering counts from there, less up to 1.5 s for the tap itself (the warm-ups it's compared
+  with have no tap), so stalling before the tap still counts. Answering before the tap is fine:
+  the answer is timed from its first word, and its words are the answer, not part of the
+  question.
+- **The answer ends** at *Final answer*, or 4 s after the player last spoke if the tap comes
+  later, so the room's chatter while nobody tapped isn't read as part of it (words count as the
+  player's only while the answer is still going). It's never scored
+  for more than 60 s after the question, however late the tap.
 - **Half-duplex:** recognition is muted while the host speaks or a sound plays, and for 150 ms
   after, so the transcript never contains the host.
 
@@ -334,15 +352,15 @@ real fonts), accessibility actions and color contrast.
   estimate. Not medical, not diagnostic, not a lie detector.
 - **Light and position matter:** dim rooms, a bright window behind you, moving the phone, or a
   second face in frame all reduce signal quality. The app pauses and says why rather than guess.
-- **Noise:** loud rooms make transcripts unreliable; use *Too loud? Tap when done asking*.
-- **Talking detection** comes from the camera, so a mumbled answer may need the *Final answer* tap.
+- **Noise:** loud rooms make transcripts unreliable; the taps work the same either way.
+- **Talking detection** comes from the camera, so a mumbled answer may time the pause loosely.
 - **HRV** needs about 60 s of measurement; it's shown, not scored.
 - **Heartbeats from the waveform are untested on a device so far.** They're checked against the
   SDK's pulse on every question, and the score falls back to the SDK mean when they disagree.
   The shape constants (`ScoringConfig`) still need tuning from real play.
 - **Network:** the SDK must sign in to start a session (E5 explains if it can't).
 - **Languages:** transcripts need on-device recognition for the iPhone's language; otherwise the
-  game is tap-to-advance.
+  game plays without them.
 - Heavy use warms the phone; between turns the app suggests a breather if iOS reports it's hot.
 
 ## Credits

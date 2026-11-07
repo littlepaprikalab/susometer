@@ -11,6 +11,7 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:susometer/app_scope.dart';
 import 'package:susometer/game/game_controller.dart';
+import 'package:susometer/game/models.dart';
 import 'package:susometer/main.dart';
 import 'package:susometer/presage/presage_models.dart';
 import 'package:susometer/screens/settings_screen.dart';
@@ -44,10 +45,7 @@ void main() {
       speech: rig.speech,
       device: rig.device,
       host: rig.host,
-      turnConfig: const TurnConfig(
-        autoQuestionEnd: false,
-        autoAnswerEnd: false,
-      ),
+      turnConfig: const TurnConfig(),
     );
     rig.presage.begin();
     rig.presage.pulse = 84;
@@ -108,6 +106,18 @@ void main() {
     await shot(tester, key, '03b-calibrate-bad-signal');
     rig.presage.code = 'OK';
     rig.presage.expr = const {'neutral': 0.8, 'happy': 0.1, 'surprise': 0.05};
+    rig.autoTaps = false;
+    await rig.until(() {
+      final w = rig.game.currentWarmup;
+      if (w != null && w.latencyS != null && !rig.presage.talking) {
+        rig.game.nextWarmup();
+      }
+      return rig.game.calibStage == CalibStage.ready;
+    }, what: 'the normal locked in');
+    await rig.wait(700);
+    await shot(tester, key, '03c-calibrate-ready');
+    await rig.tap('Start the questions');
+    rig.autoTaps = true;
     await rig.until(() => rig.game.phase == GamePhase.ask);
     rig.services.settings.proofPanel = true;
     await rig.wait(300);
@@ -134,7 +144,7 @@ void main() {
       ),
     );
     await rig.wait(300);
-    await rig.tap('Tap when done asking');
+    await rig.tap('Done asking');
     await rig.wait(1200);
     rig.presage.talk(true);
     rig.presage.pulse = 95;
@@ -157,9 +167,8 @@ void main() {
     await shot(tester, key, '04c-settle');
     await rig.until(() => rig.game.phase == GamePhase.callIt);
     final voters = rig.game.voters;
-    rig.game.cycleVote(voters[0].id);
-    rig.game.cycleVote(voters[1].id);
-    rig.game.cycleVote(voters[1].id);
+    rig.game.castVote(voters[0].id, Vote.legit);
+    rig.game.castVote(voters[1].id, Vote.sus);
     await rig.wait(200);
     await shot(tester, key, '04d-call-it');
     rig.game.reveal();

@@ -28,13 +28,7 @@ class PhaseHaptics implements HapticsApi {
 
 /// A scripted SmartSpectra + speech world running on fake time.
 class World {
-  World(
-    this.async, {
-    TurnConfig turnConfig = const TurnConfig(
-      autoQuestionEnd: false,
-      autoAnswerEnd: false,
-    ),
-  }) {
+  World(this.async, {TurnConfig turnConfig = const TurnConfig()}) {
     presage = RunningPresage(this);
     game = GameController(
       presage: presage,
@@ -96,6 +90,12 @@ class World {
   /// publishing a new expression sample every frame).
   Map<String, double> expr = const {'neutral': 0.8, 'surprise': 0.05};
   bool autoAnswerWarmups = true;
+
+  /// Taps like a player through calibration, which never moves on by
+  /// itself: Next 1.5 s after each auto-answered warm-up, and Start the
+  /// questions once the normal is locked in. Off: the test taps.
+  bool autoTaps = true;
+  int? _nextWarmupAt;
 
   /// Time to the next blink (ms), asked after each one. Every 4 s unless a
   /// test says otherwise (e.g. fewer while sitting still than chatting).
@@ -209,7 +209,8 @@ class World {
       _pendingEvents.add({'e': 'blinkEvent', 't': t});
       _nextBlink = t + blinkEveryMs();
     }
-    // Answer each warm-up: start talking 0.8 s after it's asked, stop 2 s later.
+    // Answer each warm-up: start talking 0.8 s after it's asked, stop 2 s
+    // later, tap Next 1.5 s after that.
     final w = game.currentWarmup;
     if (autoAnswerWarmups &&
         w != null &&
@@ -217,7 +218,16 @@ class World {
         t - w.askedAtMs >= 800) {
       _answered = w;
       talk(true);
+      _nextWarmupAt = t + 3500;
       Timer(const Duration(seconds: 2), () => talk(false));
+    }
+    if (autoTaps && game.phase == GamePhase.calibrate) {
+      final next = _nextWarmupAt;
+      if (w != null && identical(w, _answered) && next != null && t >= next) {
+        _nextWarmupAt = null;
+        game.nextWarmup();
+      }
+      if (game.calibStage == CalibStage.ready) game.startQuestions();
     }
     presage.controller.add(
       PresageSample.fromMap({
@@ -329,7 +339,7 @@ class World {
     );
   }
 
-  /// Party question with tap-to-advance; returns the result.
+  /// Party question, tapped through; returns the result.
   QuestionResult askAndAnswer({
     String question = 'Have you ever re-gifted a present?',
     String answer = 'No way. Okay, maybe once.',
@@ -357,8 +367,7 @@ class World {
     pulse = 70;
     if (game.phase == GamePhase.callIt) {
       for (final id in votesSus) {
-        game.cycleVote(id);
-        game.cycleVote(id);
+        game.castVote(id, Vote.sus);
       }
       game.reveal();
     }

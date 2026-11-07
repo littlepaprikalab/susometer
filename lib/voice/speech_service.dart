@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'package:flutter/services.dart';
 
 /// On-device speech recognition through the native bridge (SPEC.md §7, §8).
@@ -221,6 +222,24 @@ class TranscriptBuffer {
   String get text {
     final keys = _segments.keys.toList()..sort();
     return keys.map((k) => _segments[k]!).join(' ');
+  }
+
+  /// Text of the segments before [segment] only.
+  String textBefore(int segment) {
+    final keys = _segments.keys.where((k) => k < segment).toList()..sort();
+    return keys.map((k) => _segments[k]!).join(' ');
+  }
+
+  /// Moves the segments from [segment] on into [other].
+  void moveFrom(int segment, TranscriptBuffer other) {
+    final moved = _segments.keys.where((k) => k >= segment).toList();
+    for (final k in moved) {
+      other._segments[k] = _segments.remove(k)!;
+    }
+    if (moved.isEmpty) return;
+    other._lastSegment = other._segments.keys.reduce(math.max);
+    other.lastUpdateMs = lastUpdateMs;
+    _lastSegment = _segments.isEmpty ? null : _segments.keys.reduce(math.max);
   }
 
   /// Text of the most recent segment only.

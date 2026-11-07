@@ -23,7 +23,7 @@ class GameRoot extends StatefulWidget {
 
 /// After any phase change, taps are ignored this long: the second tap of a
 /// double tap would otherwise land on whatever the new phase put in the same
-/// spot ("Tap when done asking" → "Final answer", "Got it" → "I agree").
+/// spot ("Done asking" → "Final answer", "Got it" → "I agree").
 const phaseTapGuard = Duration(milliseconds: 450);
 
 /// The guard's [IgnorePointer], so tests can wait it out.
@@ -160,15 +160,21 @@ class _GameRootState extends State<GameRoot> with WidgetsBindingObserver {
                   telemetry: services.settings.telemetry,
                 ),
               ),
+            // BlockSemantics: VoiceOver can't reach the screen behind a
+            // sheet either (it could tap Final answer behind Pause).
             if (game.showPauseSheet && !_confirmEnd)
               Positioned.fill(
-                child: SheetOverlay(child: PauseSheet(onEndShow: _askEnd)),
+                child: BlockSemantics(
+                  child: SheetOverlay(child: PauseSheet(onEndShow: _askEnd)),
+                ),
               ),
             if (_confirmEnd && game.inGame)
               Positioned.fill(
-                child: SheetOverlay(
-                  onDismiss: _closeEnd,
-                  child: EndShowSheet(onKeepPlaying: _closeEnd),
+                child: BlockSemantics(
+                  child: SheetOverlay(
+                    onDismiss: _closeEnd,
+                    child: EndShowSheet(onKeepPlaying: _closeEnd),
+                  ),
                 ),
               ),
           ],

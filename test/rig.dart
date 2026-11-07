@@ -100,14 +100,18 @@ class Rig {
   final host = FakeHostAudio();
   late AppServices services;
   Warmup? _answered;
+  int? _nextWarmupAt;
+
+  /// [until] taps like a player through calibration, which never moves on
+  /// by itself: Next 1.5 s after each warm-up answer, and Start the
+  /// questions once the normal is locked in (calling the controller, as the
+  /// buttons do). Off: the test taps the buttons.
+  bool autoTaps = true;
 
   GameController get game => services.game;
 
   Future<void> pumpApp({
-    TurnConfig turnConfig = const TurnConfig(
-      autoQuestionEnd: false,
-      autoAnswerEnd: false,
-    ),
+    TurnConfig turnConfig = const TurnConfig(),
     Size size = const Size(390, 844),
   }) async {
     useRealPhone(tester, size);
@@ -138,7 +142,19 @@ class Rig {
           presage.now - w.askedAtMs >= 800) {
         _answered = w;
         presage.talk(true);
+        _nextWarmupAt = presage.now + 3500;
         Timer(const Duration(seconds: 2), () => presage.talk(false));
+      }
+      if (autoTaps && game.phase == GamePhase.calibrate) {
+        final next = _nextWarmupAt;
+        if (w != null &&
+            identical(w, _answered) &&
+            next != null &&
+            presage.now >= next) {
+          _nextWarmupAt = null;
+          game.nextWarmup();
+        }
+        if (game.calibStage == CalibStage.ready) game.startQuestions();
       }
       await tester.pump(const Duration(milliseconds: 100));
       waited += 100;

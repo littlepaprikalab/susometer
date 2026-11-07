@@ -47,20 +47,27 @@ Settings → **Signal check** → **Start both**. Allow microphone and speech re
 
 ## 4. A party game (2 players, 3 questions)
 
-- [ ] Lobby → Start the show → How to play → Consent → calibration completes on its own in about
-  30–60 s. (If a mustard stamp stays on the camera, note what it says.)
-- [ ] A friend asks a question: it appears as they speak. Stop talking and wait: after ~1.5 s
-  the host asks "{name}, your answer?"
-- [ ] Next question: answer **immediately** after it's asked. The question should end the moment
-  you start (no host prompt).
-- [ ] After answering, stay quiet: the answer ends by itself after ~4 s, then "Locking in the
-  reading…".
-- [ ] From *Ask your question!* to *{name}, your answer?* to *Locking in the reading…*, the camera
-  card doesn't move, resize or flash black.
+- [ ] Lobby → Start the show → How to play → Consent → calibration: each warm-up waits for *Next*
+  (wait 20 s after answering one: nothing moves), then *Start the questions* shows within about
+  30–60 s of taps. (If a mustard stamp stays on the camera, note what it says.)
+- [ ] **Nothing moves by itself (decision 76):** the host says "{other player}, ask your
+  question!". The friend asks, pauses mid-question for 3 s, laughs, carries on: the screen stays
+  on the question until *Done asking*, and the host never cuts in. After answering, stay quiet
+  for 30 s: still on the answer until *Final answer*. On *Call it!*, wait a minute: no reveal
+  until *Reveal*.
+- [ ] With 3 players, the host names a different asker for each question, taking turns.
+- [ ] While *Start the questions* is up, take a screenshot and close the preview: still on *Start
+  the questions*, no new warm-ups (decision 76).
+- [ ] *Call it!* (decision 77): each voter taps *Legit* or *Sus* by their name. **Does everyone
+  get it without being told?** Tap your pick again: it clears. Tap the other: it switches.
+- [ ] Next question: answer **immediately**, before tapping *Done asking*. Tap it, then *Final
+  answer*: the pause tile on the verdict should be short, not the time it took to tap.
+- [ ] From *{name}, ask your question!* to *{name}, your answer?* to *Locking in the reading…*,
+  the camera card doesn't move, resize or flash black.
 - [ ] The Pulse card's trend line: roughly flat around the dashed line while you sit calmly, rising
   after a few seconds if you hold your breath or do 10 squats first. **Does it look jumpy?** The
   number should match where the line ends.
-- [ ] Double-tap *Tap when done asking* fast: the answer must **not** end by itself (the second
+- [ ] Double-tap *Done asking* fast: the answer must **not** end (the second
   tap lands where *Final answer* appears). Same with *Got it, let's play*: you should still see the
   consent screen.
 - [ ] Verdict: the pulse chart's shaded stretch lines up with when you were talking.
@@ -98,7 +105,8 @@ Settings → **Signal check** → **Start both**. Allow microphone and speech re
 
 - [ ] After the host reads the question, **wait about 10 s without talking**: the question card
   stays up, with *Different question* and *Ready to answer*. The camera doesn't move or flash.
-- [ ] Start talking without tapping: the answer card appears and your words show up.
+- [ ] Start talking without tapping: the question card stays up (decision 76). Tap *Ready to
+  answer*: the answer card shows, with your words so far.
 - [ ] Next question: tap *Ready to answer* **while the host is still reading**. The host stops
   mid-sentence, and when you answer right away your first words are in the transcript (the mic
   reopens).
@@ -110,13 +118,13 @@ Settings → **Signal check** → **Start both**. Allow microphone and speech re
 - [ ] Hold the side button for Siri while the verdict sound plays, then dismiss Siri. On the next
   question your words still show up (a paused sound used to gate the mic for good).
 - [ ] Connect or disconnect AirPods mid-question. Within a few seconds your words show up again; if
-  the mic can't come back, a "tap-to-advance for this turn" notice shows, and the next player's turn
+  the mic can't come back, a "no transcripts for this turn" notice shows, and the next player's turn
   has voice again.
 - [ ] **Questions (decision 74):** with one player, no question mentions "someone here" or "this
   room"; add a second player and, over a few Spicy turns, some do (always at the end of a turn). Each
   turn's last question should feel like the hottest. **Does the meter read higher on it** than on
   the first? Note which questions get skipped with *Different question*, and which warm-ups get
-  *Doesn't apply? Next one*.
+  *Doesn't apply*.
 
 ## 5. Edge cases
 
@@ -135,11 +143,11 @@ Settings → **Signal check** → **Start both**. Allow microphone and speech re
   starts over by itself, with no Pause sheet. Stay away 20 s: the Pause sheet says "You left the
   app, so the camera stopped."; Resume restarts the question.
 - [ ] **Screenshot:** mid-question and during Call it!, take a screenshot and close the preview:
-  the game carries on (the question starts over; the vote keeps its time) with no flash of the
+  the game carries on (the question starts over; the vote is still waiting) with no flash of the
   Pause sheet. **Does the full-screen preview send the app to the background on your iOS
   version?** (SPEC decision 72.)
 - [ ] **Screenshot right after *I agree*:** take one while the camera is still starting, then
-  close the preview: calibration starts once you're back, with voice on (no "tap-to-advance"
+  close the preview: calibration starts once you're back, with voice on (no "no transcripts"
   notice) and no E5.
 - [ ] **Hand-held:** play one turn holding the phone in your hand. **How often does "Hold still"
   appear?** (SPEC §16.)

@@ -3,15 +3,19 @@
 // targets (iOS), labelled tap targets, and WCAG text contrast measured on
 // the rendered pixels.
 
+import 'dart:convert';
+import 'dart:io';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:susometer/game/decks.dart';
 import 'package:susometer/game/game_controller.dart';
 import 'package:susometer/game/models.dart';
 import 'package:susometer/presage/camera_preview.dart';
 import 'package:susometer/presage/presage_models.dart';
+import 'package:susometer/screens/intro_screens.dart';
 import 'package:susometer/settings/app_settings.dart';
 import 'package:susometer/theme/expression_stamp.dart';
 import 'package:susometer/theme/game_widgets.dart';
@@ -21,6 +25,22 @@ import 'rig.dart';
 
 /// Screens already checked in this test run (each phase checked once).
 final _checked = <String>{};
+
+/// [checkScreen]'s tap target and label checks, without contrast.
+Future<void> checkTargets(WidgetTester tester, String name) async {
+  final handle = tester.ensureSemantics();
+  await expectLater(
+    tester,
+    meetsGuideline(iOSTapTargetGuideline),
+    reason: '$name: tap targets',
+  );
+  await expectLater(
+    tester,
+    meetsGuideline(labeledTapTargetGuideline),
+    reason: '$name: labels',
+  );
+  handle.dispose();
+}
 
 Future<void> checkScreen(WidgetTester tester, String name) async {
   if (!_checked.add(name)) return;
@@ -163,6 +183,7 @@ void main() {
     await checkScreen(tester, 'answer-solo');
     for (var q = 0; q < 3; q++) {
       await rig.until(() => rig.game.phase == GamePhase.answer);
+      if (q > 0) await rig.tap('Ready to answer');
       rig.presage.talk(true);
       await rig.wait(1500);
       rig.presage.talk(false);
@@ -327,7 +348,7 @@ void main() {
         what: 'first warm-up',
       );
       final first = rig.game.currentWarmup!;
-      await rig.tap("Doesn't apply? Next one");
+      await rig.tap("Doesn't apply");
       expect(first.skipped, isTrue);
       await rig.until(() => rig.game.phase == GamePhase.ask);
       expect(find.textContaining('tQ0'), findsOneWidget);
@@ -608,6 +629,24 @@ void main() {
               chip('Light'),
               find.byType(LiveStatCard),
             ], 'calibrate, talking');
+            expect(
+              tester.getRect(find.byType(CameraPreview)),
+              calibCamera,
+              reason: 'the calibration camera moved for the warm-ups',
+            );
+            // Locked in: the wait for Start keeps the camera where it was.
+            await rig.until(
+              () => rig.game.calibStage == CalibStage.ready,
+              what: 'the normal locked in',
+            );
+            await rig.wait(200);
+            expect(find.text('Start the questions'), findsOneWidget);
+            expect(
+              tester.getRect(find.byType(CameraPreview)),
+              calibCamera,
+              reason: 'the calibration camera moved on Start the questions',
+            );
+            await checkScreen(tester, 'calibrate, ready');
             await rig.until(() => rig.game.phase == GamePhase.ask);
             await rig.wait(200);
 
@@ -875,9 +914,9 @@ void main() {
     expect(rig.game.phase, GamePhase.consent, reason: 'consent is deliberate');
     await rig.tap('I agree, measure me');
     await rig.until(() => rig.game.phase == GamePhase.ask);
-    // "Tap when done asking" → "Final answer" must not end the answer
+    // "Done asking" → "Final answer" must not end the answer
     // before it starts.
-    await quickSecondTap('Tap when done asking', 'Final answer');
+    await quickSecondTap('Done asking', 'Final answer');
     expect(rig.game.phase, GamePhase.answer);
     await rig.wait(500);
     await rig.tap('Final answer');
@@ -910,6 +949,233 @@ void main() {
     await rig.tap('Final answer');
     await rig.wait(100);
     expect(rig.game.phase, GamePhase.settle, reason: 'a deliberate tap works');
+    await rig.finish();
+  });
+
+  for (final screen in const [Size(390, 844), Size(375, 667)]) {
+    for (final scale in [1.0, 1.3]) {
+      testWidgets(
+        'Call it! with 7 voters: every Legit and Sus fits and can be tapped '
+        '(text ×$scale, ${screen.width.round()}×${screen.height.round()})',
+        (tester) async {
+          tester.platformDispatcher.textScaleFactorTestValue = scale;
+          addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+          final rig = Rig(tester);
+          await rig.pumpApp(size: screen);
+          await rig.startParty([
+            'Sam',
+            'Christopher-Alexand',
+            'Priya',
+            'Jordan',
+            'Kai',
+            'Mo',
+            'Lee',
+            'Ana',
+          ]);
+          await rig.tap('I agree, measure me');
+          await rig.until(() => rig.game.phase == GamePhase.ask);
+          rig.game.doneAsking();
+          await rig.wait(200);
+          await rig.tap('Final answer');
+          await rig.until(
+            () =>
+                rig.game.phase == GamePhase.callIt ||
+                rig.game.phase == GamePhase.redo,
+          );
+          expect(rig.game.phase, GamePhase.callIt);
+          // Tap targets and labels only: the list scrolls, and the contrast
+          // check reads whichever row the list's edge cuts against the page
+          // drawn outside it. The colors are checked on an unscrolled list
+          // below.
+          await checkTargets(tester, 'callIt, 7 voters ×$scale $screen');
+          await waitOutTapGuard(tester);
+          expect(find.text('Reveal').hitTestable(), findsOneWidget);
+          final voters = rig.game.voters;
+          expect(voters.length, 7);
+          for (final (i, v) in voters.indexed) {
+            final pick = i.isEven ? 'Sus' : 'Legit';
+            final button = find.bySemanticsLabel('${v.name}: $pick');
+            await tester.ensureVisible(button);
+            await waitOutTapGuard(tester);
+            expect(
+              tester.getSize(button).height,
+              greaterThanOrEqualTo(44),
+              reason: '${v.name}: $pick tap target',
+            );
+            await tester.tap(button);
+            await tester.pump(const Duration(milliseconds: 150));
+            expect(
+              rig.game.pendingVotes[v.id],
+              i.isEven ? Vote.sus : Vote.legit,
+              reason: v.name,
+            );
+          }
+          expect(find.text('7 / 7 voted'), findsOneWidget);
+          // Back to the top: a pick the list has half scrolled past its edge
+          // reads as a clipped sliver (each pick's real size is checked
+          // above, as it's tapped).
+          tester
+              .state<ScrollableState>(find.byType(Scrollable).first)
+              .position
+              .jumpTo(0);
+          await tester.pump(const Duration(milliseconds: 100));
+          await checkTargets(tester, 'callIt, voted ×$scale $screen');
+          await rig.tap('Reveal');
+          expect(rig.game.currentResult!.votes.length, 7);
+          await rig.finish();
+        },
+      );
+    }
+  }
+
+  for (final screen in const [Size(390, 844), Size(375, 667)]) {
+    for (final scale in [1.0, 1.3]) {
+      testWidgets('Call it! colors: picked and unpicked pass contrast '
+          '(text ×$scale, ${screen.width.round()}×${screen.height.round()})', (
+        tester,
+      ) async {
+        tester.platformDispatcher.textScaleFactorTestValue = scale;
+        addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+        final rig = Rig(tester);
+        await rig.pumpApp(size: screen);
+        await rig.startParty(['Sam', 'Christopher-Alexand', 'Priya']);
+        await rig.tap('I agree, measure me');
+        await rig.until(() => rig.game.phase == GamePhase.ask);
+        rig.game.doneAsking();
+        await rig.wait(200);
+        await rig.tap('Final answer');
+        await rig.until(
+          () =>
+              rig.game.phase == GamePhase.callIt ||
+              rig.game.phase == GamePhase.redo,
+        );
+        expect(rig.game.phase, GamePhase.callIt);
+        await checkScreen(tester, 'callIt, none picked ×$scale $screen');
+        final voters = rig.game.voters;
+        await waitOutTapGuard(tester);
+        await tester.tap(find.bySemanticsLabel('${voters[0].name}: Legit'));
+        await tester.tap(find.bySemanticsLabel('${voters[1].name}: Sus'));
+        await tester.pump(const Duration(milliseconds: 300));
+        await checkScreen(tester, 'callIt, both picked ×$scale $screen');
+        await rig.finish();
+      });
+    }
+  }
+
+  testWidgets('every warm-up and calibration line fits the Calibrate bubble '
+      'whole, on both phones at both text sizes', (tester) async {
+    final lines = [
+      for (final q
+          in (jsonDecode(File('assets/decks/warmup.json').readAsStringSync())
+                  as Map)['questions']
+              as List)
+        (q as Map)['q'] as String,
+      for (final w in DeckLibrary.fallback.warmup) w.text,
+      'Warming up the camera…',
+      'Sit still and look at the camera.',
+      'Christopher-Alexand, sit still and look at the camera.',
+      "That's your normal locked in.",
+    ];
+    for (final screen in const [Size(390, 844), Size(375, 667)]) {
+      for (final scale in [1.0, 1.3]) {
+        useRealPhone(tester, screen);
+        tester.platformDispatcher.textScaleFactorTestValue = scale;
+        for (final text in lines) {
+          await tester.pumpWidget(
+            MaterialApp(
+              theme: buildSusTheme(),
+              home: Scaffold(
+                body: ScreenFrame(
+                  child: Column(
+                    children: [
+                      HostBubble(
+                        text: text,
+                        lines: CalibrateScreen.bubbleLines,
+                        minFontSize: CalibrateScreen.bubbleMinFontSize,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          );
+          expect(
+            find.descendant(
+              of: find.byType(HostBubble),
+              matching: find.byType(ClipRect),
+            ),
+            findsNothing,
+            reason: '"$text" was cut at ×$scale on $screen',
+          );
+        }
+      }
+    }
+    tester.platformDispatcher.clearTextScaleFactorTestValue();
+  });
+
+  testWidgets('voting near the bottom of the list keeps its place', (
+    tester,
+  ) async {
+    final rig = Rig(tester);
+    await rig.pumpApp(size: const Size(375, 667));
+    await rig.startParty([
+      'Sam',
+      'Alex',
+      'Priya',
+      'Jordan',
+      'Kai',
+      'Mo',
+      'Lee',
+    ]);
+    await rig.tap('I agree, measure me');
+    await rig.until(() => rig.game.phase == GamePhase.ask);
+    rig.game.doneAsking();
+    await rig.wait(200);
+    await rig.tap('Final answer');
+    await rig.until(() => rig.game.phase == GamePhase.callIt);
+    await waitOutTapGuard(tester);
+    final last = rig.game.voters.last;
+    final pick = find.bySemanticsLabel('${last.name}: Sus');
+    await tester.ensureVisible(pick);
+    await tester.pump(const Duration(milliseconds: 300));
+    final position = tester
+        .state<ScrollableState>(find.byType(Scrollable).first)
+        .position;
+    final offset = position.pixels;
+    expect(offset, greaterThan(0), reason: 'the list had to scroll');
+    await tester.tap(pick);
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(rig.game.pendingVotes[last.id], Vote.sus);
+    expect(position.pixels, offset, reason: 'the list jumped after the vote');
+    await rig.finish();
+  });
+
+  testWidgets('VoiceOver reaches only the sheet: nothing behind Pause or End '
+      'the show', (tester) async {
+    final rig = Rig(tester);
+    await rig.pumpApp();
+    await rig.startParty(['Sam', 'Alex']);
+    await rig.tap('I agree, measure me');
+    await rig.until(() => rig.game.phase == GamePhase.ask);
+    rig.game.doneAsking();
+    await rig.wait(600);
+    final handle = tester.ensureSemantics();
+    expect(find.semantics.byLabel('Final answer'), findsOne);
+    await waitOutTapGuard(tester);
+    await tester.tap(find.bySemanticsLabel('Pause the game'));
+    await rig.wait(300);
+    expect(find.semantics.byLabel('Resume'), findsOne);
+    expect(
+      find.semantics.byLabel('Final answer'),
+      findsNothing,
+      reason: 'VoiceOver could tap Final answer behind the Pause sheet',
+    );
+    await rig.tap('End the show');
+    await rig.wait(300);
+    expect(find.semantics.byLabel('Keep playing'), findsOne);
+    expect(find.semantics.byLabel('Final answer'), findsNothing);
+    expect(find.semantics.byLabel('Resume'), findsNothing);
+    handle.dispose();
     await rig.finish();
   });
 }

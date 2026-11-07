@@ -5,24 +5,15 @@ import '../game/models.dart';
 /// Turn-detection constants (SPEC.md §7).
 class TurnConfig {
   const TurnConfig({
-    this.askerSilenceMs = 1500,
-    this.answerSilenceMs = 4000,
-    this.noAnswerTimeoutMs = 20000,
     this.talkStartDebounceMs = 200,
     this.talkEndDebounceMs = 500,
     this.speechLevelThreshold = 0.45,
-    this.autoQuestionEnd = true,
-    this.autoAnswerEnd = true,
+    this.answerTailMs = 4000,
+    this.lateWordsMs = 1000,
+    this.tapAllowanceMs = 1500,
+    this.maxAnswerMs = 60000,
+    this.maxQuestionMs = 60000,
   });
-
-  /// Question ends after this much silence following asker speech.
-  final int askerSilenceMs;
-
-  /// Answer ends after this much silence following the player's last talk.
-  final int answerSilenceMs;
-
-  /// If the player never starts talking, the answer ends after this long.
-  final int noAnswerTimeoutMs;
 
   /// SmartSpectra `talking` must hold this long to count as a talk start.
   final int talkStartDebounceMs;
@@ -33,21 +24,31 @@ class TurnConfig {
   /// Mic level (0..1) that counts as someone still speaking.
   final double speechLevelThreshold;
 
-  /// Detect question end and answer end automatically. Off = tap-to-advance.
-  final bool autoQuestionEnd;
-  final bool autoAnswerEnd;
+  /// When Final answer comes later than this after the player last spoke,
+  /// the scored answer ends here instead, so the room's chatter while
+  /// nobody tapped isn't read as part of it.
+  final int answerTailMs;
 
-  TurnConfig copyWith({bool? autoQuestionEnd, bool? autoAnswerEnd}) =>
-      TurnConfig(
-        askerSilenceMs: askerSilenceMs,
-        answerSilenceMs: answerSilenceMs,
-        noAnswerTimeoutMs: noAnswerTimeoutMs,
-        talkStartDebounceMs: talkStartDebounceMs,
-        talkEndDebounceMs: talkEndDebounceMs,
-        speechLevelThreshold: speechLevelThreshold,
-        autoQuestionEnd: autoQuestionEnd ?? this.autoQuestionEnd,
-        autoAnswerEnd: autoAnswerEnd ?? this.autoAnswerEnd,
-      );
+  /// Words heard this soon after the player stops talking are taken as
+  /// theirs, arriving late from recognition, not as the asker's.
+  final int lateWordsMs;
+
+  /// A tap before answering (Done asking, solo's Ready to answer) takes a
+  /// moment, and the warm-ups the pause is compared with have none, so up
+  /// to this much of the wait before the tap doesn't count as hesitation.
+  /// Stalling longer than that before tapping does.
+  final int tapAllowanceMs;
+
+  /// The scored answer ends at most this long after the question did, however
+  /// late Final answer comes. Nothing ends the answer on screen, so without
+  /// it a forgotten tap would score (and search for heartbeats in) every
+  /// minute since the question, freezing the screen on the tap.
+  final int maxAnswerMs;
+
+  /// The scored question starts at most this long before it ended. Nothing
+  /// ends the question on screen either, so a room that chats for minutes
+  /// before Done asking would otherwise be scored as one long question.
+  final int maxQuestionMs;
 }
 
 /// Debounces SmartSpectra `talking` edges into confirmed talk starts/ends.
@@ -101,9 +102,10 @@ class TalkTracker {
   }
 }
 
-enum QuestionEndReason { playerTalk, askerSilence, button, hostDone }
-
-enum AnswerEndReason { finalAnswer, silence, noAnswer }
+/// What ended the question: Done asking (party, or solo's Ready to answer
+/// while the host reads), Final answer straight from Ask, or the host
+/// finishing the question (solo).
+enum QuestionEndReason { button, hostDone }
 
 sealed class TurnEvent {
   const TurnEvent(this.tMs);
@@ -112,34 +114,49 @@ sealed class TurnEvent {
 }
 
 class QuestionEnded extends TurnEvent {
-  const QuestionEnded(this.reason, int tMs, {required this.hostShouldPrompt})
-    : super(tMs);
+  const QuestionEnded(this.reason, super.tMs);
 
   final QuestionEndReason reason;
-
-  /// True when the host should say "{name}, your answer?" (silence path).
-  final bool hostShouldPrompt;
 }
 
 class AnswerStarted extends TurnEvent {
   const AnswerStarted(super.tMs);
 }
 
-class AnswerEnded extends TurnEvent {
-  const AnswerEnded(this.reason, int tMs) : super(tMs);
-
-  final AnswerEndReason reason;
+/// Party: the player started talking after the asker's last words, before
+/// Done asking. Nothing moves; the controller keeps their words apart from
+/// the question in case it's the answer.
+class EarlyAnswer extends TurnEvent {
+  const EarlyAnswer(super.tMs);
 }
 
-/// Detects question end (tQ1) and answer end (tA1) for one question
-/// (SPEC.md §7). Pure: feed it events and clock ticks, read the events back.
+/// ...and then the asker carried on, so it was a reaction: their words
+/// belong to the question after all.
+class EarlyAnswerWithdrawn extends TurnEvent {
+  const EarlyAnswerWithdrawn(super.tMs);
+}
+
+/// Final answer was tapped. [tMs] is where the scored answer ends, which
+/// can be before the tap (see [TurnConfig.answerTailMs]).
+class AnswerEnded extends TurnEvent {
+  const AnswerEnded(super.tMs);
+}
+
+/// Marks the question's end (tQ1) and the answer's (tA1) for one question
+/// (SPEC.md §7). Pure: feed it events, taps and clock ticks, read the events
+/// back.
+///
+/// Nothing ends by itself: only Done asking (or, in solo mode, the host
+/// finishing the question) ends the question, and only Final answer ends the
+/// answer (SPEC.md decision 76). The voice and the camera still say *when*
+/// things happened, so the score is timed from what was said, not from when
+/// someone got round to tapping.
 ///
 /// Speaker separation without diarization: mic speech while the player is
 /// not talking (per SmartSpectra) is the asker; while talking, the answer.
 class TurnDetector {
   TurnDetector({
     required this.party,
-    required this.micEnabled,
     required this.startMs,
     this.config = const TurnConfig(),
   }) : _talk = TalkTracker(config) {
@@ -148,7 +165,6 @@ class TurnDetector {
   }
 
   final bool party;
-  final bool micEnabled;
   final int startMs;
   final TurnConfig config;
   final TalkTracker _talk;
@@ -159,35 +175,57 @@ class TurnDetector {
   int? tA1;
   int? hesitationFromMs;
   QuestionEndReason? questionEndReason;
-  AnswerEndReason? answerEndReason;
   int? lastAskerSpeechMs;
   int? lastPlayerActivityMs;
+
+  /// Party: the player started talking after the asker's last words, before
+  /// Done asking was tapped. If the asker carries on, it was a reaction, not
+  /// the answer, and it's forgotten.
+  int? earlyTalkMs;
 
   bool get questionEnded => tQ1 != null;
   bool get answerEnded => tA1 != null;
   bool get playerTalking => _talk.talking;
 
-  bool get _autoQuestion => party && micEnabled && config.autoQuestionEnd;
-  bool get _autoAnswer => micEnabled && config.autoAnswerEnd;
-
   /// A raw SmartSpectra talking edge.
   List<TurnEvent> onPlayerTalkEdge(bool talking, int tMs) =>
       _confirm(_talk.edge(talking, tMs));
+
+  /// Whether speech at [tMs] can be the asker's: the player isn't talking
+  /// and didn't only just stop (recognition delivers words late).
+  bool _askerCouldSpeak(int tMs) {
+    if (!party || _talk.talking || _talk.rawTalking) return false;
+    final end = _talk.lastEndMs;
+    return end == null || tMs - end >= config.lateWordsMs;
+  }
 
   /// Recognized speech (new partial text) at [tMs].
   List<TurnEvent> onSpeech(int tMs) {
     if (answerEnded) return const [];
     if (!questionEnded) {
-      if (!_talk.talking && !_talk.rawTalking) {
+      if (_askerCouldSpeak(tMs)) {
         tQ0 ??= tMs;
         lastAskerSpeechMs = tMs;
+        if (earlyTalkMs != null) {
+          earlyTalkMs = null;
+          return [EarlyAnswerWithdrawn(tMs)];
+        }
       }
-    } else if (_talk.talking || _talk.rawTalking || tA0 != null) {
+    } else if (_talk.talking || _talk.rawTalking || _answerStillOpen(tMs)) {
       // Once the player has started answering, new words keep the answer
-      // open even if SmartSpectra's talking flag drops out for a moment.
+      // open even if SmartSpectra's talking flag drops out for a moment,
+      // but only while it's still going: words after a gap longer than the
+      // tail are the room's, as when the answer ended itself on silence.
       lastPlayerActivityMs = math.max(lastPlayerActivityMs ?? 0, tMs);
     }
     return const [];
+  }
+
+  /// The player has started answering and was last active within
+  /// [TurnConfig.answerTailMs] of [tMs].
+  bool _answerStillOpen(int tMs) {
+    final last = lastPlayerActivityMs;
+    return tA0 != null && last != null && tMs - last <= config.answerTailMs;
   }
 
   /// Mic level. Only extends speech that recognition already picked up, so
@@ -197,8 +235,8 @@ class TurnDetector {
     if (!questionEnded) {
       if (tQ0 != null &&
           lastAskerSpeechMs != null &&
-          !_talk.talking &&
-          !_talk.rawTalking) {
+          earlyTalkMs == null &&
+          _askerCouldSpeak(tMs)) {
         lastAskerSpeechMs = tMs;
       }
     } else if (_talk.talking) {
@@ -207,72 +245,60 @@ class TurnDetector {
     return const [];
   }
 
-  /// "Too loud? Tap when done asking" / "Done asking" (no-mic mode).
+  /// "Done asking" (party), or solo's "Ready to answer" while the host is
+  /// still reading.
   List<TurnEvent> onDoneAskingTap(int tMs) {
     if (questionEnded) return const [];
-    return _endQuestion(QuestionEndReason.button, tMs, prompt: false);
+    return _endQuestion(QuestionEndReason.button, tMs);
   }
 
   /// Solo mode: the host finished reading the question.
   List<TurnEvent> onHostFinishedQuestion(int tMs) {
     if (questionEnded) return const [];
-    return _endQuestion(QuestionEndReason.hostDone, tMs, prompt: false);
+    return _endQuestion(QuestionEndReason.hostDone, tMs);
   }
 
-  /// The host finished "{name}, your answer?". Hesitation counts from here
-  /// if the player hasn't started yet, matching how warm-up latency is timed.
-  void onHostPromptFinished(int tMs) {
-    if (questionEndReason == QuestionEndReason.askerSilence && tA0 == null) {
-      hesitationFromMs = tMs;
-    }
+  /// Solo "Ready to answer" after the host finished: it doesn't end
+  /// anything, but like Done asking, the tap isn't counted as hesitation
+  /// (see [TurnConfig.tapAllowanceMs]).
+  void onReadyTap(int tMs) {
+    if (!questionEnded || tA0 != null || answerEnded) return;
+    hesitationFromMs = _pauseFrom(tQ1!, tMs);
   }
 
+  /// Where hesitation counts from when the question ended at [endMs] and the
+  /// player tapped at [tapMs] before answering.
+  int _pauseFrom(int endMs, int tapMs) =>
+      math.max(endMs, math.min(tapMs, endMs + config.tapAllowanceMs));
+
+  /// "Final answer".
   List<TurnEvent> onFinalAnswerTap(int tMs) {
     if (answerEnded) return const [];
     final events = <TurnEvent>[];
     if (!questionEnded) {
-      events.addAll(_endQuestion(QuestionEndReason.button, tMs, prompt: false));
+      events.addAll(_endQuestion(QuestionEndReason.button, tMs));
     }
-    tA1 = tMs;
-    answerEndReason = AnswerEndReason.finalAnswer;
-    return events..add(AnswerEnded(AnswerEndReason.finalAnswer, tMs));
+    final end = _answerEnd(tMs);
+    tA1 = end;
+    return events..add(AnswerEnded(end));
   }
 
-  List<TurnEvent> tick(int nowMs) {
-    final events = _confirm(_talk.settle(nowMs));
-    if (answerEnded) return events;
-    if (!questionEnded) {
-      final last = lastAskerSpeechMs;
-      if (_autoQuestion &&
-          tQ0 != null &&
-          last != null &&
-          !_talk.talking &&
-          !_talk.rawTalking &&
-          nowMs - last >= config.askerSilenceMs) {
-        events.addAll(
-          _endQuestion(QuestionEndReason.askerSilence, nowMs, prompt: true),
-        );
-      }
-      return events;
-    }
-    if (_autoAnswer) {
-      final lastTalk = lastPlayerActivityMs;
-      if (tA0 != null &&
-          !_talk.talking &&
-          lastTalk != null &&
-          nowMs - lastTalk >= config.answerSilenceMs) {
-        tA1 = nowMs;
-        answerEndReason = AnswerEndReason.silence;
-        events.add(AnswerEnded(AnswerEndReason.silence, nowMs));
-      } else if (tA0 == null &&
-          nowMs - (hesitationFromMs ?? tQ1!) >= config.noAnswerTimeoutMs) {
-        tA1 = nowMs;
-        answerEndReason = AnswerEndReason.noAnswer;
-        events.add(AnswerEnded(AnswerEndReason.noAnswer, nowMs));
-      }
-    }
-    return events;
+  /// Where the scored answer ends for a Final answer tap at [tapMs]: the
+  /// tap, or [TurnConfig.answerTailMs] after the player last spoke if that's
+  /// sooner, and never more than [TurnConfig.maxAnswerMs] after the question
+  /// ended. An answer that only started after that is scored as none: the
+  /// window is the minute after the question (see [timing]).
+  int _answerEnd(int tapMs) {
+    final cap = math.min(tapMs, tQ1! + config.maxAnswerMs);
+    final start = tA0;
+    if (start == null || start >= cap) return cap;
+    if (_talk.talking || _talk.rawTalking) return cap;
+    final last = math.max(lastPlayerActivityMs ?? start, start);
+    return math.max(math.min(cap, last + config.answerTailMs), start);
   }
+
+  /// Clock tick: confirms debounced talk edges. Nothing ends on a tick.
+  List<TurnEvent> tick(int nowMs) => _confirm(_talk.settle(nowMs));
 
   List<TurnEvent> _confirm(List<(bool, int)> transitions) {
     final events = <TurnEvent>[];
@@ -289,11 +315,10 @@ class TurnDetector {
   List<TurnEvent> _onTalkStart(int t) {
     if (answerEnded) return const [];
     if (!questionEnded) {
-      // The player starts answering: that ends the question (rule 1), but
-      // only once the asker has said something, or in solo mode.
-      final askerSpoke = tQ0 != null && lastAskerSpeechMs != null;
-      if ((_autoQuestion && askerSpoke) || (!party && config.autoQuestionEnd)) {
-        return _endQuestion(QuestionEndReason.playerTalk, t, prompt: false);
+      // Noted, not acted on: only a tap ends the question.
+      if (party && lastAskerSpeechMs != null && earlyTalkMs == null) {
+        earlyTalkMs = t;
+        return [EarlyAnswer(t)];
       }
       return const [];
     }
@@ -305,33 +330,44 @@ class TurnDetector {
     return const [];
   }
 
-  List<TurnEvent> _endQuestion(
-    QuestionEndReason reason,
-    int t, {
-    required bool prompt,
-  }) {
+  /// Ends the question for a tap (or the host finishing) at [tapMs]. In
+  /// party mode the question really ended with the asker's last words, so
+  /// that's tQ1, and hesitation counts from there, less a moment for the
+  /// tap: a slow tap can't hide a slow answer.
+  List<TurnEvent> _endQuestion(QuestionEndReason reason, int tapMs) {
     tQ0 ??= startMs;
-    tQ1 = t;
+    final asked = lastAskerSpeechMs;
+    final end = party && asked != null && asked < tapMs ? asked : tapMs;
+    tQ1 = end;
     questionEndReason = reason;
-    hesitationFromMs = t;
-    final events = <TurnEvent>[
-      QuestionEnded(reason, t, hostShouldPrompt: prompt),
-    ];
-    final talkingNow = _talk.talking;
-    if (reason == QuestionEndReason.playerTalk || talkingNow) {
-      tA0 = t;
-      lastPlayerActivityMs = t;
-      events.add(AnswerStarted(t));
+    final early = earlyTalkMs;
+    // Answering before the tap: no tap came first, so no allowance.
+    hesitationFromMs = early != null ? end : _pauseFrom(end, tapMs);
+    final events = <TurnEvent>[QuestionEnded(reason, end)];
+    if (early != null || _talk.talking) {
+      // Already answering: from when they started, or the question's end if
+      // they were talking over it.
+      final start = math.max(early ?? _talk.lastStartMs ?? end, end);
+      tA0 = start;
+      lastPlayerActivityMs = math.max(lastPlayerActivityMs ?? start, start);
+      events.add(AnswerStarted(start));
     }
     return events;
   }
 
-  /// Timing markers once the answer has ended.
-  QuestionTiming timing() => QuestionTiming(
-    tQ0: tQ0 ?? startMs,
-    tQ1: tQ1 ?? startMs,
-    tA0: tA0,
-    tA1: tA1 ?? tQ1 ?? startMs,
-    hesitationFromMs: hesitationFromMs ?? tQ1 ?? startMs,
-  );
+  /// Timing markers once the answer has ended. An answer that started after
+  /// the scored answer ended ([TurnConfig.maxAnswerMs]) counts as none, and
+  /// the question starts at most [TurnConfig.maxQuestionMs] before its end.
+  QuestionTiming timing() {
+    final end = tA1 ?? tQ1 ?? startMs;
+    final start = tA0;
+    final asked = tQ1 ?? startMs;
+    return QuestionTiming(
+      tQ0: math.max(tQ0 ?? startMs, asked - config.maxQuestionMs),
+      tQ1: asked,
+      tA0: start != null && start <= end ? start : null,
+      tA1: end,
+      hesitationFromMs: hesitationFromMs ?? tQ1 ?? startMs,
+    );
+  }
 }

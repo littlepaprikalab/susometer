@@ -2,6 +2,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
+import 'fit_text.dart';
 import 'tokens.dart';
 
 /// Mustard page with the mockup's 18 px side padding.
@@ -39,6 +40,8 @@ class HostBubble extends StatelessWidget {
     required this.text,
     this.fontSize = 20,
     this.singleLine = false,
+    this.lines,
+    this.minFontSize = 16,
   });
 
   final String text;
@@ -46,6 +49,13 @@ class HostBubble extends StatelessWidget {
 
   /// One line that shrinks to fit, so the bubble's height never changes.
   final bool singleLine;
+
+  /// Always this many full-size lines tall: shorter text sits in the middle,
+  /// longer text shrinks to fit, so the bubble's height never changes.
+  final int? lines;
+
+  /// With [lines]: the smallest size the text shrinks to, 2 pt at a time.
+  final double minFontSize;
 
   double _lineHeight(BuildContext context) {
     final ambient = DefaultTextStyle.of(context);
@@ -114,6 +124,26 @@ class HostBubble extends StatelessWidget {
                           text,
                           maxLines: 1,
                           style: SusText.display(fontSize),
+                        ),
+                      ),
+                    )
+                  : lines != null
+                  ? SizedBox(
+                      height: _lineHeight(context) * lines!,
+                      child: Align(
+                        alignment: Alignment.centerLeft,
+                        child: FitText(
+                          text,
+                          sizes: [
+                            for (
+                              var size = fontSize;
+                              size >= minFontSize;
+                              size -= 2
+                            )
+                              size,
+                          ],
+                          overflow: FitOverflow.keepStart,
+                          style: SusText.display,
                         ),
                       ),
                     )
@@ -468,79 +498,6 @@ class PauseButton extends StatelessWidget {
       ),
     );
   }
-}
-
-/// Dashed-outline button ("Too loud? Tap when done asking").
-class DashedButton extends StatelessWidget {
-  const DashedButton({
-    super.key,
-    required this.label,
-    required this.onPressed,
-    this.height = 48,
-  });
-
-  final String label;
-  final VoidCallback? onPressed;
-  final double height;
-
-  @override
-  Widget build(BuildContext context) {
-    return Semantics(
-      button: true,
-      label: label,
-      excludeSemantics: true,
-      onTap: onPressed,
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTap: onPressed,
-        child: CustomPaint(
-          painter: const _DashedBorderPainter(radius: 14),
-          child: SizedBox(
-            height: height,
-            child: Center(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 10),
-                child: Text(
-                  label,
-                  textAlign: TextAlign.center,
-                  style: SusText.body(15, weight: FontWeight.w700),
-                ),
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _DashedBorderPainter extends CustomPainter {
-  const _DashedBorderPainter({required this.radius});
-
-  final double radius;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = SusColors.ink
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 2.5;
-    final rrect = RRect.fromRectAndRadius(
-      Offset.zero & size,
-      Radius.circular(radius),
-    ).deflate(1.25);
-    final path = Path()..addRRect(rrect);
-    for (final metric in path.computeMetrics()) {
-      var d = 0.0;
-      while (d < metric.length) {
-        canvas.drawPath(metric.extractPath(d, d + 8), paint);
-        d += 13;
-      }
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant _DashedBorderPainter oldDelegate) => false;
 }
 
 /// Cream rounded card used for bottom sheets (E6, Pause).

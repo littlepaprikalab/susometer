@@ -48,8 +48,9 @@ status (face position, lighting, motion).
 **How the game reacts in real time:**
 
 - **Calibration** learns each player's normal: about 20 s sitting still, then 3 easy warm-ups
-  the host reads aloud. It finishes by itself once it has 12 s of confident pulse with the face
-  present 80% of the time.
+  the host reads aloud, each answered and then tapped through with *Next*. It's locked in once it
+  has 12 s of confident pulse with the face present 80% of the time, and the questions start when
+  the room taps *Start the questions*.
 - **Questions:** each window scores four signals against that baseline: pulse rise (45%), blink
   rate change or a blink "freeze" (25%), the peak stress expression (15%), and hesitation before
   answering (15%). Each counts only what's bigger than the player's own normal wobble (blinks
@@ -57,8 +58,10 @@ status (face position, lighting, motion).
   extra thinking free), so a calm, honest answer scores near 0. Then `score = 100 × raw^0.8`.
 - **Turn-taking without diarization:** SmartSpectra's **talking** flag tells the app who is
   speaking. Mic speech while the hot-seat player isn't talking is the question; speech while they
-  are is the answer. The question ends when they start talking or after 1.5 s of silence, and
-  the answer ends 4 s after they stop.
+  are is the answer. The host names who asks each question, and only taps move the game on
+  (*Done asking*, *Final answer*, *Reveal*), because a party is too noisy for silence detection.
+  The timing still comes from the voice and the camera: the pause is counted from the asker's last
+  words, and a late *Final answer* doesn't stretch the answer.
 - **Never a fake verdict:** low-confidence pulse samples, and anything captured while validation
   isn't OK, are ignored. If less than 60% of the window is clean, the show says **No clean read**
   and explains why with the actual validation hints ("The camera lost Sam's face for about
@@ -95,8 +98,8 @@ physiology most often.
   game ends, on *Wipe everything*, or when the app closes. Nothing is written to disk: no
   accounts, no analytics, no backend.
 - **Audio** goes only to Apple's on-device speech recognition (`requiresOnDeviceRecognition`). If
-  on-device recognition isn't available, the app does **not** fall back to servers; it switches to
-  tap-to-advance. Audio is never recorded. Everyone at the table is told in the lobby that voices
+  on-device recognition isn't available, the app does **not** fall back to servers; it plays on
+  without transcripts. Audio is never recorded. Everyone at the table is told in the lobby that voices
   are transcribed on the phone.
 - **Transcripts** (questions and answers) stay in memory for the Replay and are never shared;
   the *Share results* image contains only names, scores and awards.
