@@ -12,6 +12,62 @@ import 'synthetic.dart';
 import 'world.dart';
 
 void main() {
+  test('scale: 8 × 7 with a screenshot in every question', () {
+    fakeAsync((async) {
+      final w = World(async);
+      final names = ['Sam', 'Alex', 'Priya', 'Jordan', 'Kai', 'Mo', 'Lee'];
+      w.startGame([...names, 'Ana'], questions: 7);
+      final timersAtStart = async.pendingTimers.length;
+      var trips = 0;
+      for (var p = 0; p < 8; p++) {
+        w.calibrate();
+        for (var q = 0; q < 7; q++) {
+          // Mid-question: a screenshot, or (once a turn) a longer trip
+          // that waits on the Pause sheet until someone taps Resume.
+          w.elapse(500);
+          final starts = w.sdkCalls('start');
+          final stops = w.sdkCalls('stop');
+          final long = q == 3;
+          w.leaveApp(long ? GameController.autoResumeWithinMs + 5000 : 3000);
+          if (long) {
+            expect(w.game.showPauseSheet, isTrue);
+            w.game.resume();
+            w.elapse(300);
+          }
+          trips++;
+          expect(w.sdkCalls('stop'), stops + 1, reason: 'one stop per trip');
+          expect(w.sdkCalls('start'), starts + 1, reason: 'one start per trip');
+          expect(w.game.paused, isFalse);
+          expect(w.game.phase, GamePhase.ask);
+          w.askAndAnswer(question: 'Question $q?');
+          w.game.nextQuestion();
+          w.elapse(100);
+        }
+      }
+      expect(w.game.phase, GamePhase.leaderboard);
+      expect(trips, 56);
+      expect(
+        w.game.turns.map((t) => t.results.where((r) => !r.skipped).length),
+        everyElement(7),
+        reason: 'every question still scored',
+      );
+      expect(w.game.micEnabled, isTrue);
+      expect(w.running, isFalse);
+      expect(
+        w.sdkCalls('start'),
+        8 + trips,
+        reason:
+            'one session per player plus one per trip: no watchdog restarts',
+      );
+      expect(
+        async.pendingTimers.length,
+        lessThanOrEqualTo(timersAtStart),
+        reason: 'no timers left behind by 56 trips',
+      );
+      w.dispose();
+    });
+  });
+
   test('scale: 8 players × 7 questions, everyone votes, game completes', () {
     fakeAsync((async) {
       final w = World(async);

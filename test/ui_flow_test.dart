@@ -1,5 +1,6 @@
 import 'dart:math' as math;
 
+import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:susometer/game/game_controller.dart';
 import 'package:susometer/presage/presage_models.dart';
@@ -146,6 +147,63 @@ void main() {
     expect(find.text('Ask your question!'), findsOneWidget);
     await rig.finish();
   });
+
+  testWidgets(
+    'coming back: the Pause sheet never flashes up for a short trip',
+    (tester) async {
+      final rig = Rig(tester);
+      await rig.pumpApp();
+      rig.presage.storedKey = 'k';
+      rig.game.hasSeenHowToPlay = true;
+      await rig.addPlayer('Sam');
+      await rig.addPlayer('Alex');
+      await rig.tap('Start the show');
+      await rig.wait(300);
+      await rig.tap('I agree, measure me');
+      await rig.until(() => rig.game.phase == GamePhase.ask);
+      final binding = tester.binding;
+      void out() {
+        binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+        binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
+        binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+      }
+
+      // On the way back in, iOS shows the app (inactive, frames on) a moment
+      // before it's active, and only then does the game carry on.
+      void backInView() {
+        binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
+        binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+      }
+
+      out();
+      await rig.wait(3000);
+      backInView();
+      await tester.pump();
+      expect(
+        find.text('Paused'),
+        findsNothing,
+        reason: 'the sheet flashed up just before the game carried on',
+      );
+      binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      await rig.wait(300);
+      expect(find.text('Paused'), findsNothing);
+      expect(rig.presage.running, isTrue);
+
+      // Away longer: the sheet is there as soon as the app is.
+      out();
+      await rig.wait(GameController.autoResumeWithinMs + 5000);
+      backInView();
+      await tester.pump();
+      expect(find.text('Paused'), findsOneWidget);
+      binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      await rig.wait(300);
+      expect(find.text('Paused'), findsOneWidget);
+      await rig.tap('Resume');
+      await rig.wait(300);
+      expect(rig.presage.running, isTrue);
+      await rig.finish();
+    },
+  );
 
   testWidgets('leaving the app: the Pause sheet fits the phase', (
     tester,

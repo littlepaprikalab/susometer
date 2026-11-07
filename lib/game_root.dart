@@ -160,7 +160,7 @@ class _GameRootState extends State<GameRoot> with WidgetsBindingObserver {
                   telemetry: services.settings.telemetry,
                 ),
               ),
-            if (game.paused && !_confirmEnd)
+            if (game.showPauseSheet && !_confirmEnd)
               Positioned.fill(
                 child: SheetOverlay(child: PauseSheet(onEndShow: _askEnd)),
               ),

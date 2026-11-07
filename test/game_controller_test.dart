@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:fake_async/fake_async.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:susometer/audio/host_audio.dart';
@@ -685,6 +687,211 @@ void main() {
         expect(w.running, isTrue, reason: 'the next question needs the camera');
         // It plays: without the ticker, settle would never end.
         expect(w.askAndAnswer().verdict, isNotNull);
+        w.dispose();
+      });
+    });
+
+    test(
+      'leaving while the camera starts: nothing starts in the background',
+      () {
+        fakeAsync((async) {
+          final w = World(async);
+          w.startGame(['Sam', 'Alex']);
+          w.startTakesMs = 800;
+          w.game.agreeToMeasure();
+          w.elapse(300);
+          // A screenshot right after "I agree": the start finishes while away.
+          w.goAway();
+          final said = w.host.said.length;
+          w.elapse(2000);
+          expect(
+            w.running,
+            isFalse,
+            reason: 'camera started in the background',
+          );
+          expect(
+            w.game.micEnabled,
+            isTrue,
+            reason: 'voice was dropped: the mic was started in the background',
+          );
+          expect(w.host.said.length, said, reason: 'the host spoke while away');
+          w.startTakesMs = 0;
+          w.comeBack();
+          w.elapse(300);
+          expect(w.game.paused, isFalse);
+          expect(w.running, isTrue);
+          w.until(() => w.game.phase == GamePhase.ask, what: 'calibration');
+          expect(w.game.micEnabled, isTrue);
+          expect(w.askAndAnswer().verdict, isNotNull);
+          w.dispose();
+        });
+      },
+    );
+
+    test('a camera start that fails because the app left is not E5', () {
+      fakeAsync((async) {
+        final w = World(async);
+        w.startGame(['Sam', 'Alex']);
+        w.startTakesMs = 800;
+        w.startFailsWhileAway = true;
+        w.game.agreeToMeasure();
+        w.elapse(300);
+        w.goAway();
+        w.elapse(2000);
+        expect(w.game.phase, GamePhase.calibrate, reason: 'E5 for a trip');
+        expect(w.game.paused, isTrue);
+        w.startTakesMs = 0;
+        w.comeBack();
+        w.until(() => w.game.phase == GamePhase.ask, what: 'calibration');
+        expect(w.running, isTrue);
+        w.dispose();
+      });
+    });
+
+    test('leaving while the mic starts keeps voice on', () {
+      fakeAsync((async) {
+        final w = World(async);
+        w.startGame(['Sam', 'Alex']);
+        w.calibrate();
+        w.leaveApp(GameController.autoResumeWithinMs + 5000);
+        w.speech.startTakesMs = 500;
+        w.game.resume();
+        w.elapse(200);
+        // iOS runs the mic start after the app is already in the background.
+        w.goAway();
+        final said = w.host.said.length;
+        final asked = w.game.questionStartMs;
+        w.elapse(2000);
+        expect(w.game.micEnabled, isTrue, reason: 'voice dropped for a trip');
+        expect(
+          w.game.questionStartMs,
+          asked,
+          reason: 'a question began while away',
+        );
+        expect(w.game.paused, isTrue);
+        expect(w.host.said.length, said, reason: 'the host spoke while away');
+        w.speech.startTakesMs = 0;
+        w.comeBack();
+        w.elapse(300);
+        expect(w.running, isTrue);
+        expect(w.game.phase, GamePhase.ask);
+        expect(w.askAndAnswer().verdict, isNotNull);
+        w.dispose();
+      });
+    });
+
+    test('back before the camera finished starting: calibration runs', () {
+      fakeAsync((async) {
+        final w = World(async);
+        w.startGame(['Sam', 'Alex']);
+        w.startTakesMs = 800;
+        w.game.agreeToMeasure();
+        w.elapse(100);
+        w.goAway();
+        w.elapse(200);
+        w.comeBack();
+        w.startTakesMs = 0;
+        w.until(() => w.game.phase == GamePhase.ask, what: 'calibration');
+        expect(w.running, isTrue);
+        expect(w.game.micEnabled, isTrue);
+        expect(w.askAndAnswer().verdict, isNotNull);
+        w.dispose();
+      });
+    });
+
+    test('a native stop that never returns does not hold up the return', () {
+      fakeAsync((async) {
+        final w = World(async);
+        w.startGame(['Sam', 'Alex']);
+        w.calibrate();
+        final starts = w.sdkCalls('start');
+        w.stopHangs = Completer<void>();
+        w.leaveApp(3000);
+        w.stopHangs = null;
+        w.elapse(3000);
+        expect(w.game.paused, isFalse);
+        expect(
+          w.sdkCalls('start'),
+          starts + 1,
+          reason: 'the restart waited on the stop',
+        );
+        expect(w.askAndAnswer().verdict, isNotNull);
+        w.dispose();
+      });
+    });
+
+    test('a mic error while away does not turn voice off', () {
+      fakeAsync((async) {
+        final w = World(async);
+        w.startGame(['Sam', 'Alex']);
+        w.calibrate();
+        w.leaveApp(
+          3000,
+          whileAway: () {
+            // The recognizer fails as iOS takes the audio session away.
+            w.speech.controller.add(
+              const SpeechError('RECOGNIZER_FAILING', 'cancelled', 0),
+            );
+            w.elapse(100);
+          },
+        );
+        expect(w.game.micEnabled, isTrue);
+        expect(w.game.notice, isNull);
+        w.dispose();
+      });
+    });
+
+    test('leaving again while Resume restarts the camera', () {
+      fakeAsync((async) {
+        final w = World(async);
+        w.startGame(['Sam', 'Alex']);
+        w.calibrate();
+        w.leaveApp(GameController.autoResumeWithinMs + 5000);
+        w.startTakesMs = 800;
+        w.game.resume();
+        w.elapse(300);
+        w.goAway();
+        final said = w.host.said.length;
+        w.elapse(2000);
+        expect(w.game.paused, isTrue);
+        expect(w.running, isFalse, reason: 'camera started in the background');
+        expect(w.game.micEnabled, isTrue);
+        expect(w.host.said.length, said, reason: 'the host spoke while away');
+        w.startTakesMs = 0;
+        w.comeBack();
+        w.elapse(300);
+        expect(w.running, isTrue);
+        expect(w.game.phase, GamePhase.ask);
+        expect(w.askAndAnswer().verdict, isNotNull);
+        w.dispose();
+      });
+    });
+
+    test('leaving again while Skip question restarts the camera', () {
+      fakeAsync((async) {
+        final w = World(async);
+        w.startGame(['Sam', 'Alex'], questions: 3);
+        w.calibrate();
+        w.leaveApp(GameController.autoResumeWithinMs + 5000);
+        w.startTakesMs = 800;
+        w.game.skipQuestion();
+        w.elapse(300);
+        w.goAway();
+        final said = w.host.said.length;
+        w.elapse(2000);
+        expect(w.running, isFalse, reason: 'camera started in the background');
+        expect(w.host.said.length, said, reason: 'the host spoke while away');
+        w.startTakesMs = 0;
+        w.comeBack();
+        w.elapse(300);
+        expect(w.game.questionIndex, 1, reason: 'the skip moved on once');
+        expect(w.game.paused, isFalse);
+        expect(w.running, isTrue);
+        w.askAndAnswer();
+        expect(w.game.currentTurn.results.map((r) => r.index), [
+          0,
+          1,
+        ], reason: 'each question recorded once');
         w.dispose();
       });
     });

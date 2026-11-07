@@ -100,8 +100,22 @@ class FakeSpeech implements SpeechApi {
   @override
   Future<SpeechPermissions> requestPermissions() async => permissions;
 
+  /// Thrown by [start], like iOS refusing the mic to an app in the
+  /// background.
+  SpeechException? startError;
+
+  /// How long the native start takes; [startError] is checked at the end.
+  int startTakesMs = 0;
+
   @override
-  Future<void> start({String? locale}) async => calls.add('start');
+  Future<void> start({String? locale}) async {
+    calls.add('start');
+    if (startTakesMs > 0) {
+      await Future<void>.delayed(Duration(milliseconds: startTakesMs));
+    }
+    final error = startError;
+    if (error != null) throw error;
+  }
 
   @override
   Future<void> stop() async => calls.add('stop');

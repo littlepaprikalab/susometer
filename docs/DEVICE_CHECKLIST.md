@@ -125,8 +125,12 @@ Settings → **Signal check** → **Start both**. Allow microphone and speech re
   starts over by itself, with no Pause sheet. Stay away 20 s: the Pause sheet says "You left the
   app, so the camera stopped."; Resume restarts the question.
 - [ ] **Screenshot:** mid-question and during Call it!, take a screenshot and close the preview:
-  the game carries on (the question starts over; the vote keeps its time). **Does the full-screen
-  preview send the app to the background on your iOS version?** (SPEC decision 72.)
+  the game carries on (the question starts over; the vote keeps its time) with no flash of the
+  Pause sheet. **Does the full-screen preview send the app to the background on your iOS
+  version?** (SPEC decision 72.)
+- [ ] **Screenshot right after *I agree*:** take one while the camera is still starting, then
+  close the preview: calibration starts once you're back, with voice on (no "tap-to-advance"
+  notice) and no E5.
 - [ ] **Hand-held:** play one turn holding the phone in your hand. **How often does "Hold still"
   appear?** (SPEC §16.)
 - [ ] **Frozen camera:** with the Proof Panel on, watch `cam` after the validation code through a
