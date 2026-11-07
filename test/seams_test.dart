@@ -423,6 +423,10 @@ void main() {
         w.game.nextQuestion();
         w.elapse(100);
         expect(w.game.phase, GamePhase.ask);
+        // The camera restarted on Resume: the question waits for its first
+        // pulse (decision 79).
+        expect(w.game.waitingForPulse, isTrue);
+        w.waitForPulse();
         w.elapse(300);
         w.say('Do you floss?');
         w.elapse(500);

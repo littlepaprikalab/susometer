@@ -8,7 +8,9 @@ class PulsePoint {
   final double bpm;
   final double conf;
 
-  /// Validation was OK and the pipeline was running when the sample arrived.
+  /// The pipeline was running when the sample arrived, and validation was
+  /// OK then or at most [ScoringConfig.pulseValidationGraceMs] before
+  /// (SPEC.md decision 79).
   final bool validOk;
 }
 
@@ -53,8 +55,9 @@ class TracePoint {
   final int tsUs;
   final double value;
 
-  /// Validation was OK and the pipeline was running when it arrived (the
-  /// same gate as [PulsePoint.validOk]).
+  /// Validation was OK and the pipeline was running when it arrived. Stricter
+  /// than [PulsePoint.validOk], which allows a passing problem: beats aren't
+  /// averaged, so a moving picture shows in them at once.
   final bool ok;
 
   /// Which SDK-clock mapping applies (a new one starts if the SDK clock
@@ -100,6 +103,20 @@ class SignalLog {
   int? _lastPulseAt;
   int? _lastConfidentPulseMs;
 
+  /// When the last snapshot with the pipeline running and validation OK
+  /// arrived.
+  int? _lastValidOkMs;
+
+  /// When the last confident pulse sample arrived, or null if none has.
+  int? get lastConfidentPulseMs => _lastConfidentPulseMs;
+
+  /// A confident pulse sample arrived within [ScoringConfig.pulseFreshMs] of
+  /// [t]: the same test as [FaceFrame.pulseFresh].
+  bool pulseFreshAt(int t) {
+    final last = _lastConfidentPulseMs;
+    return last != null && t - last <= config.pulseFreshMs;
+  }
+
   void clear() {
     pulse.clear();
     blinks.clear();
@@ -113,6 +130,7 @@ class SignalLog {
     latest = null;
     _lastPulseAt = null;
     _lastConfidentPulseMs = null;
+    _lastValidOkMs = null;
   }
 
   static const _faceMissingCodes = {
@@ -125,7 +143,18 @@ class SignalLog {
     latest = s;
     final running = s.status == PresageStatus.running;
     final validation = s.validation;
-    final validOk = running && (validation?.isOk ?? false);
+    final okNow = running && (validation?.isOk ?? false);
+    if (okNow) _lastValidOkMs = s.tMs;
+    // A pulse sample counts through a passing problem (a glance away, a
+    // laugh): the SDK's own confidence says how good its 12 s of data was.
+    // One that lasts longer drops the samples that arrive during it
+    // (SPEC.md decision 79). The waveform keeps the strict gate: its beats
+    // aren't averaged, so a moving picture shows in them at once.
+    final lastOk = _lastValidOkMs;
+    final pulseOk =
+        running &&
+        lastOk != null &&
+        s.tMs - lastOk <= config.pulseValidationGraceMs;
 
     if (s.pulse != null &&
         s.pulseAtMs != null &&
@@ -137,7 +166,7 @@ class SignalLog {
         s.pulseAtMs!,
         s.pulse!,
         s.pulseConf ?? 0,
-        validOk: validOk,
+        validOk: pulseOk,
       );
       pulse.add(point);
       if (_isConfident(point)) _lastConfidentPulseMs = point.tMs;
@@ -155,9 +184,8 @@ class SignalLog {
     }
 
     if (s.expr.isNotEmpty) expr.add(ExprPoint(s.tMs, s.expr));
-    _addTrace(s, validOk);
+    _addTrace(s, okNow);
 
-    final last = _lastConfidentPulseMs;
     frames.add(
       FaceFrame(
         tMs: s.tMs,
@@ -168,7 +196,7 @@ class SignalLog {
             !_faceMissingCodes.contains(validation.code),
         validationCode: validation?.code,
         validationHint: validation?.hint,
-        pulseFresh: last != null && s.tMs - last <= config.pulseFreshMs,
+        pulseFresh: pulseFreshAt(s.tMs),
       ),
     );
     _trim();

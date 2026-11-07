@@ -20,6 +20,11 @@ class StreamingPresage extends FakePresage {
   double pulse = 70;
   String code = 'OK';
 
+  /// Like the real SDK (and `World`): after each start, the pulse comes
+  /// with too little confidence to count for this long.
+  int pulseWarmupMs = 12000;
+  int? _startedAt;
+
   /// Expression scores in every snapshot (none unless a test sets them).
   Map<String, double> expr = const {};
   final List<Map<String, Object?>> pending = [];
@@ -49,6 +54,8 @@ class StreamingPresage extends FakePresage {
     if (!running || !emitting) return;
     final t = now;
     if (_pulseAt == null || t - _pulseAt! >= 1000) _pulseAt = t;
+    final started = _startedAt;
+    final warm = started == null || t - started >= pulseWarmupMs;
     if (t >= _nextBlink) {
       pending.add({'e': 'blinkEvent', 't': t});
       _nextBlink = t + 4000;
@@ -58,7 +65,7 @@ class StreamingPresage extends FakePresage {
         't': t,
         'status': 'running',
         'pulse': pulse,
-        'pulseConf': 0.9,
+        'pulseConf': warm ? 0.9 : 0.2,
         'pulseAt': _pulseAt,
         'validation': {'code': code, 'hint': ''},
         'talking': talking,
@@ -75,6 +82,7 @@ class StreamingPresage extends FakePresage {
   Future<void> start() async {
     await super.start();
     running = true;
+    _startedAt = now;
   }
 
   @override

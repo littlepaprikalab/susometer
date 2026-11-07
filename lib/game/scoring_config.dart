@@ -24,7 +24,8 @@ class ScoringConfig {
     this.pulseConfMin = 0.4,
     this.pulseMinBpm = 30,
     this.pulseMaxBpm = 220,
-    this.pulseFreshMs = 3000,
+    this.pulseFreshMs = 5000,
+    this.pulseValidationGraceMs = 2000,
     this.pulseMaxGapMs = 2000,
     this.minWindowAfterQuestionMs = 12000,
     this.minCleanFraction = 0.6,
@@ -37,6 +38,7 @@ class ScoringConfig {
     this.calibMinConfidentPulseMs = 12000,
     this.calibMinFaceFraction = 0.8,
     this.calibHintAfterMs = 45000,
+    this.pulseWaitHintAfterMs = 25000,
     this.traceClockJumpMs = 2000,
     this.traceResampleHz = 30,
     this.traceMaxGapMs = 300,
@@ -121,17 +123,26 @@ class ScoringConfig {
   final double hesitationGraceS;
   final double defaultBaseLatencyS;
 
-  // --- Confidence gating (SPEC.md §5.5) ---
+  // --- Confidence gating (SPEC.md §5.5, decision 79) ---
   /// Pulse samples below this confidence (0..1) are ignored. The SDK marks
   /// pulse `stable` at 40% and above.
   final double pulseConfMin;
+
+  /// A pulse sample also needs a picture SmartSpectra calls OK, now or at
+  /// most this long ago. A glance away, a laugh or a shaky hand puts a code
+  /// up for a moment, and the SDK's pulse is a 12 s average whose own
+  /// confidence already says how good its data was; a problem that lasts
+  /// longer than this still drops the samples that arrive during it.
+  final int pulseValidationGraceMs;
 
   /// Pulse readings outside this range (BPM) are treated as glitches and
   /// dropped, so one bad value can't skew a score or a chart's scale.
   final double pulseMinBpm;
   final double pulseMaxBpm;
 
-  /// A confident pulse value counts as current for this long.
+  /// A confident pulse value counts as current for this long. The SDK's
+  /// pulse rate comes when its analysis produces one, not on a fixed beat,
+  /// so this allows for a few seconds between them.
   final int pulseFreshMs;
 
   /// When adding up "seconds of confident pulse", one sample covers at most
@@ -169,6 +180,11 @@ class ScoringConfig {
   /// After this long without a valid baseline, stamp a hint on the camera
   /// (SPEC.md decision 69).
   final int calibHintAfterMs;
+
+  /// A question waits for a fresh pulse before it starts (decision 79);
+  /// after this long the screen suggests what to do. A camera restart
+  /// usually takes 12–20 s to give a pulse again.
+  final int pulseWaitHintAfterMs;
 
   // --- Heartbeats from the pulse waveform (SPEC.md decision 63) ---
   /// A waveform batch whose SDK clock runs ahead of the wall clock by more

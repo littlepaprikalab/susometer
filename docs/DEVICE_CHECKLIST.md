@@ -137,7 +137,14 @@ Settings → **Signal check** → **Start both**. Allow microphone and speech re
 - [ ] **E3:** mid-question, turn the lights down or cover the camera: a "Too dark" stamp lands on
   the camera with its fix underneath, nothing else on screen moves, and it goes when fixed. **Is
   the mustard stamp easy to spot against your room?**
-- [ ] **E4:** move around a lot while answering: "No clean read" with a reason, then *Ask it again*.
+- [ ] **E4:** turn away from the phone (or cover the camera) for most of an answer: "No clean
+  read" with a reason, then *Ask it again*. A quick glance at the asker or a laugh shouldn't cause
+  one any more (decision 79). **Note any No clean read you didn't expect, with its reason**, and
+  with the Proof Panel on, whether `conf` dropped below 40% while you talked.
+- [ ] **Waiting for the pulse (decision 79):** mid-question, take a screenshot and close the
+  preview. The screen says *Finding {name}'s pulse…* with no *Done asking*, and the question
+  starts on its own once the pulse is back. **Note how long it waits** (the Proof Panel shows the
+  seconds). The re-asked question should score, not come out No clean read.
 - [ ] **E5:** turn on Airplane Mode, then start a turn: "The meter won't warm up" → turn Airplane
   Mode off → *Try again* works.
 - [ ] **Offline mid-game:** start a turn online, then switch on Airplane Mode. **Does measuring
@@ -147,8 +154,8 @@ Settings → **Signal check** → **Start both**. Allow microphone and speech re
   starts over by itself, with no Pause sheet. Stay away 20 s: the Pause sheet says "You left the
   app, so the camera stopped."; Resume restarts the question.
 - [ ] **Screenshot:** mid-question and during Call it!, take a screenshot and close the preview:
-  the game carries on (the question starts over; the vote is still waiting) with no flash of the
-  Pause sheet. **Does the full-screen preview send the app to the background on your iOS
+  the game carries on (the question starts over once the pulse is back; the vote is still
+  waiting) with no flash of the Pause sheet. **Does the full-screen preview send the app to the background on your iOS
   version?** (SPEC decision 72.)
 - [ ] **Screenshot right after *I agree*:** take one while the camera is still starting, then
   close the preview: calibration starts once you're back, with voice on (no "no transcripts"
@@ -158,7 +165,8 @@ Settings → **Signal check** → **Start both**. Allow microphone and speech re
 - [ ] **Frozen camera:** with the Proof Panel on, watch `cam` after the validation code through a
   turn: it should stay under 1 s. **If the preview ever freezes, note what happened just before**
   (Pause, a notification, Control Center, moving the phone) and the `cam` value. The game should
-  restart the camera and the question within about 5 s (SPEC decision 64).
+  restart the camera within about 5 s (SPEC decision 64), then start the question again once the
+  pulse is back (decision 79).
 
 ## 6. Network check (privacy claim)
 

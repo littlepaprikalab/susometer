@@ -82,6 +82,9 @@ class ProofPanel extends StatelessWidget {
               'base ${base.pulse.toStringAsFixed(0)}bpm ${base.blinkRatePerMin.toStringAsFixed(0)}/min '
                   'lat ${base.latencyS.toStringAsFixed(1)}s '
                   'pulse ${(base.confidentPulseMs / 1000).toStringAsFixed(0)}s face ${pct(base.faceFraction)}',
+            if (game.waitingForPulse)
+              'question waits for a fresh pulse '
+                  '${((game.nowMs - game.pulseWaitSinceMs) / 1000).toStringAsFixed(0)}s',
             if (d != null)
               'tQ0 ${rel(d.tQ0)} tQ1 ${rel(d.tQ1)} tA0 ${rel(d.tA0)} tA1 ${rel(d.tA1)}'
                   '${d.questionEndReason == null ? '' : ' (${d.questionEndReason!.name})'}',

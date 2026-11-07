@@ -7,6 +7,7 @@ import 'package:susometer/audio/host_audio.dart';
 import 'package:susometer/game/decks.dart';
 import 'package:susometer/game/game_controller.dart';
 import 'package:susometer/game/models.dart';
+import 'package:susometer/game/scoring_config.dart';
 import 'package:susometer/presage/presage_models.dart';
 import 'package:susometer/settings/app_settings.dart';
 import 'package:susometer/voice/speech_service.dart';
@@ -28,7 +29,11 @@ class PhaseHaptics implements HapticsApi {
 
 /// A scripted SmartSpectra + speech world running on fake time.
 class World {
-  World(this.async, {TurnConfig turnConfig = const TurnConfig()}) {
+  World(
+    this.async, {
+    TurnConfig turnConfig = const TurnConfig(),
+    ScoringConfig config = const ScoringConfig(),
+  }) {
     presage = RunningPresage(this);
     game = GameController(
       presage: presage,
@@ -39,6 +44,7 @@ class World {
       host: host,
       haptics: haptics = PhaseHaptics(() => game.phase),
       decks: DeckLibrary.fallback,
+      config: config,
       turnConfig: turnConfig,
       now: () => now,
     );
@@ -79,6 +85,27 @@ class World {
   String status = 'running';
   double pulse = 70;
   String code = 'OK';
+
+  /// Scripted validation: when set and it returns a code for the time, that
+  /// code goes out instead of [code] (a glance away, a laugh, a shaky hand).
+  String? Function(int t)? codeAt;
+
+  /// Like the real SDK, whose pulse is a 12 s average: after each start the
+  /// pulse comes with too little confidence to count ([warmupPulseConf])
+  /// for this long. 0 gives a confident pulse from the first sample.
+  int pulseWarmupMs = 12000;
+  double warmupPulseConf = 0.2;
+
+  /// The pulse rate comes when the SDK's analysis produces one; this is how
+  /// often here.
+  int pulseEveryMs = 1000;
+
+  /// The pulse confidence once warmed up.
+  double pulseConf = 0.9;
+  int? _startedAt;
+
+  /// The validation code going out at [t].
+  String codeFor(int t) => codeAt?.call(t) ?? code;
 
   /// The camera stops delivering frames while the SDK still says it's
   /// running: snapshots keep coming with the last frame's time. Like the
@@ -203,7 +230,10 @@ class World {
         pulse = window.reduce((a, b) => a + b) / window.length;
       }
     }
-    if (_pulseAt == null || t - _pulseAt! >= 1000) _pulseAt = t;
+    if (_pulseAt == null || t - _pulseAt! >= pulseEveryMs) _pulseAt = t;
+    final started = _startedAt;
+    final warm = started == null || t - started >= pulseWarmupMs;
+    final c = codeFor(t);
     if (!cameraFrozen || _frameAt == null) _frameAt = t;
     if (t >= _nextBlink) {
       _pendingEvents.add({'e': 'blinkEvent', 't': t});
@@ -234,12 +264,12 @@ class World {
         't': t,
         'status': status,
         'pulse': pulse,
-        'pulseConf': 0.9,
+        'pulseConf': warm ? pulseConf : warmupPulseConf,
         'pulseAt': _pulseAt,
         'expr': expr,
         'exprAt': expr.isEmpty ? null : t,
         'frameAt': _frameAt,
-        'validation': {'code': code, 'hint': code == 'OK' ? '' : 'hint'},
+        'validation': {'code': c, 'hint': c == 'OK' ? '' : 'hint'},
         'talking': talking,
         'events': List.of(_pendingEvents),
         if (trace.isNotEmpty) ...{
@@ -273,6 +303,14 @@ class World {
   }
 
   void elapse(int ms) => async.elapse(Duration(milliseconds: ms));
+
+  /// Until a question's wait for the pulse (SPEC.md decision 79) is over:
+  /// after a camera start, the SDK's first confident pulse.
+  void waitForPulse({int maxMs = 30000}) => until(
+    () => !game.waitingForPulse,
+    maxMs: maxMs,
+    what: 'the pulse, for the question to start',
+  );
 
   /// Leaves the app for [ms] and comes back, with the lifecycle calls
   /// GameRoot makes for what Flutter reports on iOS: inactive, hidden, paused
@@ -347,6 +385,9 @@ class World {
     List<String> votesSus = const [],
   }) {
     expect(game.phase, GamePhase.ask);
+    // After a camera restart the question waits for the pulse; nobody can
+    // tap Done asking before it shows.
+    waitForPulse();
     elapse(300);
     say(question);
     elapse(1500);
@@ -395,6 +436,7 @@ class RunningPresage extends FakePresage {
     }
     world.running = true;
     world._frameAt = null;
+    world._startedAt = world.now;
   }
 
   @override

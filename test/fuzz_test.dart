@@ -171,8 +171,13 @@ void abuse(
     (
       fw(2, 1),
       () {
+        // Biased: now and then a bad stretch. A lost face spoils a reading
+        // at once; a dark room only once it outlasts the pulse's grace and
+        // freshness (decision 79), so both are in.
         w.code = biased
-            ? (rng.nextInt(8) == 0 ? 'TOO_DARK' : 'OK')
+            ? (rng.nextInt(8) == 0
+                  ? (rng.nextBool() ? 'TOO_DARK' : 'NO_FACE_FOUND')
+                  : 'OK')
             : const [
                 'OK',
                 'OK',
@@ -180,6 +185,17 @@ void abuse(
                 'EXCESSIVE_MOTION',
                 'NO_FACE_FOUND',
               ][rng.nextInt(5)];
+      },
+    ),
+    // The player leaves the frame for a while: long enough to spoil a
+    // reading even with the pulse's grace (decision 79), so No clean read
+    // still comes up.
+    (
+      fw(1, 1),
+      () {
+        w.code = 'NO_FACE_FOUND';
+        w.elapse(6000 + rng.nextInt(10000));
+        w.code = 'OK';
       },
     ),
     (

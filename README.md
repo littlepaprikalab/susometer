@@ -207,11 +207,21 @@ burst, a burst of surprise) is still about 87% Sus. Before the zero-point fixes 
 the honest answer was Sus a third of the time. The noise levels in the simulation are assumptions,
 not measured on a device.
 
-**No fake verdicts:** pulse samples below 40% confidence, or that arrive while SmartSpectra's
-validation isn't OK, are ignored. If less than 60% of the window has a present face and a fresh
-confident pulse, the result is **No clean read** with the real reasons (e.g. "The camera lost
-Sam's face for about 5 seconds") and an *Ask it again* button. Every constant lives in
+**No fake verdicts:** pulse samples below 40% confidence (the SDK's own "stable" line) are
+ignored, and so are samples that arrive more than 2 s into a validation problem. A passing one (a
+glance at the asker, a laugh, a shaky hand) doesn't drop them: the SDK's pulse is a 12 s average,
+and its confidence already says how good that data was. A confident pulse counts as current for
+5 s. If less than 60% of the window has a present face and a current confident pulse, the result
+is **No clean read** with the real reasons (e.g. "The camera lost Sam's face for about 5
+seconds") and an *Ask it again* button. Every constant lives in
 [`ScoringConfig`](lib/game/scoring_config.dart) for tuning.
+
+**A question waits for the pulse.** After the camera restarts (it froze, the app was away, even
+for a screenshot, or E5 *Try again*), the SDK needs 12 s or more for its first pulse. A question
+asked meanwhile used to come out No clean read every time, then pass when asked again. Now a
+question doesn't start until the camera has a fresh pulse from its current session: the screen
+says *Finding Sam's pulse…*, and only Pause works until then. Usually there's no wait at all. After
+25 s it suggests facing the light, or Pause to skip. (SPEC decision 79.)
 
 **Expression #tag.** While the camera measures, the player's strongest expression is stamped in
 its top-right corner as a #tag, in the SDK's own words (#surprise, #happy, #neutral…). SmartSpectra
@@ -328,7 +338,7 @@ It also shows the heartbeat check: waveform samples per second and their confide
 beat-to-beat RMSSD and coverage from the beats the app found over the last 12 s; and, for the last
 scored question, whether the pulse part came from beats (with each part's 0–1 score and the raw
 BPM) or the SDK mean (with the reason). On a device, the beat rate should track the SDK's pulse and
-the beat RMSSD should be near the SDK's.
+the beat RMSSD should be near the SDK's. While a question waits for the pulse, it says for how long.
 **Settings → Signal check** opens a bare screen with the camera, live signals and the transcript
 side by side.
 
@@ -360,6 +370,8 @@ real fonts), accessibility actions and color contrast.
   estimate. Not medical, not diagnostic, not a lie detector.
 - **Light and position matter:** dim rooms, a bright window behind you, moving the phone, or a
   second face in frame all reduce signal quality. The app pauses and says why rather than guess.
+  Prop the phone up if you can: a hand-held phone is the biggest source of motion. The SDK runs
+  the camera itself and has no image stabilization setting.
 - **Noise:** loud rooms make transcripts unreliable; the taps work the same either way.
 - **Talking detection** comes from the camera, so a mumbled answer may time the pause loosely.
 - **HRV** needs about 60 s of measurement; it's shown, not scored.

@@ -32,11 +32,13 @@ const phaseTapGuardKey = ValueKey('phaseTapGuard');
 class _GameRootState extends State<GameRoot> with WidgetsBindingObserver {
   bool _confirmEnd = false;
   final GlobalKey _shareKey = GlobalKey();
-  GamePhase? _shownPhase;
+  Object? _shownPhase;
   bool _freshPhase = false;
   Timer? _freshTimer;
 
-  void _notePhase(GamePhase phase) {
+  /// [phase] is what's shown: a phase, or a step within one that puts new
+  /// buttons where the last ones were.
+  void _notePhase(Object phase) {
     if (phase == _shownPhase) return;
     final first = _shownPhase == null;
     _shownPhase = phase;
@@ -118,8 +120,10 @@ class _GameRootState extends State<GameRoot> with WidgetsBindingObserver {
       builder: (context, _) {
         final showProof = services.settings.proofPanel && game.isMeasuring;
         // Solo's Ready to answer swaps in Final answer without a phase
-        // change, so the guard follows what's shown.
-        _notePhase(game.shownPhase);
+        // change, so the guard follows what's shown. So does the end of a
+        // question's wait for the pulse, which puts Done asking (or Ready
+        // to answer) where the wait's status was.
+        _notePhase((game.shownPhase, game.waitingForPulse));
         return Stack(
           children: [
             if (game.phase == GamePhase.leaderboard && game.awards != null)
