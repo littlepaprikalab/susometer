@@ -1937,9 +1937,13 @@ class GameController extends ChangeNotifier {
   }
 
   void _tick() {
-    _advance(nowMs);
-    // After the tick's own changes, so they share one frame.
-    live.flush();
+    try {
+      _advance(nowMs);
+    } finally {
+      // After the tick's own changes, so they share one frame. Even if the
+      // tick threw: the live values must not freeze on screen.
+      live.flush();
+    }
   }
 
   void _advance(int now) {
