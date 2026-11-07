@@ -49,6 +49,8 @@ Verify every package name and version on pub.dev before adding it. The choices a
 
 **Settings:** `8 Settings · Presage API key`, opened from the gear button at the top right of the Lobby.
 
+**Score guide:** *How it's scored*, opened from the **?** button next to the gear (decision 74). Not mocked.
+
 Two screens are **not mocked**, so build them in the same style:
 - **Countdown:** full screen, mustard background, flashing marquee bulbs, a giant "3… 2… 1…" in Bowlby, plus a drumroll.
 - **Call it!:** the room vote, see §5.6.
@@ -567,3 +569,11 @@ Choices made once the real APIs were in hand. Where these differ from the sectio
         - *Seams:* Dart is unchanged. It sends only the text, and its speak timeout (2.5 s + 0.5 s a word, decision 34) leaves room for any voice at the default rate, plus a premium voice's first-line load. Hesitation counts from when the host finishes (`tQ1`, decision 36), so a voice's speed doesn't change scores. The half-duplex gate (decision 71) doesn't depend on the voice. A trip out of the app (decision 72) only marks the choice stale, so the next line reads the list once, as every line used to.
         - *Tests:* `HostVoiceTests.swift` adds voices with no gender (Martha and "Serena (Premium)" by name; an unknown British man, an Australian Kate and a Kate reported male are not), ties in either order and the 2,001-voice list. Each of five more deliberate bugs (no names, last-of-equals wins, any English counts, men count, the whole name compared) fails it. `test/contract_test.dart` pins the cache: the voice list is read in one place only, each line uses the kept voice, and both notifications mark it stale. Reading the list per line again fails it.
         - *Device only:* whether iOS reports a gender for each British voice, and how long a premium voice's first line takes to start.
+74. **How it's scored, in the app.** Players saw a score and #tags with no way to tell where they came from: what the bands mean, why a red #fear can sit beside a Legit, why a teal #happy never moves anything. The answers were only in the README. A **?** button next to the lobby's gear now opens *How it's scored* (`lib/screens/score_guide_screen.dart`), a scrolling page in the Settings style:
+    - *Your normal:* the sit-still and warm-ups, and that you're only compared with you.
+    - *What counts:* pulse, blinks, expressions and pause, each with its share of the score and one line on what moves it, and that only what's past your own normal wobble counts.
+    - *The verdict:* how the four become 0–100, the Legit / Hmm… / Sus! bands in the verdict board's colors (Sus in `tomatoDeep`, since its range is small cream text), what the verdict screen's three tiles mean, and the formula for the curious.
+    - *No clean read:* no score when the face or pulse is missing for too much of a question.
+    - *The #tags:* all eight drawn with the real `ExpressionStamp`, red for the ones the score counts and teal for the rest; that a tag is the live reading, not compared with your normal, so a red one isn't a Sus score; and that it's the camera's best guess and can misread a face (decision 70: Presage publishes no accuracy data for it).
+    - *One source of truth:* every number on the page (weights, bands, curve, the clean-read share, the free pause, the sit-still time, which tags are red) is read from the game's `ScoringConfig`, so tuning a constant updates the page. The red/teal split uses the same list as the camera's stamp.
+    - *Tests:* `test/score_guide_test.dart`: the lobby's ? opens the page and Back returns; the default page shows the real weights, bands, formula and tag split; a page built on a different `ScoringConfig` shows that config's numbers and none of the defaults (so a hard-coded number fails it); tap targets, labels and contrast on every screenful; and no overflow on a 320 pt phone at the largest text size. The lobby's VoiceOver test covers the ? button, and the gallery adds `09-score-guide`.

@@ -21,6 +21,7 @@ void main() {
     await tester.pump();
 
     for (final label in [
+      "How it's scored",
       'Settings',
       'Party',
       'Solo · host asks',

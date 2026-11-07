@@ -52,6 +52,9 @@ The spec wins where the two disagree (see SPEC.md, "Decisions made during build"
 
 - **Room vote:** the Verdict mock has "Does the room agree?". The app moves voting to *Call it!*,
   before the reveal (SPEC.md §5.6), so the Verdict screen shows how the votes went instead.
+- **Score guide:** the Lobby mock has only the gear. The app adds a **?** button beside it that
+  opens *How it's scored* (SPEC.md decision 74), built from the existing card, pill and #tag stamp
+  styles; it isn't mocked.
 - **Deck choice:** the Lobby mock has no Mild / Spicy picker. The app adds one, styled like the
   "Questions per turn" row, plus the one-line note that voices are transcribed on-device.
 - **Saved API key:** the Settings mock shows the saved key in the field. The key never comes back
