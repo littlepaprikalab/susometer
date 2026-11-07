@@ -896,6 +896,64 @@ void main() {
       });
     });
 
+    /// Party question 1, answered and settling.
+    void answerToSettle(World w) {
+      w.elapse(300);
+      w.say('Have you ever re-gifted a present?');
+      w.elapse(1500);
+      w.game.doneAsking();
+      w.elapse(1300);
+      w.talk(true);
+      w.elapse(300);
+      w.say('No way.');
+      w.elapse(2500);
+      w.talk(false);
+      w.elapse(800);
+      w.game.finalAnswer();
+      expect(w.game.phase, GamePhase.settle);
+    }
+
+    test('Skip question from settle: the skipped one never scores', () {
+      fakeAsync((async) {
+        final w = World(async);
+        w.startGame(['Sam', 'Alex'], questions: 3);
+        w.calibrate();
+        answerToSettle(w);
+        // Away past the settle window, then Skip while the mic is slow.
+        w.leaveApp(GameController.autoResumeWithinMs + 5000);
+        w.speech.startTakesMs = 1000;
+        w.game.skipQuestion();
+        w.elapse(1500);
+        expect(w.game.currentTurn.results.map((r) => (r.index, r.skipped)), [
+          (0, true),
+        ], reason: 'the skipped question was scored as well');
+        expect(w.game.phase, GamePhase.ask);
+        expect(w.game.questionIndex, 1);
+        w.dispose();
+      });
+    });
+
+    test('Resume from settle restarts the question, never scores it', () {
+      fakeAsync((async) {
+        final w = World(async);
+        w.startGame(['Sam', 'Alex'], questions: 3);
+        w.calibrate();
+        answerToSettle(w);
+        w.leaveApp(GameController.autoResumeWithinMs + 5000);
+        w.speech.startTakesMs = 1000;
+        w.game.resume();
+        w.elapse(1500);
+        expect(
+          w.game.currentTurn.results,
+          isEmpty,
+          reason: 'a question with a broken window was scored',
+        );
+        expect(w.game.phase, GamePhase.ask, reason: 'the question starts over');
+        expect(w.game.questionIndex, 0);
+        w.dispose();
+      });
+    });
+
     test('Call it! keeps the rest of its vote time', () {
       fakeAsync((async) {
         final w = World(async);

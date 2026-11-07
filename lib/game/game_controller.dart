@@ -1481,7 +1481,7 @@ class GameController extends ChangeNotifier {
         return;
       }
       // The app may have left again meanwhile; its Resume carries on.
-      if (!await _restartMeasuring() || paused) return;
+      if (!await _restartMeasuring()) return;
     }
     if (phase == GamePhase.ask ||
         phase == GamePhase.answer ||
@@ -1490,16 +1490,23 @@ class GameController extends ChangeNotifier {
     }
   }
 
-  /// Starts the camera, the ticker and the mic again after the app was away.
-  /// False if the SDK didn't start (E5) or the game moved on meanwhile.
+  /// Starts the camera, the mic and then the ticker again after the app was
+  /// away. False if the SDK didn't start (E5), the game moved on, or the app
+  /// left again meanwhile.
+  ///
+  /// The ticker comes last: until the caller sets the question up again, the
+  /// old one's detector and settle window are still live, and a tick would
+  /// move it on (score a question being skipped or restarted). Callers set
+  /// it up straight after, with no await in between.
   Future<bool> _restartMeasuring() async {
     final e = _epoch;
     if (!await _startSdk() || e != _epoch) return false;
     _lastSampleMs = nowMs;
     live.sample = null;
-    _startTicker();
     await _startListening();
-    return e == _epoch;
+    if (e != _epoch || paused) return false;
+    _startTicker();
+    return true;
   }
 
   /// The app went to the background: iOS stops the camera, so stop cleanly
