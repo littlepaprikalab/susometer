@@ -39,6 +39,11 @@ Settings → **Signal check** → **Start both**. Allow microphone and speech re
   gets applause.
 - [ ] Haptics on the countdown and verdict, **never** during calibration or a question.
 - [ ] Pause → *Host voice and sounds* off mutes everything.
+- [ ] The host speaks with a **British woman's** voice (decision 73). If it's American or male,
+  note which voice, then download a UK female voice such as Serena (Premium) (Settings >
+  Accessibility > Spoken Content > Voices > English) and check the next host line uses it.
+- [ ] With a premium British voice, the first host line of a game starts without a long pause and
+  isn't cut off.
 
 ## 4. A party game (2 players, 3 questions)
 

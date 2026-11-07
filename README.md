@@ -236,9 +236,10 @@ and why.
 
 ## How turn-taking works
 
-The host is the phone's voice. Speaker separation uses SmartSpectra's **talking** detection
-instead of diarization: speech while the hot-seat player isn't talking is the question; speech
-while they are is the answer.
+The host is the phone's voice: a British woman's, the most natural one installed (a downloaded
+premium voice such as Serena sounds best; Settings > Accessibility > Spoken Content > Voices).
+Speaker separation uses SmartSpectra's **talking** detection instead of diarization: speech
+while the hot-seat player isn't talking is the question; speech while they are is the answer.
 
 - **Question ends** when the player starts talking, or after 1.5 s of silence following the
   asker (the host then asks "{name}, your answer?"), or with *Too loud? Tap when done asking*.
