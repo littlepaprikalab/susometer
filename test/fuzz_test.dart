@@ -108,7 +108,12 @@ void abuse(
       () {
         if (g.inGame && g.phase == GamePhase.callIt) {
           final v = g.voters;
-          if (v.isNotEmpty) g.cycleVote(v[rng.nextInt(v.length)].id);
+          if (v.isNotEmpty) {
+            g.castVote(
+              v[rng.nextInt(v.length)].id,
+              rng.nextBool() ? Vote.legit : Vote.sus,
+            );
+          }
         }
       },
     ),

@@ -5,6 +5,7 @@ import '../game/game_controller.dart';
 import '../game/scoring.dart';
 import '../presage/camera_preview.dart';
 import '../theme/expression_stamp.dart';
+import '../theme/fit_text.dart';
 import '../theme/game_widgets.dart';
 import '../theme/tokens.dart';
 import '../theme/widgets.dart';
@@ -367,16 +368,18 @@ class CalibrateScreen extends StatelessWidget {
             chatDone: game.warmupsDone,
           ),
           const SizedBox(height: 12),
-          Text(
+          _OneLine(
             ready
                 ? 'Warm-ups done · your normal is locked in'
                 : chat
                 ? 'Warm-up $warmupNumber of ${game.config.calibMaxWarmups} · from the easy deck'
                 : 'Step 1 · Sit still for about 20 seconds',
-            style: SusText.label(13),
+            style: SusText.label,
           ),
           const SizedBox(height: 6),
-          HostBubble(text: bubble),
+          // Two lines tall at every step, so the camera below never moves
+          // when a warm-up (or the lock-in) replaces "Sit still".
+          HostBubble(text: bubble, lines: 2),
           const SizedBox(height: 12),
           const Expanded(child: _CalibCamera()),
           const SizedBox(height: 12),
@@ -415,16 +418,41 @@ class CalibrateScreen extends StatelessWidget {
               ],
             ),
           const SizedBox(height: 6),
-          Text(
+          _OneLine(
             ready
                 ? 'Tap when ready. The host says who asks first.'
                 : chat
                 ? 'Answer out loud, then tap Next.'
                 : 'Easy warm-up questions come next.',
             textAlign: TextAlign.center,
-            style: SusText.body(13, weight: FontWeight.w600),
+            style: (size) => SusText.body(size, weight: FontWeight.w600),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// A line of Calibrate copy in a slot one line tall, whatever it says: it
+/// shrinks to fit rather than wrap, so the camera below never moves when
+/// the step changes (the sit-still is measured).
+class _OneLine extends StatelessWidget {
+  const _OneLine(this.text, {required this.style, this.textAlign});
+
+  final String text;
+  final TextStyle Function(double size) style;
+  final TextAlign? textAlign;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: MediaQuery.textScalerOf(context).scale(13) * 1.5,
+      child: FitText(
+        text,
+        sizes: const [13, 12, 11],
+        overflow: FitOverflow.keepStart,
+        textAlign: textAlign,
+        style: style,
       ),
     );
   }

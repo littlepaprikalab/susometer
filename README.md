@@ -49,7 +49,8 @@ Built for the DEV [Presage SmartSpectra SDK Challenge](https://dev.to/challenges
    on the hottest, the same way for every player; "someone in this room" questions only come up
    when others are playing.
 5. **Answer:** the player answers out loud and smashes *Final answer*.
-6. **Call it!:** everyone else votes Legit or Sus *before* the reveal, then taps *Reveal*.
+6. **Call it!:** everyone else picks *Legit* or *Sus* next to their name *before* the reveal
+   (tap your pick again to take it back), then someone taps *Reveal*.
 7. **Countdown → Verdict:** drumroll, 3-2-1, then the scoreboard, applause meter and what moved.
 8. **Leaderboard:** Best poker face, Most sus, Best lie detector, Biggest spike, and a Replay of
    every question. *Wipe everything* clears it all.
@@ -265,7 +266,8 @@ The voice and camera still say *when* things happened, so a slow tap doesn't cha
   with have no tap), so stalling before the tap still counts. Answering before the tap is fine:
   the answer is timed from its first word.
 - **The answer ends** at *Final answer*, or 4 s after the player last spoke if the tap comes
-  later, so the room's chatter while nobody tapped isn't read as part of it.
+  later, so the room's chatter while nobody tapped isn't read as part of it. It's never scored
+  for more than 60 s after the question, however late the tap.
 - **Half-duplex:** recognition is muted while the host speaks or a sound plays, and for 150 ms
   after, so the transcript never contains the host.
 

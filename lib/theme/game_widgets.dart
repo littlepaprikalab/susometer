@@ -2,6 +2,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
+import 'fit_text.dart';
 import 'tokens.dart';
 
 /// Mustard page with the mockup's 18 px side padding.
@@ -39,6 +40,7 @@ class HostBubble extends StatelessWidget {
     required this.text,
     this.fontSize = 20,
     this.singleLine = false,
+    this.lines,
   });
 
   final String text;
@@ -46,6 +48,10 @@ class HostBubble extends StatelessWidget {
 
   /// One line that shrinks to fit, so the bubble's height never changes.
   final bool singleLine;
+
+  /// Always this many full-size lines tall: shorter text sits in the middle,
+  /// longer text shrinks to fit, so the bubble's height never changes.
+  final int? lines;
 
   double _lineHeight(BuildContext context) {
     final ambient = DefaultTextStyle.of(context);
@@ -114,6 +120,19 @@ class HostBubble extends StatelessWidget {
                           text,
                           maxLines: 1,
                           style: SusText.display(fontSize),
+                        ),
+                      ),
+                    )
+                  : lines != null
+                  ? SizedBox(
+                      height: _lineHeight(context) * lines!,
+                      child: Align(
+                        alignment: Alignment.centerLeft,
+                        child: FitText(
+                          text,
+                          sizes: [fontSize, fontSize - 2, fontSize - 4],
+                          overflow: FitOverflow.keepStart,
+                          style: SusText.display,
                         ),
                       ),
                     )

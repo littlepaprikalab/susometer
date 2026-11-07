@@ -1474,6 +1474,44 @@ void main() {
     });
   });
 
+  test('voting: pick, switch, take back; only voters, only on Call it! '
+      '(decision 77)', () {
+    fakeAsync((async) {
+      final w = World(async);
+      w.startGame(['Sam', 'Alex', 'Priya'], questions: 1);
+      w.calibrate();
+      final sam = w.game.players[0].id;
+      final alex = w.game.players[1].id;
+      final priya = w.game.players[2].id;
+      w.game.castVote(alex, Vote.sus);
+      expect(w.game.pendingVotes, isEmpty, reason: 'not on Call it! yet');
+      w.elapse(300);
+      w.say('Have you ever lied?');
+      w.elapse(500);
+      w.game.doneAsking();
+      w.elapse(1000);
+      w.talk(true);
+      w.elapse(1500);
+      w.talk(false);
+      w.game.finalAnswer();
+      w.until(() => w.game.phase == GamePhase.callIt);
+      w.game.castVote(sam, Vote.sus);
+      expect(w.game.pendingVotes, isEmpty, reason: 'the hot seat never votes');
+      w.game.castVote(alex, Vote.legit);
+      w.game.castVote(priya, Vote.sus);
+      expect(w.game.pendingVotes, {alex: Vote.legit, priya: Vote.sus});
+      w.game.castVote(alex, Vote.sus);
+      expect(w.game.pendingVotes[alex], Vote.sus, reason: 'switched');
+      w.game.castVote(priya, Vote.sus);
+      expect(w.game.pendingVotes.containsKey(priya), isFalse, reason: 'undone');
+      w.game.reveal();
+      expect(w.game.currentResult!.votes, {alex: Vote.sus});
+      w.game.castVote(priya, Vote.legit);
+      expect(w.game.currentResult!.votes, {alex: Vote.sus}, reason: 'closed');
+      w.dispose();
+    });
+  });
+
   group('only taps move the game on (SPEC.md decision 76)', () {
     test('silence, talking and the vote all wait for a tap', () {
       fakeAsync((async) {

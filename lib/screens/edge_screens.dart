@@ -546,7 +546,9 @@ class PauseSheet extends StatelessWidget {
         ? 'You left the app, so the camera stopped. '
         : '';
     final what = calibrating
-        ? (game.cameraStopped
+        ? (game.calibStage == CalibStage.ready
+              ? 'Your normal is still locked in.'
+              : game.cameraStopped
               ? 'Calibration starts over when you resume.'
               : 'Calibration picks up where it left off.')
         : inQuestion

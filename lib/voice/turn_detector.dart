@@ -11,6 +11,7 @@ class TurnConfig {
     this.answerTailMs = 4000,
     this.lateWordsMs = 1000,
     this.tapAllowanceMs = 1500,
+    this.maxAnswerMs = 60000,
   });
 
   /// SmartSpectra `talking` must hold this long to count as a talk start.
@@ -36,6 +37,12 @@ class TurnConfig {
   /// to this much of the wait before the tap doesn't count as hesitation.
   /// Stalling longer than that before tapping does.
   final int tapAllowanceMs;
+
+  /// The scored answer ends at most this long after the question did, however
+  /// late Final answer comes. Nothing ends the answer on screen, so without
+  /// it a forgotten tap would score (and search for heartbeats in) every
+  /// minute since the question, freezing the screen on the tap.
+  final int maxAnswerMs;
 }
 
 /// Debounces SmartSpectra `talking` edges into confirmed talk starts/ends.
@@ -247,12 +254,17 @@ class TurnDetector {
 
   /// Where the scored answer ends for a Final answer tap at [tapMs]: the
   /// tap, or [TurnConfig.answerTailMs] after the player last spoke if that's
-  /// sooner. Never before the question ended.
+  /// sooner, and never more than [TurnConfig.maxAnswerMs] after the question
+  /// ended (or before it, or before the answer started).
   int _answerEnd(int tapMs) {
+    final end = tQ1!;
+    final cap = math.min(tapMs, end + config.maxAnswerMs);
     final start = tA0;
-    if (start == null || _talk.talking || _talk.rawTalking) return tapMs;
+    if (start == null || _talk.talking || _talk.rawTalking) {
+      return math.max(cap, start ?? end);
+    }
     final last = math.max(lastPlayerActivityMs ?? start, start);
-    return math.min(tapMs, math.max(last + config.answerTailMs, tQ1!));
+    return math.max(math.min(cap, last + config.answerTailMs), start);
   }
 
   /// Clock tick: confirms debounced talk edges. Nothing ends on a tick.

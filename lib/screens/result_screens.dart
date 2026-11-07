@@ -6,6 +6,7 @@ import '../app_scope.dart';
 import '../game/awards.dart';
 import '../game/game_controller.dart';
 import '../game/models.dart';
+import '../theme/fit_text.dart';
 import '../theme/game_widgets.dart';
 import '../theme/sparkline.dart';
 import '../theme/tokens.dart';
@@ -47,64 +48,64 @@ class CallItScreen extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 14),
-          MarqueeBoard(
-            color: SusColors.ink,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 10),
+          // The board, the instructions and the voters scroll together, so on
+          // a small phone at a large text size the voters get the whole
+          // height instead of a strip under a fixed board.
+          Expanded(
+            child: SingleChildScrollView(
               child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Text(
-                    'Call it!',
-                    style: SusText.display(44, color: SusColors.mustard),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    'Legit or sus? Vote before the meter shows its hand.',
-                    textAlign: TextAlign.center,
-                    style: SusText.body(
-                      15,
-                      weight: FontWeight.w600,
-                      color: SusColors.cream,
+                  MarqueeBoard(
+                    color: SusColors.ink,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 10),
+                      child: Column(
+                        children: [
+                          Text(
+                            'Call it!',
+                            style: SusText.display(
+                              44,
+                              color: SusColors.mustard,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            'Legit or sus? Vote before the meter shows its hand.',
+                            textAlign: TextAlign.center,
+                            style: SusText.body(
+                              15,
+                              weight: FontWeight.w600,
+                              color: SusColors.cream,
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    '${game.currentPlayer.name}, hold the phone out. Everyone else: pick Legit or Sus next to your name.',
+                    style: SusText.body(15, weight: FontWeight.w600),
+                  ),
+                  const SizedBox(height: 12),
+                  for (final (i, p) in game.voters.indexed) ...[
+                    if (i > 0) const SizedBox(height: 10),
+                    _VoteRow(
+                      player: p,
+                      vote: game.pendingVotes[p.id],
+                      onVote: (v) => game.castVote(p.id, v),
+                    ),
+                  ],
+                  const SizedBox(height: 12),
+                  Text(
+                    'Measuring is done, so wiggle all you like. No pick, no vote. Tap your pick again to take it back.',
+                    textAlign: TextAlign.center,
+                    style: SusText.body(13, weight: FontWeight.w600),
                   ),
                 ],
               ),
             ),
-          ),
-          const SizedBox(height: 16),
-          Text(
-            '${game.currentPlayer.name}, hold the phone out. Everyone else: tap your name until it shows your call.',
-            style: SusText.body(15, weight: FontWeight.w600),
-          ),
-          const SizedBox(height: 12),
-          Expanded(
-            child: SingleChildScrollView(
-              child: LayoutBuilder(
-                builder: (context, constraints) {
-                  final chipWidth = (constraints.maxWidth - 10) / 2;
-                  return Wrap(
-                    spacing: 10,
-                    runSpacing: 10,
-                    children: [
-                      for (final p in game.voters)
-                        SizedBox(
-                          width: chipWidth,
-                          child: _VoteChip(
-                            player: p,
-                            vote: game.pendingVotes[p.id],
-                            onTap: () => game.cycleVote(p.id),
-                          ),
-                        ),
-                    ],
-                  );
-                },
-              ),
-            ),
-          ),
-          Text(
-            'Measuring is done, so wiggle all you like. No tap means no vote.',
-            textAlign: TextAlign.center,
-            style: SusText.body(13, weight: FontWeight.w600),
           ),
           const SizedBox(height: 12),
           ChunkyButton(
@@ -119,60 +120,121 @@ class CallItScreen extends StatelessWidget {
   }
 }
 
-class _VoteChip extends StatelessWidget {
-  const _VoteChip({
+/// One voter on Call it!: their name, then Legit and Sus to pick from
+/// (SPEC.md decision 77). The pick fills with its verdict's color and a
+/// check; picking it again takes the vote back.
+class _VoteRow extends StatelessWidget {
+  const _VoteRow({
     required this.player,
     required this.vote,
-    required this.onTap,
+    required this.onVote,
   });
 
   final Player player;
   final Vote? vote;
+  final ValueChanged<Vote> onVote;
+
+  /// Leaves each pick 50 pt tall inside the border and padding.
+  static const height = 64.0;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: height,
+      padding: const EdgeInsets.fromLTRB(14, 4, 4, 4),
+      decoration: BoxDecoration(
+        color: SusColors.cream,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: SusColors.ink, width: SusShape.borderWidth),
+      ),
+      child: Row(
+        children: [
+          // The body face, at the largest size that fits, on two lines if it
+          // must: the display face is so wide that a long name beside two
+          // buttons would shrink too small to read.
+          Expanded(
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: FitText(
+                player.name,
+                sizes: const [19, 17, 15, 13],
+                overflow: FitOverflow.keepStart,
+                style: (size) => SusText.body(size, weight: FontWeight.w800),
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          for (final v in Vote.values) ...[
+            if (v != Vote.values.first) const SizedBox(width: 6),
+            _VotePick(
+              name: player.name,
+              vote: v,
+              on: vote == v,
+              onTap: () => onVote(v),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _VotePick extends StatelessWidget {
+  const _VotePick({
+    required this.name,
+    required this.vote,
+    required this.on,
+    required this.onTap,
+  });
+
+  final String name;
+  final Vote vote;
+  final bool on;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    final (bg, fg, label) = switch (vote) {
-      null => (SusColors.cream, SusColors.ink, 'Tap to vote'),
-      Vote.legit => (SusColors.teal, SusColors.cream, 'Legit'),
-      Vote.sus => (SusColors.tomatoDeep, SusColors.cream, 'Sus'),
-    };
+    final label = vote == Vote.legit ? 'Legit' : 'Sus';
+    final fill = vote == Vote.legit ? SusColors.teal : SusColors.tomatoDeep;
+    final fg = on ? SusColors.cream : SusColors.ink;
     return Semantics(
       button: true,
-      label: '${player.name}: ${vote == null ? 'no vote' : label}',
+      selected: on,
+      label: '$name: $label',
+      hint: on ? 'Tap again to take it back' : null,
       excludeSemantics: true,
       onTap: onTap,
       child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
         onTap: onTap,
         child: AnimatedContainer(
-          duration: const Duration(milliseconds: 120),
-          height: 76,
-          padding: const EdgeInsets.symmetric(horizontal: 12),
+          duration: MediaQuery.disableAnimationsOf(context)
+              ? Duration.zero
+              : const Duration(milliseconds: 120),
+          width: 86,
+          padding: const EdgeInsets.symmetric(horizontal: 8),
           decoration: BoxDecoration(
-            color: bg,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(
-              color: SusColors.ink,
-              width: SusShape.borderWidth,
-            ),
-            boxShadow: const [
-              BoxShadow(color: SusColors.ink, offset: Offset(0, 4)),
-            ],
+            color: on ? fill : SusColors.cream,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: SusColors.ink, width: 2.5),
           ),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                player.name,
-                overflow: TextOverflow.ellipsis,
-                style: SusText.body(17, weight: FontWeight.w700, color: fg),
-              ),
-              Text(
-                label,
-                style: SusText.display(vote == null ? 15 : 22, color: fg),
-              ),
-            ],
+          alignment: Alignment.center,
+          child: FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (on) ...[
+                  Icon(Icons.check_rounded, size: 20, color: fg),
+                  const SizedBox(width: 4),
+                ],
+                Text(
+                  label,
+                  maxLines: 1,
+                  style: SusText.body(17, weight: FontWeight.w800, color: fg),
+                ),
+              ],
+            ),
           ),
         ),
       ),

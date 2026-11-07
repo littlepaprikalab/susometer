@@ -299,6 +299,33 @@ void main() {
       expect(s.detector.tA1, 30000);
     });
 
+    test('a forgotten Final answer: at most 60 s after the question', () {
+      final silent = Script(party());
+      silent.speech(1000);
+      silent.doneAsking(2000);
+      silent.finalAnswer(30 * 60000);
+      silent.run(30 * 60000);
+      expect(silent.detector.tA1, 1000 + 60000);
+
+      final stuck = Script(party());
+      stuck.speech(1000);
+      stuck.doneAsking(2000);
+      stuck.talk(3000, true);
+      stuck.finalAnswer(10 * 60000);
+      stuck.run(10 * 60000);
+      expect(stuck.detector.tA1, 1000 + 60000, reason: 'talking flag stuck on');
+
+      final story = Script(party());
+      story.speech(1000);
+      story.doneAsking(2000);
+      for (var t = 3000; t <= 90000; t += 1000) {
+        story.talk(t, t % 2000 == 1000);
+      }
+      story.finalAnswer(95000);
+      story.run(95000);
+      expect(story.detector.tA1, 61000, reason: 'a long story is capped too');
+    });
+
     test('Final answer straight from Ask ends the question too', () {
       final s = Script(party());
       s.speech(1000);

@@ -146,4 +146,147 @@ void main() {
       w.dispose();
     });
   });
+
+  group('seams of decision 76', () {
+    /// Calibrates with the taps by hand, up to "Start the questions".
+    void toReady(World w) {
+      w.autoTaps = false;
+      w.game.agreeToMeasure();
+      w.until(() => w.game.calibStage == CalibStage.chat, what: 'chat');
+      while (w.game.calibStage == CalibStage.chat) {
+        final warmup = w.game.currentWarmup!;
+        w.until(() => warmup.latencyS != null && !w.talking, what: 'answer');
+        w.elapse(1000);
+        w.game.nextWarmup();
+        w.elapse(100);
+      }
+      expect(w.game.calibStage, CalibStage.ready);
+    }
+
+    test('a trip away while waiting on Start keeps the locked-in normal', () {
+      fakeAsync((async) {
+        final w = World(async);
+        w.startGame(['Sam', 'Alex']);
+        toReady(w);
+        final base = w.game.calibBaseline;
+        final warmups = w.game.warmups.length;
+        void stillReady(String why) {
+          expect(w.game.phase, GamePhase.calibrate, reason: why);
+          expect(w.game.calibStage, CalibStage.ready, reason: why);
+          expect(w.game.calibBaseline, same(base), reason: why);
+          expect(
+            w.game.warmups.length,
+            warmups,
+            reason: '$why: no new warm-up',
+          );
+          expect(w.game.paused, isFalse, reason: why);
+          expect(w.running, isTrue, reason: why);
+          expect(w.game.tickerRunning, isTrue, reason: why);
+        }
+
+        var starts = w.sdkCalls('start');
+        w.leaveApp(3000);
+        stillReady('a screenshot');
+        expect(w.sdkCalls('start'), starts + 1);
+
+        starts = w.sdkCalls('start');
+        w.leaveApp(GameController.autoResumeWithinMs + 5000);
+        expect(w.game.showPauseSheet, isTrue);
+        w.game.resume();
+        w.elapse(300);
+        stillReady('a long trip, then Resume');
+        expect(w.sdkCalls('start'), starts + 1);
+
+        // Start tapped while a slow camera is still coming back: it plays.
+        w.startTakesMs = 1000;
+        w.leaveApp(3000);
+        w.game.startQuestions();
+        expect(w.game.phase, GamePhase.ask);
+        w.elapse(1500);
+        expect(w.game.tickerRunning, isTrue);
+        expect(w.game.currentTurn.baseline, same(base));
+        expect(w.askAndAnswer().verdict, isNotNull);
+        w.dispose();
+      });
+    });
+
+    test('E5 while waiting on Start: Try again goes back to the wait', () {
+      fakeAsync((async) {
+        final w = World(async);
+        w.startGame(['Sam', 'Alex']);
+        toReady(w);
+        final base = w.game.calibBaseline;
+        final warmups = w.game.warmups.length;
+        w.emitting = false;
+        w.until(() => w.game.phase == GamePhase.sdkOffline, maxMs: 40000);
+        expect(w.running, isFalse);
+        w.emitting = true;
+        w.game.retrySdk();
+        w.elapse(300);
+        expect(w.game.phase, GamePhase.calibrate);
+        expect(w.game.calibStage, CalibStage.ready);
+        expect(w.game.calibBaseline, same(base));
+        expect(w.game.warmups.length, warmups);
+        expect(w.running, isTrue);
+        expect(w.game.tickerRunning, isTrue);
+        w.game.startQuestions();
+        expect(w.game.phase, GamePhase.ask);
+        expect(w.askAndAnswer().verdict, isNotNull);
+        w.dispose();
+      });
+    });
+
+    test('Pause and Skip again while the camera restarts: one result per '
+        'question, and Resume brings the ticker back', () {
+      fakeAsync((async) {
+        final w = World(async);
+        w.startGame(['Sam', 'Alex'], questions: 3);
+        w.calibrate();
+        w.leaveApp(GameController.autoResumeWithinMs + 5000);
+        w.startTakesMs = 1500;
+        w.game.skipQuestion();
+        w.elapse(100);
+        // The sheet closed while the camera restarts: the old question's
+        // Final answer is on screen but does nothing.
+        expect(w.game.phase, GamePhase.ask);
+        w.game.finalAnswer();
+        w.game.pause();
+        w.elapse(700);
+        w.game.skipQuestion();
+        w.elapse(3000);
+        expect(
+          [for (final r in w.game.currentTurn.results) r.index],
+          [0],
+          reason: 'skipped once, scored never',
+        );
+        expect(w.game.questionIndex, 1);
+        w.game.resume();
+        w.elapse(300);
+        expect(w.game.tickerRunning, isTrue);
+        final r = w.askAndAnswer();
+        expect(r.index, 1);
+        w.dispose();
+      });
+    });
+
+    test('Pause just after a short trip, while the camera restarts: Resume '
+        'still starts the ticker', () {
+      fakeAsync((async) {
+        final w = World(async);
+        w.startGame(['Sam', 'Alex']);
+        w.calibrate();
+        w.startTakesMs = 1000;
+        w.leaveApp(3000);
+        w.game.pause();
+        w.elapse(2000);
+        expect(w.game.tickerRunning, isFalse, reason: 'the restart gave up');
+        w.game.resume();
+        w.elapse(100);
+        expect(w.game.tickerRunning, isTrue);
+        // Without the ticker, Locking in would never end.
+        expect(w.askAndAnswer().verdict, isNotNull);
+        w.dispose();
+      });
+    });
+  });
 }

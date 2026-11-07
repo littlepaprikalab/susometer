@@ -367,8 +367,7 @@ class World {
     pulse = 70;
     if (game.phase == GamePhase.callIt) {
       for (final id in votesSus) {
-        game.cycleVote(id);
-        game.cycleVote(id);
+        game.castVote(id, Vote.sus);
       }
       game.reveal();
     }

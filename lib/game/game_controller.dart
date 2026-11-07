@@ -1156,6 +1156,9 @@ class GameController extends ChangeNotifier {
       GamePhase.redo,
     };
     if (!inGame || !allowed.contains(phase) || !_once('skipQuestion')) return;
+    // Already skipped, and the next question is still waiting on the camera
+    // (Pause and Skip again during the restart): one result per question.
+    if (currentTurn.results.any((r) => r.index == questionIndex)) return;
     final q = mode == GameMode.solo
         ? questionText
         : (_askerTranscript.text.isEmpty
@@ -1206,16 +1209,15 @@ class GameController extends ChangeNotifier {
     unawaited(_say('Call it! Legit or sus?'));
   }
 
-  /// Tapping a voter's chip cycles unset → Legit → Sus → unset.
-  void cycleVote(String voterId) {
+  /// A voter picks Legit or Sus by their name; picking the same again takes
+  /// the vote back (SPEC.md decision 77). No pick is no vote.
+  void castVote(String voterId, Vote vote) {
     if (phase != GamePhase.callIt) return;
-    final current = pendingVotes[voterId];
-    if (current == null) {
-      pendingVotes[voterId] = Vote.legit;
-    } else if (current == Vote.legit) {
-      pendingVotes[voterId] = Vote.sus;
-    } else {
+    if (!voters.any((p) => p.id == voterId)) return;
+    if (pendingVotes[voterId] == vote) {
       pendingVotes.remove(voterId);
+    } else {
+      pendingVotes[voterId] = vote;
     }
     notifyListeners();
   }
@@ -1418,7 +1420,11 @@ class GameController extends ChangeNotifier {
   Future<void> retrySdk() async {
     if (phase != GamePhase.sdkOffline || !_once('retry')) return;
     if (currentTurn.baseline == null) {
-      await _beginCalibration();
+      if (calibStage == CalibStage.ready && _calibBaseline != null) {
+        await _retryToReady();
+      } else {
+        await _beginCalibration();
+      }
       return;
     }
     sdkError = null;
@@ -1437,6 +1443,20 @@ class GameController extends ChangeNotifier {
     // so a tick can't move the old one on.
     questionIndex = currentTurn.results.length;
     _beginQuestion(repeat: mode == GameMode.solo ? questionText : null);
+    _startTicker();
+    await _startListening();
+  }
+
+  /// E5 "Try again" while the screen waited on Start the questions: the
+  /// normal is locked in, so keep it and go back to the wait.
+  Future<void> _retryToReady() async {
+    sdkError = null;
+    _recoveries = 0;
+    final e = _epoch;
+    if (!await _startSdk(fromOffline: true) || e != _epoch) return;
+    _lastSampleMs = nowMs;
+    live.sample = null;
+    _setPhase(GamePhase.calibrate);
     _startTicker();
     await _startListening();
   }
@@ -1542,6 +1562,12 @@ class GameController extends ChangeNotifier {
     notifyListeners();
     if (restart) {
       if (phase == GamePhase.calibrate) {
+        // A normal that's locked in survives the trip: only the camera, mic
+        // and ticker come back, and the screen still waits on Start.
+        if (calibStage == CalibStage.ready) {
+          if (await _restartMeasuring()) notifyListeners();
+          return;
+        }
         await _beginCalibration();
         return;
       }

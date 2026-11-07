@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:susometer/game/game_controller.dart';
+import 'package:susometer/game/models.dart';
 import 'package:susometer/presage/presage_models.dart';
 import 'package:susometer/voice/speech_service.dart';
 
@@ -73,8 +74,8 @@ void main() {
         what: 'Call it!',
       );
       expect(find.text('Call it!'), findsOneWidget);
-      await rig.tap('Tap to vote');
-      expect(find.text('Legit'), findsOneWidget);
+      await rig.tap('Legit');
+      expect(rig.game.pendingVotes.values, [Vote.legit]);
       await rig.tap('Reveal');
       expect(find.text('The Sus-o-meter says…'), findsOneWidget);
       await rig.until(
@@ -395,9 +396,20 @@ void main() {
     expect(find.textContaining('Reveal in'), findsNothing);
     await rig.wait(15000);
     expect(rig.game.phase, GamePhase.callIt);
-    await rig.tap('Tap to vote');
+    // Pick, change your mind, take it back, pick again (decision 77).
+    final alex = rig.game.voters.single.id;
+    await rig.tap('Legit');
+    expect(find.text('1 / 1 voted'), findsOneWidget);
+    expect(rig.game.pendingVotes[alex], Vote.legit);
+    await rig.tap('Sus');
+    expect(rig.game.pendingVotes[alex], Vote.sus);
+    await rig.tap('Sus');
+    expect(find.text('0 / 1 voted'), findsOneWidget);
+    expect(rig.game.pendingVotes, isEmpty);
+    await rig.tap('Sus');
     expect(find.text('1 / 1 voted'), findsOneWidget);
     await rig.tap('Reveal');
+    expect(rig.game.currentResult!.votes[alex], Vote.sus);
     expect(rig.game.phase, GamePhase.countdown);
     await rig.finish();
   });

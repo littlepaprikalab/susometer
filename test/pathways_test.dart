@@ -22,6 +22,22 @@ import 'rig.dart';
 /// Screens already checked in this test run (each phase checked once).
 final _checked = <String>{};
 
+/// [checkScreen]'s tap target and label checks, without contrast.
+Future<void> checkTargets(WidgetTester tester, String name) async {
+  final handle = tester.ensureSemantics();
+  await expectLater(
+    tester,
+    meetsGuideline(iOSTapTargetGuideline),
+    reason: '$name: tap targets',
+  );
+  await expectLater(
+    tester,
+    meetsGuideline(labeledTapTargetGuideline),
+    reason: '$name: labels',
+  );
+  handle.dispose();
+}
+
 Future<void> checkScreen(WidgetTester tester, String name) async {
   if (!_checked.add(name)) return;
   final handle = tester.ensureSemantics();
@@ -609,6 +625,24 @@ void main() {
               chip('Light'),
               find.byType(LiveStatCard),
             ], 'calibrate, talking');
+            expect(
+              tester.getRect(find.byType(CameraPreview)),
+              calibCamera,
+              reason: 'the calibration camera moved for the warm-ups',
+            );
+            // Locked in: the wait for Start keeps the camera where it was.
+            await rig.until(
+              () => rig.game.calibStage == CalibStage.ready,
+              what: 'the normal locked in',
+            );
+            await rig.wait(200);
+            expect(find.text('Start the questions'), findsOneWidget);
+            expect(
+              tester.getRect(find.byType(CameraPreview)),
+              calibCamera,
+              reason: 'the calibration camera moved on Start the questions',
+            );
+            await checkScreen(tester, 'calibrate, ready');
             await rig.until(() => rig.game.phase == GamePhase.ask);
             await rig.wait(200);
 
@@ -913,4 +947,114 @@ void main() {
     expect(rig.game.phase, GamePhase.settle, reason: 'a deliberate tap works');
     await rig.finish();
   });
+
+  for (final screen in const [Size(390, 844), Size(375, 667)]) {
+    for (final scale in [1.0, 1.3]) {
+      testWidgets(
+        'Call it! with 7 voters: every Legit and Sus fits and can be tapped '
+        '(text ×$scale, ${screen.width.round()}×${screen.height.round()})',
+        (tester) async {
+          tester.platformDispatcher.textScaleFactorTestValue = scale;
+          addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+          final rig = Rig(tester);
+          await rig.pumpApp(size: screen);
+          await rig.startParty([
+            'Sam',
+            'Christopher-Alexand',
+            'Priya',
+            'Jordan',
+            'Kai',
+            'Mo',
+            'Lee',
+            'Ana',
+          ]);
+          await rig.tap('I agree, measure me');
+          await rig.until(() => rig.game.phase == GamePhase.ask);
+          rig.game.doneAsking();
+          await rig.wait(200);
+          await rig.tap('Final answer');
+          await rig.until(
+            () =>
+                rig.game.phase == GamePhase.callIt ||
+                rig.game.phase == GamePhase.redo,
+          );
+          expect(rig.game.phase, GamePhase.callIt);
+          // Tap targets and labels only: the list scrolls, and the contrast
+          // check reads whichever row the list's edge cuts against the page
+          // drawn outside it. The colors are checked on an unscrolled list
+          // below.
+          await checkTargets(tester, 'callIt, 7 voters ×$scale $screen');
+          await waitOutTapGuard(tester);
+          expect(find.text('Reveal').hitTestable(), findsOneWidget);
+          final voters = rig.game.voters;
+          expect(voters.length, 7);
+          for (final (i, v) in voters.indexed) {
+            final pick = i.isEven ? 'Sus' : 'Legit';
+            final button = find.bySemanticsLabel('${v.name}: $pick');
+            await tester.ensureVisible(button);
+            await waitOutTapGuard(tester);
+            expect(
+              tester.getSize(button).height,
+              greaterThanOrEqualTo(44),
+              reason: '${v.name}: $pick tap target',
+            );
+            await tester.tap(button);
+            await tester.pump(const Duration(milliseconds: 150));
+            expect(
+              rig.game.pendingVotes[v.id],
+              i.isEven ? Vote.sus : Vote.legit,
+              reason: v.name,
+            );
+          }
+          expect(find.text('7 / 7 voted'), findsOneWidget);
+          // Back to the top: a pick the list has half scrolled past its edge
+          // reads as a clipped sliver (each pick's real size is checked
+          // above, as it's tapped).
+          tester
+              .state<ScrollableState>(find.byType(Scrollable).first)
+              .position
+              .jumpTo(0);
+          await tester.pump(const Duration(milliseconds: 100));
+          await checkTargets(tester, 'callIt, voted ×$scale $screen');
+          await rig.tap('Reveal');
+          expect(rig.game.currentResult!.votes.length, 7);
+          await rig.finish();
+        },
+      );
+    }
+  }
+
+  for (final screen in const [Size(390, 844), Size(375, 667)]) {
+    for (final scale in [1.0, 1.3]) {
+      testWidgets('Call it! colors: picked and unpicked pass contrast '
+          '(text ×$scale, ${screen.width.round()}×${screen.height.round()})', (
+        tester,
+      ) async {
+        tester.platformDispatcher.textScaleFactorTestValue = scale;
+        addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+        final rig = Rig(tester);
+        await rig.pumpApp(size: screen);
+        await rig.startParty(['Sam', 'Christopher-Alexand', 'Priya']);
+        await rig.tap('I agree, measure me');
+        await rig.until(() => rig.game.phase == GamePhase.ask);
+        rig.game.doneAsking();
+        await rig.wait(200);
+        await rig.tap('Final answer');
+        await rig.until(
+          () =>
+              rig.game.phase == GamePhase.callIt ||
+              rig.game.phase == GamePhase.redo,
+        );
+        expect(rig.game.phase, GamePhase.callIt);
+        await checkScreen(tester, 'callIt, none picked ×$scale $screen');
+        final voters = rig.game.voters;
+        await waitOutTapGuard(tester);
+        await tester.tap(find.bySemanticsLabel('${voters[0].name}: Legit'));
+        await tester.tap(find.bySemanticsLabel('${voters[1].name}: Sus'));
+        await tester.pump(const Duration(milliseconds: 300));
+        await checkScreen(tester, 'callIt, both picked ×$scale $screen');
+        await rig.finish();
+      });
+    }
+  }
 }

@@ -56,6 +56,10 @@ Settings → **Signal check** → **Start both**. Allow microphone and speech re
   for 30 s: still on the answer until *Final answer*. On *Call it!*, wait a minute: no reveal
   until *Reveal*.
 - [ ] With 3 players, the host names a different asker for each question, taking turns.
+- [ ] While *Start the questions* is up, take a screenshot and close the preview: still on *Start
+  the questions*, no new warm-ups (decision 76).
+- [ ] *Call it!* (decision 77): each voter taps *Legit* or *Sus* by their name. **Does everyone
+  get it without being told?** Tap your pick again: it clears. Tap the other: it switches.
 - [ ] Next question: answer **immediately**, before tapping *Done asking*. Tap it, then *Final
   answer*: the pause tile on the verdict should be short, not the time it took to tap.
 - [ ] From *{name}, ask your question!* to *{name}, your answer?* to *Locking in the reading…*,
