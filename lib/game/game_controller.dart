@@ -187,7 +187,39 @@ class LiveState extends ChangeNotifier {
     beatsAtMs = 0;
   }
 
-  void notify() => notifyListeners();
+  /// While the turn's ticker runs, [notify] holds changes back and the tick
+  /// redraws them all at once ([flush]). The snapshots, the mic level and
+  /// the transcript each update about 10 times a second, out of step with
+  /// each other and with the tick, so drawing each one as it came redrew
+  /// the camera screens 20 to 23 times a second. Every frame drawn over the
+  /// native camera preview takes time on the iOS main thread, which is also
+  /// where the SDK hands over each camera frame; it queues them all rather
+  /// than drop one, so a busy main thread makes the preview fall behind.
+  /// Batched, the camera screens draw once per tick: at most 100 ms late.
+  bool _batched = false;
+  bool _pending = false;
+
+  /// Whether [notify] waits for the next [flush].
+  bool get batched => _batched;
+  set batched(bool on) {
+    _batched = on;
+    if (!on) flush();
+  }
+
+  void notify() {
+    if (_batched) {
+      _pending = true;
+    } else {
+      notifyListeners();
+    }
+  }
+
+  /// Delivers a change [notify] held back, if any.
+  void flush() {
+    if (!_pending) return;
+    _pending = false;
+    notifyListeners();
+  }
 
   void resetQuestion() {
     askerText = '';
@@ -1895,15 +1927,22 @@ class GameController extends ChangeNotifier {
   void _startTicker() {
     _ticker?.cancel();
     _ticker = Timer.periodic(const Duration(milliseconds: 100), (_) => _tick());
+    live.batched = true;
   }
 
   void _stopTicker() {
     _ticker?.cancel();
     _ticker = null;
+    live.batched = false;
   }
 
   void _tick() {
-    final now = nowMs;
+    _advance(nowMs);
+    // After the tick's own changes, so they share one frame.
+    live.flush();
+  }
+
+  void _advance(int now) {
     if (paused) return;
     switch (phase) {
       case GamePhase.calibrate:

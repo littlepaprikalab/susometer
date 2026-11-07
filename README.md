@@ -84,6 +84,14 @@ SmartSpectra Swift package (~60 MB) the first time. Then connect your iPhone and
 flutter run
 ```
 
+That's a debug build. Its Dart code isn't optimized, and Flutter runs Dart on the iPhone's main
+thread, the same one that puts each camera frame on screen, so the preview can stutter. To play,
+or to judge how smooth the camera is, use a release build:
+
+```bash
+flutter run --release
+```
+
 On first launch, open **Settings** (gear icon), paste your Presage key and tap **Save & test**.
 Tapping *Start the show* without a key opens Settings for you.
 

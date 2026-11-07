@@ -3,6 +3,7 @@
 // targets (iOS), labelled tap targets, and WCAG text contrast measured on
 // the rendered pixels.
 
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math' as math;
@@ -20,6 +21,7 @@ import 'package:susometer/settings/app_settings.dart';
 import 'package:susometer/theme/expression_stamp.dart';
 import 'package:susometer/theme/game_widgets.dart';
 import 'package:susometer/theme/tokens.dart';
+import 'package:susometer/voice/speech_service.dart';
 
 import 'rig.dart';
 
@@ -146,6 +148,41 @@ extension on Rig {
     await wait(300);
     if (game.phase == GamePhase.howToPlay) await tap("Got it, let's play");
   }
+}
+
+/// Frames drawn in [seconds] of 60 Hz vsyncs while the room talks, as on a
+/// phone: a new mic level every 100 ms, out of step with the snapshots, and
+/// a longer partial transcript every 330 ms. A vsync draws a frame only if
+/// something asked for one since the last.
+Future<int> framesWhileTalking(Rig rig, {int seconds = 3}) async {
+  final tester = rig.tester;
+  var n = 0;
+  Timer? levels;
+  final offset = Timer(const Duration(milliseconds: 37), () {
+    levels = Timer.periodic(const Duration(milliseconds: 100), (_) {
+      n++;
+      rig.speech.controller.add(
+        SpeechLevel(0.2 + 0.1 * (n % 7), rig.presage.now),
+      );
+    });
+  });
+  var words = 0;
+  final partials = Timer.periodic(const Duration(milliseconds: 330), (_) {
+    words++;
+    rig.say(List.filled(words, 'maybe').join(' '));
+  });
+  var frames = 0;
+  for (var i = 0; i < seconds * 60; i++) {
+    await tester.binding.delayed(const Duration(microseconds: 16667));
+    if (tester.binding.hasScheduledFrame) {
+      frames++;
+      await tester.pump();
+    }
+  }
+  offset.cancel();
+  levels?.cancel();
+  partials.cancel();
+  return frames;
 }
 
 void main() {
@@ -1176,6 +1213,52 @@ void main() {
     expect(find.semantics.byLabel('Final answer'), findsNothing);
     expect(find.semantics.byLabel('Resume'), findsNothing);
     handle.dispose();
+    await rig.finish();
+  });
+
+  testWidgets('the camera screens draw once per tick while the room talks', (
+    tester,
+  ) async {
+    // Every frame drawn over the native camera preview takes time on the
+    // iOS main thread, where the SDK also hands over each camera frame (and
+    // queues them rather than drop one). The mic bars used to animate each
+    // 100 ms level for 90 ms, so with anyone talking the question screens
+    // drew on nearly every vsync (174 of 180 here; twice that at 120 Hz),
+    // and the snapshots, mic level and transcript each drew on their own.
+    final rig = Rig(tester);
+    await rig.pumpApp();
+    await rig.startParty(['Sam', 'Alex']);
+    await rig.tap('I agree, measure me');
+    await rig.until(
+      () => rig.game.currentWarmup != null,
+      what: 'first warm-up',
+    );
+    final calibrate = await framesWhileTalking(rig);
+    expect(rig.game.phase, GamePhase.calibrate);
+    await rig.until(() => rig.game.phase == GamePhase.ask);
+    await rig.wait(1000);
+    final ask = await framesWhileTalking(rig);
+    expect(rig.game.phase, GamePhase.ask);
+    // Still live: the asker's words so far are on the card.
+    expect(find.textContaining('maybe maybe maybe'), findsOneWidget);
+    rig.game.doneAsking();
+    await rig.wait(1000);
+    rig.presage.talk(true);
+    await rig.wait(500);
+    final answer = await framesWhileTalking(rig);
+    expect(rig.game.phase, GamePhase.answer);
+    // 3 s at one frame per 100 ms tick is 30.
+    for (final (name, frames) in [
+      ('calibration', calibrate),
+      ('ask', ask),
+      ('answer', answer),
+    ]) {
+      expect(
+        frames,
+        inInclusiveRange(25, 36),
+        reason: '$name drew $frames frames in 3 s',
+      );
+    }
     await rig.finish();
   });
 }

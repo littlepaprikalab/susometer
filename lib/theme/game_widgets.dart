@@ -274,6 +274,12 @@ class ApplauseMeter extends StatelessWidget {
 }
 
 /// Little level bars (mic or talking indicator).
+///
+/// The bars jump to each new level rather than animate to it. The level
+/// changes every 100 ms while anyone makes a sound, so a 90 ms animation
+/// never stopped, and the screen around it, camera and all, was redrawn on
+/// every vsync (60–120 times a second) instead of 10. Those frames compete
+/// with the camera preview for the iOS main thread.
 class LevelBars extends StatelessWidget {
   const LevelBars({
     super.key,
@@ -303,8 +309,7 @@ class LevelBars extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
             for (var i = 0; i < count; i++)
-              AnimatedContainer(
-                duration: const Duration(milliseconds: 90),
+              Container(
                 width: barWidth,
                 height: math.max(3, maxHeight * l * _shape[i % _shape.length]),
                 margin: EdgeInsets.only(right: i == count - 1 ? 0 : 3),

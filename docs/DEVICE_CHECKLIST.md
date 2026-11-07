@@ -64,6 +64,10 @@ Settings → **Signal check** → **Start both**. Allow microphone and speech re
   answer*: the pause tile on the verdict should be short, not the time it took to tap.
 - [ ] From *{name}, ask your question!* to *{name}, your answer?* to *Locking in the reading…*,
   the camera card doesn't move, resize or flash black.
+- [ ] **Camera lag** (release build, `flutter run --release`): while the asker talks and while
+  you answer, wave a hand in front of the camera. The preview should follow at once, and still
+  follow at once by the last question. **Does it trail behind, or fall further behind as the
+  game goes on?** (SPEC decision 78.)
 - [ ] The Pulse card's trend line: roughly flat around the dashed line while you sit calmly, rising
   after a few seconds if you hold your breath or do 10 squats first. **Does it look jumpy?** The
   number should match where the line ends.
