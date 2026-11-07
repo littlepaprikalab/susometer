@@ -693,9 +693,10 @@ class GameController extends ChangeNotifier {
 
   /// "Doesn't apply": another warm-up of the same kind instead.
   void skipWarmup() {
-    if (phase != GamePhase.calibrate) return;
+    if (phase != GamePhase.calibrate || paused) return;
     final w = currentWarmup;
-    if (w == null) return;
+    // A double tap would skip two warm-ups (and so move on to the next slot).
+    if (w == null || !_once('skipWarmup')) return;
     w
       ..done = true
       ..skipped = true
@@ -976,7 +977,7 @@ class GameController extends ChangeNotifier {
 
   /// Solo "Different question", while the question is on screen.
   void differentQuestion() {
-    if (mode != GameMode.solo) return;
+    if (mode != GameMode.solo || paused) return;
     if (phase != GamePhase.ask && !soloHoldsQuestion) return;
     if (!_once('differentQuestion')) return;
     _beginQuestion();
@@ -998,14 +999,18 @@ class GameController extends ChangeNotifier {
   }
 
   /// "Done asking".
+  /// Like every tap in a turn, ignored while paused: nothing behind the
+  /// Pause sheet moves the game on (SPEC.md decision 76).
   void doneAsking() {
-    if (phase != GamePhase.ask) return;
+    if (phase != GamePhase.ask || paused) return;
     _apply(detector?.onDoneAskingTap(nowMs) ?? const []);
   }
 
   /// "Final answer".
   void finalAnswer() {
     if (phase != GamePhase.answer && phase != GamePhase.ask) return;
+    // The pause is part of no answer: Resume starts the question over.
+    if (paused) return;
     _apply(detector?.onFinalAnswerTap(nowMs) ?? const []);
   }
 
@@ -1148,7 +1153,7 @@ class GameController extends ChangeNotifier {
 
   /// E4 "Ask it again".
   void askAgain() {
-    if (phase != GamePhase.redo || !_once('askAgain')) return;
+    if (phase != GamePhase.redo || paused || !_once('askAgain')) return;
     _beginQuestion(repeat: mode == GameMode.solo ? questionText : null);
   }
 
@@ -1217,7 +1222,7 @@ class GameController extends ChangeNotifier {
   /// A voter picks Legit or Sus by their name; picking the same again takes
   /// the vote back (SPEC.md decision 77). No pick is no vote.
   void castVote(String voterId, Vote vote) {
-    if (phase != GamePhase.callIt) return;
+    if (phase != GamePhase.callIt || paused) return;
     if (!voters.any((p) => p.id == voterId)) return;
     // A fast double tap on a pick counts once, so it doesn't undo itself.
     // Switching to the other pick is a different tap and always works.
@@ -1231,7 +1236,7 @@ class GameController extends ChangeNotifier {
   }
 
   void reveal() {
-    if (phase != GamePhase.callIt) return;
+    if (phase != GamePhase.callIt || paused) return;
     currentResult?.votes.addAll(pendingVotes);
     _beginCountdown();
   }
@@ -1292,13 +1297,13 @@ class GameController extends ChangeNotifier {
 
   /// Verdict "Next question".
   Future<void> nextQuestion() async {
-    if (phase != GamePhase.verdict || !_once('next')) return;
+    if (phase != GamePhase.verdict || paused || !_once('next')) return;
     await _afterQuestion();
   }
 
   /// Verdict "End turn".
   Future<void> endTurn() async {
-    if (phase != GamePhase.verdict || !_once('next')) return;
+    if (phase != GamePhase.verdict || paused || !_once('next')) return;
     await _endTurn();
   }
 

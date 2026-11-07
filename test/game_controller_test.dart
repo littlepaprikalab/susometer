@@ -1232,6 +1232,7 @@ void main() {
         expect(w.game.chatBlocks, 1, reason: 'a skip fills nothing');
         expect(w.game.warmupNumber, 1);
         w.game.skipWarmup();
+        w.elapse(700); // two taps, not a double tap
       }
       w.until(() => w.game.currentWarmup != null, what: 'a warm-up');
       expect(

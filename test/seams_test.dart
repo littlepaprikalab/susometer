@@ -367,6 +367,103 @@ void main() {
       });
     });
 
+    test('nothing behind the Pause sheet moves the game on', () {
+      fakeAsync((async) {
+        final w = World(async);
+        w.startGame(['Sam', 'Alex'], questions: 2);
+        toReady(w);
+        // Waiting on Start.
+        w.game.pause();
+        w.elapse(700);
+        w.game.startQuestions();
+        expect(w.game.phase, GamePhase.calibrate);
+        w.game.resume();
+        w.elapse(300);
+        w.game.startQuestions();
+        expect(w.game.phase, GamePhase.ask);
+        // Asking: Done asking and Final answer.
+        w.elapse(300);
+        w.say('Have you ever lied?');
+        w.elapse(500);
+        w.game.pause();
+        w.game.doneAsking();
+        w.game.finalAnswer();
+        expect(w.game.phase, GamePhase.ask);
+        w.game.resume();
+        w.elapse(300);
+        w.say('Have you ever lied?');
+        w.elapse(500);
+        w.game.doneAsking();
+        w.elapse(800);
+        w.talk(true);
+        w.elapse(1500);
+        w.talk(false);
+        // Answering: a Final answer while paused would score the pause.
+        w.game.pause();
+        w.elapse(15000);
+        w.game.finalAnswer();
+        w.elapse(200);
+        expect(w.game.phase, GamePhase.answer);
+        expect(w.game.currentTurn.results, isEmpty);
+        w.game.resume();
+        w.elapse(300);
+        expect(w.game.phase, GamePhase.ask, reason: 'the question starts over');
+        // Call it! after a long trip: the sheet is up; votes and Reveal wait.
+        final r = w.askAndAnswer(votesSus: const []);
+        expect(r.index, 0);
+        w.until(() => w.game.phase == GamePhase.verdict);
+        w.leaveApp(GameController.autoResumeWithinMs + 5000);
+        expect(w.game.showPauseSheet, isTrue);
+        w.game.nextQuestion();
+        w.game.endTurn();
+        w.elapse(700);
+        expect(w.game.phase, GamePhase.verdict, reason: 'verdict, paused');
+        w.game.resume();
+        w.elapse(300);
+        w.game.nextQuestion();
+        w.elapse(100);
+        expect(w.game.phase, GamePhase.ask);
+        w.elapse(300);
+        w.say('Do you floss?');
+        w.elapse(500);
+        w.game.doneAsking();
+        w.elapse(800);
+        w.talk(true);
+        w.elapse(1500);
+        w.talk(false);
+        w.game.finalAnswer();
+        w.until(() => w.game.phase == GamePhase.callIt);
+        w.leaveApp(GameController.autoResumeWithinMs + 5000);
+        final alex = w.game.voters.single.id;
+        w.game.castVote(alex, Vote.sus);
+        w.game.reveal();
+        expect(w.game.phase, GamePhase.callIt);
+        expect(w.game.pendingVotes, isEmpty);
+        w.game.resume();
+        w.elapse(300);
+        w.game.castVote(alex, Vote.sus);
+        w.game.reveal();
+        expect(w.game.phase, GamePhase.countdown);
+        expect(w.game.currentResult!.votes, {alex: Vote.sus});
+        w.dispose();
+      });
+    });
+
+    test('a double tap on Doesn\'t apply skips one warm-up, not two', () {
+      fakeAsync((async) {
+        final w = World(async)..autoTaps = false;
+        w.startGame(['Sam', 'Alex']);
+        w.game.agreeToMeasure();
+        w.until(() => w.game.calibStage == CalibStage.chat, what: 'chat');
+        w.game.skipWarmup();
+        w.elapse(80);
+        w.game.skipWarmup();
+        expect(w.game.warmups.where((x) => x.skipped).length, 1);
+        expect(w.game.warmupSlotsDone, 0, reason: 'still on the first slot');
+        w.dispose();
+      });
+    });
+
     test('Pause just after a short trip, while the camera restarts: Resume '
         'still starts the ticker', () {
       fakeAsync((async) {

@@ -1149,4 +1149,33 @@ void main() {
     expect(position.pixels, offset, reason: 'the list jumped after the vote');
     await rig.finish();
   });
+
+  testWidgets('VoiceOver reaches only the sheet: nothing behind Pause or End '
+      'the show', (tester) async {
+    final rig = Rig(tester);
+    await rig.pumpApp();
+    await rig.startParty(['Sam', 'Alex']);
+    await rig.tap('I agree, measure me');
+    await rig.until(() => rig.game.phase == GamePhase.ask);
+    rig.game.doneAsking();
+    await rig.wait(600);
+    final handle = tester.ensureSemantics();
+    expect(find.semantics.byLabel('Final answer'), findsOne);
+    await waitOutTapGuard(tester);
+    await tester.tap(find.bySemanticsLabel('Pause the game'));
+    await rig.wait(300);
+    expect(find.semantics.byLabel('Resume'), findsOne);
+    expect(
+      find.semantics.byLabel('Final answer'),
+      findsNothing,
+      reason: 'VoiceOver could tap Final answer behind the Pause sheet',
+    );
+    await rig.tap('End the show');
+    await rig.wait(300);
+    expect(find.semantics.byLabel('Keep playing'), findsOne);
+    expect(find.semantics.byLabel('Final answer'), findsNothing);
+    expect(find.semantics.byLabel('Resume'), findsNothing);
+    handle.dispose();
+    await rig.finish();
+  });
 }

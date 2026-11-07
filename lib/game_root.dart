@@ -160,15 +160,21 @@ class _GameRootState extends State<GameRoot> with WidgetsBindingObserver {
                   telemetry: services.settings.telemetry,
                 ),
               ),
+            // BlockSemantics: VoiceOver can't reach the screen behind a
+            // sheet either (it could tap Final answer behind Pause).
             if (game.showPauseSheet && !_confirmEnd)
               Positioned.fill(
-                child: SheetOverlay(child: PauseSheet(onEndShow: _askEnd)),
+                child: BlockSemantics(
+                  child: SheetOverlay(child: PauseSheet(onEndShow: _askEnd)),
+                ),
               ),
             if (_confirmEnd && game.inGame)
               Positioned.fill(
-                child: SheetOverlay(
-                  onDismiss: _closeEnd,
-                  child: EndShowSheet(onKeepPlaying: _closeEnd),
+                child: BlockSemantics(
+                  child: SheetOverlay(
+                    onDismiss: _closeEnd,
+                    child: EndShowSheet(onKeepPlaying: _closeEnd),
+                  ),
                 ),
               ),
           ],
