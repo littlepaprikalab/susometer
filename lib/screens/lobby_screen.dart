@@ -120,16 +120,18 @@ class _LobbyScreenState extends State<LobbyScreen> {
             Row(
               mainAxisAlignment: MainAxisAlignment.end,
               children: [
+                // Neither opens while the show is starting: the game would
+                // start (or Settings open for a missing key) under the page.
                 RoundIconButton(
                   icon: Icons.question_mark_rounded,
                   tooltip: "How it's scored",
-                  onPressed: _openScoreGuide,
+                  onPressed: _starting ? null : _openScoreGuide,
                 ),
                 const SizedBox(width: 10),
                 RoundIconButton(
                   icon: Icons.settings_rounded,
                   tooltip: 'Settings',
-                  onPressed: _openSettings,
+                  onPressed: _starting ? null : _openSettings,
                 ),
               ],
             ),

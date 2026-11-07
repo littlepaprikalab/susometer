@@ -1,15 +1,27 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:susometer/app_scope.dart';
 import 'package:susometer/game/expression_tag.dart';
 import 'package:susometer/game/game_controller.dart';
+import 'package:susometer/game/models.dart';
 import 'package:susometer/game/scoring_config.dart';
 import 'package:susometer/main.dart';
 import 'package:susometer/screens/score_guide_screen.dart';
-import 'package:susometer/settings/app_settings.dart';
+import 'package:susometer/screens/settings_screen.dart';
 import 'package:susometer/theme/expression_stamp.dart';
 
 import 'fakes.dart';
+
+/// A device whose camera check waits for [gate], so a test can act while
+/// *Start the show* is still starting.
+class _SlowDevice extends FakeDevice {
+  Completer<String>? gate;
+
+  @override
+  Future<String> cameraPermission() => gate?.future ?? super.cameraPermission();
+}
 
 void main() {
   void phone(WidgetTester tester, {Size size = const Size(390, 844)}) {
@@ -24,28 +36,22 @@ void main() {
     device: FakeDevice(),
   );
 
-  /// The guide over a game that scores with [config].
-  Future<void> pumpGuide(WidgetTester tester, ScoringConfig config) async {
-    final s = services();
-    final game = GameController(
-      presage: s.presage,
-      speech: s.speech,
-      device: s.device,
-      settings: AppSettings(),
-      apiKey: s.apiKey,
+  /// The guide in an app whose game scores with [config].
+  Future<GameController> pumpGuide(
+    WidgetTester tester,
+    ScoringConfig config,
+  ) async {
+    final s = AppServices(
+      presage: FakePresage(),
+      speech: FakeSpeech(),
+      device: FakeDevice(),
       config: config,
     );
-    addTearDown(game.dispose);
     await tester.pumpWidget(
-      AppScope(
-        services: s,
-        child: GameScope(
-          game: game,
-          child: const MaterialApp(home: ScoreGuideScreen()),
-        ),
-      ),
+      SusApp(services: s, home: const ScoreGuideScreen()),
     );
     await tester.pump();
+    return s.game;
   }
 
   /// The labels of the #tag stamps drawn in [stress] (red) or teal ink.
@@ -95,6 +101,15 @@ void main() {
     );
     expect(find.textContaining('more than 40% of a question'), findsOneWidget);
     expect(find.textContaining('The first extra second is free'), findsOne);
+    expect(
+      find.textContaining('0 to 100, curved so a small reaction still shows.'),
+      findsOneWidget,
+    );
+    expect(
+      find.textContaining('running high or dipping just after the question'),
+      findsOneWidget,
+      reason: 'the early slowdown counts too (SPEC decision 63)',
+    );
     expect(
       find.textContaining(
         "Surprise, fear, contempt or disgust going past your highest in the "
@@ -193,5 +208,121 @@ void main() {
     }
     expect(tester.takeException(), isNull, reason: 'no overflow');
     expect(find.text('House rule'), findsOneWidget);
+  });
+
+  testWidgets('a curve, or no free pause, still reads right', (tester) async {
+    phone(tester, size: tall);
+    await pumpGuide(
+      tester,
+      const ScoringConfig(scoreExponent: 1, hesitationGraceS: 0),
+    );
+    expect(find.textContaining('0 to 100.'), findsOneWidget);
+    expect(find.textContaining('curved'), findsNothing);
+    expect(find.textContaining('0.15 pause)'), findsOneWidget);
+    expect(find.textContaining('pause)^'), findsNothing);
+    expect(find.textContaining('free'), findsNothing);
+
+    await pumpGuide(tester, const ScoringConfig(scoreExponent: 1.25));
+    expect(
+      find.textContaining('curved so it takes a big reaction to score high'),
+      findsOneWidget,
+    );
+    expect(find.textContaining('pause)^1.25'), findsOneWidget);
+  });
+
+  group('seams', () {
+    testWidgets('neither ? nor the gear opens over a show that is starting', (
+      tester,
+    ) async {
+      phone(tester);
+      final device = _SlowDevice();
+      final s = AppServices(
+        presage: FakePresage()..storedKey = 'k-1234',
+        speech: FakeSpeech(),
+        device: device,
+      );
+      await tester.pumpWidget(SusApp(services: s));
+      await tester.pump();
+      s.game.addPlayer('Sam');
+      s.game.addPlayer('Alex');
+      device.gate = Completer();
+      await tester.tap(find.text('Start the show'));
+      await tester.pump();
+      expect(find.text('Warming up…'), findsOneWidget);
+
+      await tester.tap(find.byTooltip("How it's scored"));
+      await tester.tap(find.byTooltip('Settings'));
+      await tester.pumpAndSettle();
+      expect(find.byType(ScoreGuideScreen), findsNothing);
+      expect(find.byType(SettingsScreen), findsNothing);
+
+      // The show starts in view, with nothing over it.
+      device.gate!.complete('granted');
+      await tester.pumpAndSettle();
+      expect(s.game.phase, GamePhase.howToPlay);
+      expect(find.text('How to play'), findsOneWidget);
+      expect(find.byType(ScoreGuideScreen), findsNothing);
+    });
+
+    testWidgets("the page doesn't rebuild when the game notifies", (
+      tester,
+    ) async {
+      phone(tester);
+      final game = await pumpGuide(tester, const ScoringConfig());
+      final before = tester.widget(find.byType(ListView));
+      game.setMode(GameMode.solo);
+      await tester.pump();
+      expect(game.mode, GameMode.solo, reason: 'the game did notify');
+      expect(identical(before, tester.widget(find.byType(ListView))), isTrue);
+    });
+
+    testWidgets('a double tap on ? opens one page', (tester) async {
+      phone(tester);
+      await tester.pumpWidget(SusApp(services: services()));
+      await tester.pump();
+      final at = tester.getCenter(find.byTooltip("How it's scored"));
+      await tester.tapAt(at);
+      await tester.pump(const Duration(milliseconds: 100));
+      await tester.tapAt(at);
+      await tester.pumpAndSettle();
+      expect(find.byType(ScoreGuideScreen), findsOneWidget);
+      await tester.tap(find.byTooltip('Back to lobby'));
+      await tester.pumpAndSettle();
+      expect(find.byType(ScoreGuideScreen), findsNothing);
+      expect(find.text('Start the show'), findsOneWidget);
+    });
+
+    testWidgets('leaving the app with the page open comes back to it', (
+      tester,
+    ) async {
+      phone(tester);
+      final presage = FakePresage();
+      final s = AppServices(
+        presage: presage,
+        speech: FakeSpeech(),
+        device: FakeDevice(),
+      );
+      await tester.pumpWidget(SusApp(services: s));
+      await tester.pump();
+      await tester.tap(find.byTooltip("How it's scored"));
+      await tester.pumpAndSettle();
+      // Flutter's order for a trip out and back (World.leaveApp).
+      for (final state in [
+        AppLifecycleState.inactive,
+        AppLifecycleState.hidden,
+        AppLifecycleState.paused,
+        AppLifecycleState.hidden,
+        AppLifecycleState.inactive,
+        AppLifecycleState.resumed,
+      ]) {
+        tester.binding.handleAppLifecycleStateChanged(state);
+        await tester.pump(const Duration(milliseconds: 200));
+      }
+      await tester.pumpAndSettle();
+      expect(s.game.phase, GamePhase.lobby);
+      expect(s.game.showPauseSheet, isFalse);
+      expect(find.byType(ScoreGuideScreen), findsOneWidget);
+      expect(presage.calls, isNot(contains('start')), reason: 'no camera');
+    });
   });
 }

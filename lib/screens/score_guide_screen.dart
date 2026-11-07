@@ -20,10 +20,18 @@ class ScoreGuideScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final c = GameScope.of(context).config;
+    // Through AppScope, not GameScope: the config never changes, so the page
+    // needn't rebuild every time the game notifies.
+    final c = AppScope.of(context).game.config;
     final quietS = (c.calibQuietMs / 1000).round();
     final noReadPct = ((1 - c.minCleanFraction) * 100).round();
     final grace = _grace(c.hesitationGraceS);
+    final curve = c.scoreExponent < 1
+        ? ', curved so a small reaction still shows'
+        : (c.scoreExponent > 1
+              ? ', curved so it takes a big reaction to score high'
+              : '');
+    final power = c.scoreExponent == 1 ? '' : '^${_w(c.scoreExponent)}';
     final others = [
       for (final l in ExpressionTagger.labels)
         if (!c.exprCategories.contains(l)) l,
@@ -85,8 +93,9 @@ class ScoreGuideScreen extends StatelessWidget {
                   name: 'Pulse',
                   weight: c.wPulse,
                   text:
-                      'Your heart rate rising or running high, compared with '
-                      'your warm-ups and your other answers.',
+                      'Your heart rate jumping, running high or dipping just '
+                      'after the question, compared with your warm-ups and '
+                      'your other answers.',
                 ),
                 _Signal(
                   icon: Icons.visibility_rounded,
@@ -109,9 +118,11 @@ class ScoreGuideScreen extends StatelessWidget {
                   icon: Icons.hourglass_bottom_rounded,
                   name: 'Pause',
                   weight: c.wHesitation,
-                  text:
-                      'Taking longer than usual to start answering. $grace '
-                      'free: real questions take more thought than warm-ups.',
+                  text: grace == null
+                      ? 'Taking longer than usual to start answering.'
+                      : 'Taking longer than usual to start answering. $grace '
+                            'free: real questions take more thought than '
+                            'warm-ups.',
                   last: true,
                 ),
               ],
@@ -122,8 +133,7 @@ class ScoreGuideScreen extends StatelessWidget {
               children: [
                 Text(
                   'Each signal scores 0 to 1. They are weighted as above, '
-                  'added up and turned into a score from 0 to 100, curved so '
-                  'a small reaction still shows.',
+                  'added up and turned into a score from 0 to 100$curve.',
                   style: SusText.body(15),
                 ),
                 const SizedBox(height: 12),
@@ -139,7 +149,7 @@ class ScoreGuideScreen extends StatelessWidget {
                 Text(
                   'For the curious: score = 100 × (${_w(c.wPulse)} pulse + '
                   '${_w(c.wBlink)} blinks + ${_w(c.wExpr)} expressions + '
-                  '${_w(c.wHesitation)} pause)^${_w(c.scoreExponent)}',
+                  '${_w(c.wHesitation)} pause)$power',
                   style: SusText.body(13, weight: FontWeight.w600),
                 ),
               ],
@@ -188,8 +198,10 @@ class ScoreGuideScreen extends StatelessWidget {
     );
   }
 
-  /// "The first extra second is", "The first extra 1.5 seconds are".
-  static String _grace(double s) {
+  /// "The first extra second is", "The first extra 1.5 seconds are", or
+  /// null when no pause is free.
+  static String? _grace(double s) {
+    if (s <= 0) return null;
     if (s == 1) return 'The first extra second is';
     final n = s == s.roundToDouble() ? '${s.round()}' : '$s';
     return 'The first extra $n seconds are';
