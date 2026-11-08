@@ -325,6 +325,52 @@ void main() {
       });
     });
 
+    test('a question that waits 20 minutes for the pulse stays cheap, and '
+        'starts within a pulse of the light coming back (decision 79)', () {
+      fakeAsync((async) {
+        final w = World(async);
+        w.heart = (_) => 72;
+        w.startGame(['Sam', 'Alex'], questions: 2);
+        w.calibrate();
+        w.askAndAnswer(); // warms up the JIT
+        w.code = 'TOO_DARK';
+        w.elapse(8000);
+        w.game.nextQuestion();
+        w.elapse(100);
+        expect(w.game.waitingForPulse, isTrue);
+        double usPerTick(int ms) {
+          final sw = Stopwatch()..start();
+          w.elapse(ms);
+          return sw.elapsedMicroseconds / (ms / 100);
+        }
+
+        final early = usPerTick(10000);
+        w.elapse(20 * 60000);
+        final late = usPerTick(10000);
+        expect(w.game.waitingForPulse, isTrue, reason: 'no timer');
+        expect(w.game.pulseWaitIsLong, isTrue);
+        // Nothing piles up while it waits: the stores are capped.
+        expect(
+          w.game.log.frames.length,
+          lessThanOrEqualTo(w.game.log.maxFrames),
+        );
+        expect(
+          w.game.log.trace.length,
+          lessThanOrEqualTo(w.game.log.maxTracePoints),
+        );
+        // Measured (JIT, cloud container): about the same as early.
+        expect(late, lessThan(2000), reason: '$late µs a tick ($early early)');
+        w.code = 'OK';
+        final back = w.now;
+        w.until(() => !w.game.waitingForPulse, maxMs: 2500);
+        expect(w.now - back, lessThanOrEqualTo(1200));
+        final r = w.askAndAnswer();
+        expect(r.scored, isTrue, reason: 'the wait never enters the window');
+        expect(r.timing!.tQ0, greaterThanOrEqualTo(back));
+        w.dispose();
+      });
+    });
+
     test('a 10-minute stream at 10 Hz ingests and scores quickly', () {
       final samples = synth(
         start: 0,

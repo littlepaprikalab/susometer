@@ -450,6 +450,27 @@ void main() {
       expect(f.cleanFraction, 1.0, reason: 'a sample every 4.5 s is enough');
     });
 
+    test('the grace never spans a camera stop (decision 79)', () {
+      // OK until 5 s, the camera stops, and the new session starts dark:
+      // its pulse at 5.6 s is 0.6 s after the old session's last OK.
+      final log = SignalLog(config: cfg);
+      for (final s in synth(start: 0, end: 5000, pulse: (_) => 70)) {
+        log.add(s);
+      }
+      for (final s in synth(start: 5100, end: 5500, status: 'idle')) {
+        log.add(s);
+      }
+      for (final s in synth(
+        start: 5600,
+        end: 6800,
+        pulse: (_) => 90,
+        code: (_) => 'TOO_DARK',
+      )) {
+        log.add(s);
+      }
+      expect(log.confidentPulse(5600, 6800), isEmpty);
+    });
+
     test('a long problem still stops the pulse after the grace', () {
       final log = SignalLog(config: cfg);
       for (final s in synth(

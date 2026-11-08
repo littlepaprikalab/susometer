@@ -22,7 +22,9 @@ Settings → **Signal check** → **Start both**. Allow microphone and speech re
 
 - [ ] The camera preview appears. **Is it mirrored like a selfie?** (Raise your right hand; it
   should appear on the right.)
-- [ ] BPM appears within ~20 s and "updated … s ago" keeps refreshing.
+- [ ] BPM appears within ~20 s and "updated … s ago" keeps refreshing. **Note the highest it gets
+  while you talk.** A reading counts as current for 5 s, so if it often passes 5 s, questions will
+  come out No clean read (decision 79).
 - [ ] Blinks count up; *Talking* says **YES** while you speak.
 - [ ] Validation reads **OK** in good light. Cover the camera: it changes, and returns when uncovered.
 - [ ] Speak: the transcript updates **while** the pulse keeps updating. (This is the milestone 1

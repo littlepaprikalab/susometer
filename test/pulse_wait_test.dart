@@ -214,6 +214,184 @@ void main() {
     });
   });
 
+  group('seams of the wait (decision 79)', () {
+    test("the room's chatter while it waits never becomes the question", () {
+      fakeAsync((async) {
+        final w = World(async);
+        w.startGame(['Sam', 'Alex'], questions: 2);
+        w.calibrate();
+        w.leaveApp(2000);
+        expect(w.game.waitingForPulse, isTrue);
+        // The room wonders aloud, all in one recognition segment, and the
+        // native newSegment is slow (a busy main thread): a partial of the
+        // old segment lands after the question starts.
+        w.speech.newSegmentTakesMs = 400;
+        w.say('why is it waiting');
+        w.elapse(1000);
+        w.say('why is it waiting so long');
+        w.waitForPulse();
+        w.say('why is it waiting so long oh there it goes');
+        w.elapse(500);
+        w.say('Have you ever cheated at cards?');
+        w.elapse(300);
+        expect(w.game.live.askerText, 'Have you ever cheated at cards?');
+        w.speech.newSegmentTakesMs = 0;
+        w.game.doneAsking();
+        w.elapse(1200);
+        w.talk(true);
+        w.elapse(300);
+        w.say('Never.');
+        w.elapse(2500);
+        w.talk(false);
+        w.elapse(800);
+        w.game.finalAnswer();
+        w.until(() => w.game.phase != GamePhase.settle);
+        expect(
+          w.game.currentResult!.question,
+          'Have you ever cheated at cards?',
+        );
+        expect(w.game.currentResult!.answer, 'Never.');
+        w.dispose();
+      });
+    });
+
+    test('chatter during the verdict never becomes the next question', () {
+      fakeAsync((async) {
+        final w = World(async);
+        w.startGame(['Sam', 'Alex'], questions: 3);
+        w.calibrate();
+        w.askAndAnswer();
+        w.say('ha that was so sus');
+        w.elapse(500);
+        w.speech.newSegmentTakesMs = 400;
+        w.game.nextQuestion();
+        w.elapse(100);
+        expect(w.game.waitingForPulse, isFalse);
+        w.say('ha that was so sus right');
+        w.elapse(500);
+        w.say('Have you ever ghosted someone?');
+        w.elapse(300);
+        expect(w.game.live.askerText, 'Have you ever ghosted someone?');
+        w.dispose();
+      });
+    });
+
+    test('a trip away during the wait waits for the new session; a long '
+        'one, then Skip from the sheet, moves on', () {
+      fakeAsync((async) {
+        final w = World(async);
+        w.startGame(['Sam', 'Alex'], questions: 3);
+        w.calibrate();
+        w.leaveApp(2000);
+        expect(w.game.waitingForPulse, isTrue);
+        w.elapse(8000);
+        // Another screenshot 8 s into the wait: the wait starts again, for
+        // the session the return starts.
+        w.leaveApp(2000);
+        expect(w.game.waitingForPulse, isTrue);
+        final back = w.now;
+        w.waitForPulse();
+        expect(w.now - back, greaterThan(w.pulseWarmupMs - 1000));
+        final r = w.askAndAnswer();
+        expect(r.scored, isTrue);
+        w.game.nextQuestion();
+        w.elapse(100);
+        // A long trip during the next wait, then Skip question on the sheet.
+        w.leaveApp(2000);
+        expect(w.game.waitingForPulse, isTrue);
+        w.leaveApp(GameController.autoResumeWithinMs + 5000);
+        expect(w.game.showPauseSheet, isTrue);
+        w.game.skipQuestion();
+        w.elapse(300);
+        expect(w.game.currentTurn.results.last.skipped, isTrue);
+        expect(w.game.questionIndex, 2);
+        expect(w.running, isTrue);
+        expect(w.game.waitingForPulse, isTrue, reason: 'a fresh camera');
+        w.waitForPulse();
+        expect(w.askAndAnswer().scored, isTrue);
+        w.dispose();
+      });
+    });
+
+    test('E5 during the wait: Try again waits for the pulse, then asks', () {
+      fakeAsync((async) {
+        final w = World(async);
+        w.startGame(['Sam', 'Alex'], questions: 2);
+        w.calibrate();
+        w.leaveApp(2000);
+        expect(w.game.waitingForPulse, isTrue);
+        // The camera goes quiet for good: three restarts, then E5.
+        w.emitting = false;
+        w.until(
+          () => w.game.phase == GamePhase.sdkOffline,
+          maxMs: 60000,
+          what: 'E5',
+        );
+        expect(w.game.waitingForPulse, isFalse);
+        w.emitting = true;
+        w.elapse(700);
+        w.game.retrySdk();
+        w.elapse(300);
+        expect(w.game.phase, GamePhase.ask);
+        expect(w.game.waitingForPulse, isTrue);
+        expect(w.game.tickerRunning, isTrue);
+        w.waitForPulse();
+        expect(w.askAndAnswer().scored, isTrue);
+        w.dispose();
+      });
+    });
+
+    test('End the show during the wait: the scores, and nothing left '
+        'waiting', () {
+      fakeAsync((async) {
+        final w = World(async);
+        w.startGame(['Sam', 'Alex'], questions: 3);
+        w.calibrate();
+        w.askAndAnswer();
+        w.game.nextQuestion();
+        w.elapse(100);
+        w.leaveApp(2000);
+        expect(w.game.waitingForPulse, isTrue);
+        w.game.pause();
+        w.game.endShowEarly();
+        w.elapse(300);
+        expect(w.game.phase, GamePhase.leaderboard);
+        expect(w.game.waitingForPulse, isFalse);
+        expect(w.running, isFalse);
+        final said = w.host.said.length;
+        w.elapse(20000);
+        expect(w.game.phase, GamePhase.leaderboard);
+        expect(
+          w.host.said.skip(said),
+          isNot(contains('Alex, ask your question!')),
+        );
+        w.dispose();
+      });
+    });
+
+    test('solo with the host voice off: the reading time starts when the '
+        'wait ends', () {
+      fakeAsync((async) {
+        final w = World(async);
+        w.settings.hostVoice = false;
+        w.game.setMode(GameMode.solo);
+        w.startGame(['Sam'], questions: 2);
+        w.calibrate();
+        w.waitForPulse();
+        w.leaveApp(2000);
+        expect(w.game.waitingForPulse, isTrue);
+        w.waitForPulse();
+        // The rough reading time (1.5 s plus 55 ms a character) runs from
+        // here, not from when the wait began 12 s ago.
+        w.elapse(1000);
+        expect(w.game.detector!.questionEnded, isFalse);
+        w.until(() => w.game.detector!.questionEnded, maxMs: 15000);
+        expect(w.game.shownPhase, GamePhase.ask, reason: 'the card stays up');
+        w.dispose();
+      });
+    });
+  });
+
   group('the gate allows a passing problem (decision 79)', () {
     /// A real party: the hot seat looks at the room 3 s of every 4 while a
     /// question runs, and the SDK's pulse comes every 2 s.

@@ -144,7 +144,13 @@ class SignalLog {
     final running = s.status == PresageStatus.running;
     final validation = s.validation;
     final okNow = running && (validation?.isOk ?? false);
-    if (okNow) _lastValidOkMs = s.tMs;
+    if (okNow) {
+      _lastValidOkMs = s.tMs;
+    } else if (!running) {
+      // A stopped camera ends the grace: the next session's picture owes
+      // nothing to the last one's.
+      _lastValidOkMs = null;
+    }
     // A pulse sample counts through a passing problem (a glance away, a
     // laugh): the SDK's own confidence says how good its 12 s of data was.
     // One that lasts longer drops the samples that arrive during it

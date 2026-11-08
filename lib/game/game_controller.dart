@@ -994,6 +994,10 @@ class GameController extends ChangeNotifier {
   /// is still a few seconds old while the restarted SDK has none yet.
   int _sdkStartedAtMs = 0;
 
+  /// Whether a waiting question would start on the next tick.
+  @visibleForTesting
+  bool get pulseReady => _pulseReady;
+
   /// A fresh confident pulse from this camera session.
   bool get _pulseReady {
     final last = log.lastConfidentPulseMs;
@@ -1022,6 +1026,7 @@ class GameController extends ChangeNotifier {
     questionText = mode == GameMode.solo
         ? (repeat ?? _questions.next(questionIndex, questionsPerTurn))
         : '';
+    _segmentFloor = _newestSegment;
     _waitingForPulse = !_pulseReady;
     pulseWaitSinceMs = nowMs;
     _setPhase(GamePhase.ask);
@@ -1032,6 +1037,8 @@ class GameController extends ChangeNotifier {
   /// or reads it (solo).
   void _askQuestion() {
     _waitingForPulse = false;
+    // What the room said while it waited stays out of the question.
+    _segmentFloor = _newestSegment;
     detector = TurnDetector(
       party: mode == GameMode.party,
       startMs: nowMs,
@@ -1932,8 +1939,21 @@ class GameController extends ChangeNotifier {
 
   /// Files recognized text under the question or the answer by segment
   /// (SPEC.md §7). Transcripts stay in memory only.
+  /// The newest recognition segment heard so far.
+  int? _newestSegment;
+
+  /// A question's text starts after this segment: the newest one heard when
+  /// the question began and again when its wait for the pulse ended. A
+  /// segment's partials each carry everything said in it so far, so one
+  /// that lands after the question starts, before its own segment opens
+  /// (`newSegment` is a native round trip), would bring the room's chatter
+  /// from the verdict or the wait in as the question.
+  int? _segmentFloor;
+
   void _onSpeechText(SpeechText e) {
     if (!micEnabled) return;
+    final newest = _newestSegment;
+    if (newest == null || e.segment > newest) _newestSegment = e.segment;
     if (phase != GamePhase.ask &&
         phase != GamePhase.answer &&
         phase != GamePhase.settle) {
@@ -1943,6 +1963,8 @@ class GameController extends ChangeNotifier {
     if (waitingForPulse) return;
     final askerFrom = _askerFromSeg;
     if (askerFrom != null && e.segment < askerFrom) return;
+    final floor = _segmentFloor;
+    if (askerFrom == null && floor != null && e.segment <= floor) return;
     final answerFrom = _answerFromSeg;
     // Text from before the answer's segment is the tail of the question.
     // In solo mode there's no human asker: early speech is the answer.

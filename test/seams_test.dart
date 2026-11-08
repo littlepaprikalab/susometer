@@ -167,6 +167,32 @@ void main() {
       expect(w.game.calibStage, CalibStage.ready);
     }
 
+    test('E5 while waiting on Start, then Start at once: question 1 waits '
+        'for the new session\'s pulse (decision 79)', () {
+      fakeAsync((async) {
+        final w = World(async);
+        w.startGame(['Sam', 'Alex']);
+        toReady(w);
+        w.emitting = false;
+        w.until(
+          () => w.game.phase == GamePhase.sdkOffline,
+          maxMs: 60000,
+          what: 'E5',
+        );
+        w.emitting = true;
+        w.elapse(700);
+        w.game.retrySdk();
+        w.elapse(700);
+        expect(w.game.calibStage, CalibStage.ready);
+        w.game.startQuestions();
+        expect(w.game.phase, GamePhase.ask);
+        expect(w.game.waitingForPulse, isTrue);
+        w.waitForPulse();
+        expect(w.askAndAnswer().scored, isTrue);
+        w.dispose();
+      });
+    });
+
     test('a trip away while waiting on Start keeps the locked-in normal', () {
       fakeAsync((async) {
         final w = World(async);

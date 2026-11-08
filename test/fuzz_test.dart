@@ -268,6 +268,9 @@ void abuse(
 /// When each world's turn was first seen without its ticker.
 final _stalledSince = Expando<int>();
 
+/// When each world was first seen waiting for a pulse it already had.
+final _readySince = Expando<int>();
+
 void checkInvariants(World w, List<Object> errors, String where) {
   final g = w.game;
   if (errors.isNotEmpty) fail('$where: uncaught error ${errors.first}');
@@ -283,6 +286,22 @@ void checkInvariants(World w, List<Object> errors, String where) {
     );
   } else {
     _stalledSince[w] = null;
+  }
+  // The wait for the pulse (decision 79): nothing is timed while it waits,
+  // and once the pulse is there the question starts on the next tick.
+  if (g.waitingForPulse) {
+    expect(g.phase, GamePhase.ask, reason: where);
+    expect(g.detector, isNull, reason: '$where: timed while waiting');
+  }
+  if (g.waitingForPulse && g.pulseReady && !g.paused && g.tickerRunning) {
+    final since = _readySince[w] ??= w.now;
+    expect(
+      w.now - since,
+      lessThanOrEqualTo(200),
+      reason: '$where: still waiting with a fresh pulse',
+    );
+  } else {
+    _readySince[w] = null;
   }
   // Live changes wait for a tick only while there is one: held back with no
   // ticker, the camera screens would freeze (SPEC.md decision 78).
