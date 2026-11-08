@@ -399,18 +399,93 @@ void main() {
       expect(f.meanPulse, closeTo(70, 0.01));
     });
 
-    test('pulse that arrives while validation is not OK is ignored', () {
+    test('pulse that arrives deep into a validation problem is ignored', () {
+      // OK until 49.9 s, then 6 s of motion: the samples at 50.1 and 51.1 s
+      // are within the grace, the ones at 52.1–55.1 s aren't (decision 79).
       final (log, base) = calmBaseline();
       for (final s in synth(
         start: 40100,
         end: 70000,
-        pulse: (t) => t >= 50000 && t < 56000 ? 130 : 70,
+        pulse: (t) => t >= 52000 && t < 56000 ? 130 : 70,
         code: (t) => t >= 50000 && t < 56000 ? 'EXCESSIVE_MOTION' : 'OK',
       )) {
         log.add(s);
       }
       final f = scoring.features(log, timing(), base);
       expect(f.meanPulse, closeTo(70, 0.01));
+      expect(log.confidentPulse(50000, 56000).map((p) => p.tMs), [
+        50100,
+        51100,
+      ]);
+    });
+
+    test('a passing problem keeps its pulse samples (decision 79)', () {
+      // A glance away or a laugh: 1.5 s of a code every 3 s, all through
+      // the question. The old gate dropped every sample that landed on one.
+      final (log, base) = calmBaseline();
+      addQuestion(
+        log,
+        pulse: 72,
+        code: (t) => t >= 50000 && t % 3000 < 1500 ? 'FACE_NOT_FORWARD' : 'OK',
+      );
+      final t = timing();
+      final f = scoring.features(log, t, base);
+      expect(f.confidentPulseSamples, 15, reason: 'one a second, 50–65 s');
+      expect(f.cleanFraction, 1.0);
+      expect(scoring.isClean(f), isTrue);
+    });
+
+    test('a confident pulse stays current for 5 s', () {
+      final (log, base) = calmBaseline();
+      for (final s in synth(
+        start: 40100,
+        end: 70000,
+        pulse: (t) => 70,
+        pulseEveryMs: 4500,
+      )) {
+        log.add(s);
+      }
+      final f = scoring.features(log, timing(), base);
+      expect(cfg.pulseFreshMs, 5000);
+      expect(f.cleanFraction, 1.0, reason: 'a sample every 4.5 s is enough');
+    });
+
+    test('the grace never spans a camera stop (decision 79)', () {
+      // OK until 5 s, the camera stops, and the new session starts dark:
+      // its pulse at 5.6 s is 0.6 s after the old session's last OK.
+      final log = SignalLog(config: cfg);
+      for (final s in synth(start: 0, end: 5000, pulse: (_) => 70)) {
+        log.add(s);
+      }
+      for (final s in synth(start: 5100, end: 5500, status: 'idle')) {
+        log.add(s);
+      }
+      for (final s in synth(
+        start: 5600,
+        end: 6800,
+        pulse: (_) => 90,
+        code: (_) => 'TOO_DARK',
+      )) {
+        log.add(s);
+      }
+      expect(log.confidentPulse(5600, 6800), isEmpty);
+    });
+
+    test('a long problem still stops the pulse after the grace', () {
+      final log = SignalLog(config: cfg);
+      for (final s in synth(
+        start: 0,
+        end: 20000,
+        pulse: (_) => 70,
+        code: (t) => t >= 5000 ? 'TOO_DARK' : 'OK',
+      )) {
+        log.add(s);
+      }
+      // Last OK at 4.9 s; samples at 5 and 6 s count, 7 s on don't.
+      expect(log.lastConfidentPulseMs, 6000);
+      expect(log.pulseFreshAt(11000), isTrue);
+      expect(log.pulseFreshAt(11100), isFalse);
+      expect(log.cleanFraction(12000, 20000), 0);
     });
 
     test('losing the face for most of the window means No clean read', () {

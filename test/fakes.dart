@@ -128,9 +128,16 @@ class FakeSpeech implements SpeechApi {
 
   int segment = 0;
 
+  /// How long the native newSegment takes. Until it returns, the old
+  /// segment is still the current one: its partials keep coming.
+  int newSegmentTakesMs = 0;
+
   @override
   Future<int?> newSegment() async {
     calls.add('newSegment');
+    if (newSegmentTakesMs > 0) {
+      await Future<void>.delayed(Duration(milliseconds: newSegmentTakesMs));
+    }
     return ++segment;
   }
 }

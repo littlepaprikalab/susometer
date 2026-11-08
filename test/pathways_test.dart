@@ -14,6 +14,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:susometer/game/decks.dart';
 import 'package:susometer/game/game_controller.dart';
 import 'package:susometer/game/models.dart';
+import 'package:susometer/game_root.dart';
 import 'package:susometer/presage/camera_preview.dart';
 import 'package:susometer/presage/presage_models.dart';
 import 'package:susometer/screens/intro_screens.dart';
@@ -533,6 +534,91 @@ void main() {
     expect(find.text('Paused'), findsNothing);
     expect(rig.presage.running, isTrue);
     expect(rig.game.phase, GamePhase.ask);
+    await rig.finish();
+  });
+
+  testWidgets('after a screenshot mid-question, the question waits for the '
+      'pulse on screen (decision 79)', (tester) async {
+    // The longest name the lobby takes but one, so the copy is checked
+    // where it's tightest.
+    const longName = 'Christopher-Alexand';
+    final rig = Rig(tester);
+    // Whole on both phones at both text sizes: no line of the wait's copy
+    // cut.
+    Future<void> expectWhole(List<String> texts) async {
+      for (final screen in const [Size(390, 844), Size(375, 667)]) {
+        for (final scale in [1.0, 1.3]) {
+          useRealPhone(tester, screen);
+          tester.platformDispatcher.textScaleFactorTestValue = scale;
+          await tester.pump();
+          for (final text in [
+            ...texts,
+            "Finding $longName's pulse…",
+            'Finding the pulse…',
+            'Sit still and look at the camera',
+          ]) {
+            expect(
+              find.ancestor(
+                of: find.text(text),
+                matching: find.byType(ClipRect),
+              ),
+              findsNothing,
+              reason: '"$text" was cut at ×$scale on $screen',
+            );
+          }
+        }
+      }
+      tester.platformDispatcher.clearTextScaleFactorTestValue();
+      useRealPhone(tester, const Size(390, 844));
+      await tester.pump();
+    }
+
+    await rig.pumpApp();
+    await rig.startParty([longName, 'Alex']);
+    await rig.tap('I agree, measure me');
+    await rig.until(() => rig.game.phase == GamePhase.ask, what: 'question 1');
+    expect(find.text('Done asking'), findsOneWidget);
+    // A screenshot's preview: the camera restarts, with no pulse for 12 s.
+    await rig.leaveApp(2000);
+    expect(rig.game.waitingForPulse, isTrue);
+    expect(find.text("Finding $longName's pulse…"), findsOneWidget);
+    expect(
+      find.text("The question starts once the camera has $longName's pulse."),
+      findsOneWidget,
+    );
+    expect(find.text('Finding the pulse…'), findsOneWidget);
+    expect(find.text('Sit still and look at the camera'), findsOneWidget);
+    expect(find.text('Done asking'), findsNothing);
+    expect(find.text('Alex, ask your question!'), findsNothing);
+    expect(find.bySemanticsLabel('Pause the game'), findsOneWidget);
+    await checkScreen(tester, 'ask-hold');
+    await expectWhole([
+      "The question starts once the camera has $longName's pulse.",
+    ]);
+    // A dark room: the pulse doesn't come, and after a while the card says
+    // what to do; the camera stamps the problem.
+    rig.presage.code = 'TOO_DARK';
+    await rig.wait(rig.game.config.pulseWaitHintAfterMs + 500);
+    expect(rig.game.waitingForPulse, isTrue);
+    const long =
+        'Still no pulse. Face the light and hold still, or Pause to skip.';
+    expect(find.text(long), findsOneWidget);
+    expect(find.text('Too dark'), findsOneWidget, reason: 'E3 stamp');
+    await checkScreen(tester, 'ask-hold-long');
+    await expectWhole([long]);
+    // The light comes back: the question starts, and a tap meant for the
+    // wait's status can't land on Done asking in its place.
+    rig.presage.code = 'OK';
+    await rig.until(() => !rig.game.waitingForPulse, maxMs: 2500);
+    await tester.pump();
+    expect(
+      tester.widget<IgnorePointer>(find.byKey(phaseTapGuardKey)).ignoring,
+      isTrue,
+      reason: 'the tap guard covers the end of the wait',
+    );
+    expect(find.text('Alex, ask your question!'), findsOneWidget);
+    await rig.tap('Done asking');
+    expect(rig.game.phase, GamePhase.answer);
     await rig.finish();
   });
 
@@ -1340,6 +1426,12 @@ void main() {
     await rig.leaveApp(3000);
     expect(rig.game.phase, GamePhase.ask);
     expect(rig.game.tickerRunning, isTrue);
+    // The camera restarted, so the question waits for its pulse (decision
+    // 79): one frame per tick there too.
+    expect(rig.game.waitingForPulse, isTrue);
+    await expectOneFramePerTick(rig, 'waiting for the pulse');
+    await rig.until(() => !rig.game.waitingForPulse, what: 'the pulse');
+    await rig.wait(1000);
     await expectOneFramePerTick(rig, 'ask after a trip away');
     rig.say('banana');
     await tester.pump(const Duration(milliseconds: 100));
@@ -1353,6 +1445,7 @@ void main() {
       () => rig.game.phase == GamePhase.ask && rig.game.live.sample != null,
       what: 'camera back',
     );
+    await rig.until(() => !rig.game.waitingForPulse, what: 'the pulse');
     await rig.wait(1000);
     await expectOneFramePerTick(rig, 'ask after the camera restarted');
 

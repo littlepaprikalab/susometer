@@ -74,7 +74,10 @@ class HotSeatScreen extends StatelessWidget {
     // Solo keeps the question card up until the player is ready.
     final shown = game.shownPhase;
     final answering = shown == GamePhase.answer || shown == GamePhase.settle;
-    final host = answering
+    final waiting = game.waitingForPulse;
+    final host = waiting
+        ? "Finding $name's pulse…"
+        : answering
         ? '$name, your answer?'
         : solo
         ? "Here's one for you, $name…"
@@ -89,7 +92,9 @@ class HotSeatScreen extends StatelessWidget {
           const SizedBox(height: 14),
           SizedBox(
             height: _cardHeight,
-            child: answering
+            child: waiting
+                ? _PulseWaitCard(game: game)
+                : answering
                 ? _AnswerCard(game: game)
                 : solo
                 ? _SoloQuestionCard(game: game)
@@ -252,6 +257,7 @@ class _Actions extends StatelessWidget {
       ],
     );
 
+    if (game.waitingForPulse) return beside(_PulseWaitStatus(game: game));
     switch (game.shownPhase) {
       case GamePhase.settle:
         return beside(_SettleCard(game: game));
@@ -635,6 +641,93 @@ class _FinalAnswerButton extends StatelessWidget {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// The question waits until the camera has a fresh pulse (SPEC.md
+/// decision 79), in the card's slot: why nothing's being asked yet.
+class _PulseWaitCard extends StatelessWidget {
+  const _PulseWaitCard({required this.game});
+
+  final GameController game;
+
+  @override
+  Widget build(BuildContext context) {
+    final name = game.currentPlayer.name;
+    final text = game.pulseWaitIsLong
+        ? 'Still no pulse. Face the light and hold still, or Pause to skip.'
+        : "The question starts once the camera has $name's pulse.";
+    return _TranscriptCard(
+      children: [
+        Row(
+          children: [
+            const Icon(Icons.favorite_border_rounded, size: 17),
+            const SizedBox(width: 6),
+            Expanded(
+              child: Text(
+                'Hang on · no question yet',
+                style: SusText.label(13),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 10),
+        Expanded(
+          child: Semantics(
+            liveRegion: true,
+            child: FitText(
+              text,
+              sizes: const [22, 18, 16],
+              overflow: FitOverflow.keepStart,
+              style: (size) => SusText.display(size, color: SusColors.brown),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// The bottom row while the question waits: nothing to tap but Pause.
+class _PulseWaitStatus extends StatelessWidget {
+  const _PulseWaitStatus({required this.game});
+
+  final GameController game;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: _actionsHeight - 6,
+      margin: const EdgeInsets.only(bottom: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+      decoration: BoxDecoration(
+        color: SusColors.cream,
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: SusColors.ink, width: SusShape.borderWidth),
+      ),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Flexible(
+            flex: 2,
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Text('Finding the pulse…', style: SusText.display(19)),
+            ),
+          ),
+          const SizedBox(height: 2),
+          Flexible(
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Text(
+                'Sit still and look at the camera',
+                style: SusText.body(13, weight: FontWeight.w600),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

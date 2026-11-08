@@ -62,10 +62,11 @@ status (face position, lighting, motion).
   (*Done asking*, *Final answer*, *Reveal*), because a party is too noisy for silence detection.
   The timing still comes from the voice and the camera: the pause is counted from the asker's last
   words, and a late *Final answer* doesn't stretch the answer.
-- **Never a fake verdict:** low-confidence pulse samples, and anything captured while validation
-  isn't OK, are ignored. If less than 60% of the window is clean, the show says **No clean read**
-  and explains why with the actual validation hints ("The camera lost Sam's face for about
-  5 seconds").
+- **Never a fake verdict:** low-confidence pulse samples, and pulse that arrives more than 2 s
+  into a validation problem, are ignored. If less than 60% of the window is clean, the show says
+  **No clean read** and explains why with the actual validation hints ("The camera lost Sam's
+  face for about 5 seconds"). After a camera restart, a question waits until the pulse is back
+  instead of starting blind.
 - **Live feedback:** validation issues are stamped right on the camera ("Too dark", with "Face a
   lamp or window." underneath), and the reading resumes when they clear.
 

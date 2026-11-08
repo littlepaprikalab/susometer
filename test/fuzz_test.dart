@@ -171,8 +171,13 @@ void abuse(
     (
       fw(2, 1),
       () {
+        // Biased: now and then a bad stretch. A lost face spoils a reading
+        // at once; a dark room only once it outlasts the pulse's grace and
+        // freshness (decision 79), so both are in.
         w.code = biased
-            ? (rng.nextInt(8) == 0 ? 'TOO_DARK' : 'OK')
+            ? (rng.nextInt(8) == 0
+                  ? (rng.nextBool() ? 'TOO_DARK' : 'NO_FACE_FOUND')
+                  : 'OK')
             : const [
                 'OK',
                 'OK',
@@ -180,6 +185,17 @@ void abuse(
                 'EXCESSIVE_MOTION',
                 'NO_FACE_FOUND',
               ][rng.nextInt(5)];
+      },
+    ),
+    // The player leaves the frame for a while: long enough to spoil a
+    // reading even with the pulse's grace (decision 79), so No clean read
+    // still comes up.
+    (
+      fw(1, 1),
+      () {
+        w.code = 'NO_FACE_FOUND';
+        w.elapse(6000 + rng.nextInt(10000));
+        w.code = 'OK';
       },
     ),
     (
@@ -252,6 +268,9 @@ void abuse(
 /// When each world's turn was first seen without its ticker.
 final _stalledSince = Expando<int>();
 
+/// When each world was first seen waiting for a pulse it already had.
+final _readySince = Expando<int>();
+
 void checkInvariants(World w, List<Object> errors, String where) {
   final g = w.game;
   if (errors.isNotEmpty) fail('$where: uncaught error ${errors.first}');
@@ -267,6 +286,22 @@ void checkInvariants(World w, List<Object> errors, String where) {
     );
   } else {
     _stalledSince[w] = null;
+  }
+  // The wait for the pulse (decision 79): nothing is timed while it waits,
+  // and once the pulse is there the question starts on the next tick.
+  if (g.waitingForPulse) {
+    expect(g.phase, GamePhase.ask, reason: where);
+    expect(g.detector, isNull, reason: '$where: timed while waiting');
+  }
+  if (g.waitingForPulse && g.pulseReady && !g.paused && g.tickerRunning) {
+    final since = _readySince[w] ??= w.now;
+    expect(
+      w.now - since,
+      lessThanOrEqualTo(200),
+      reason: '$where: still waiting with a fresh pulse',
+    );
+  } else {
+    _readySince[w] = null;
   }
   // Live changes wait for a tick only while there is one: held back with no
   // ticker, the camera screens would freeze (SPEC.md decision 78).

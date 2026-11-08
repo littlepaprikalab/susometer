@@ -410,6 +410,7 @@ class GameController extends ChangeNotifier {
 
   void _setPhase(GamePhase p) {
     phase = p;
+    if (p != GamePhase.ask) _waitingForPulse = false;
     // No camera, no expression or camera problem: covers every way out of a
     // turn (E5, the lobby, the next player's consent), stopped cleanly or
     // not.
@@ -654,6 +655,8 @@ class GameController extends ChangeNotifier {
     if (_awayStop case final stopping?) {
       await stopping.timeout(_awayStopWait, onTimeout: () {});
     }
+    // Anything the SDK measures from here on is this session's.
+    _sdkStartedAtMs = nowMs;
     try {
       try {
         await presage.reset();
@@ -969,16 +972,44 @@ class GameController extends ChangeNotifier {
         : '${asker.name}, ask your question!';
   }
 
+  /// The question waits until the camera has a fresh confident pulse
+  /// (SPEC.md decision 79). After the camera restarts (it froze, the app was
+  /// away, E5 Try again) the SDK needs 12 s or more for its first pulse, and
+  /// after Call it! the phone may have been pointing at the room: a question
+  /// asked meanwhile can't be read, so it came out No clean read every time.
+  /// Nothing is timed and no tap but Pause does anything while it waits.
+  bool get waitingForPulse => _waitingForPulse && phase == GamePhase.ask;
+  bool _waitingForPulse = false;
+
+  /// When the current wait began.
+  int pulseWaitSinceMs = 0;
+
+  /// The wait has lasted long enough that the screen suggests what to do.
+  bool get pulseWaitIsLong =>
+      waitingForPulse &&
+      nowMs - pulseWaitSinceMs >= config.pulseWaitHintAfterMs;
+
+  /// When the current camera session was started. A pulse from before it
+  /// doesn't end the wait: after a short trip out of the app, the last one
+  /// is still a few seconds old while the restarted SDK has none yet.
+  int _sdkStartedAtMs = 0;
+
+  /// Whether a waiting question would start on the next tick.
+  @visibleForTesting
+  bool get pulseReady => _pulseReady;
+
+  /// A fresh confident pulse from this camera session.
+  bool get _pulseReady {
+    final last = log.lastConfidentPulseMs;
+    return last != null && last >= _sdkStartedAtMs && log.pulseFreshAt(nowMs);
+  }
+
   void _beginQuestion({String? repeat}) {
     // Whatever the host was still saying (a verdict line, or the question
     // being re-asked after a camera restart or a skip) stops here, so the
     // new reading doesn't queue behind it with the mic gated.
     unawaited(host.stopSpeaking().catchError((Object _) {}));
-    detector = TurnDetector(
-      party: mode == GameMode.party,
-      startMs: nowMs,
-      config: _turnConfig,
-    );
+    detector = null;
     questionStartMs = nowMs;
     settleUntilMs = null;
     currentResult = null;
@@ -990,10 +1021,32 @@ class GameController extends ChangeNotifier {
     _earlySeq++;
     _soloReady = false;
     live.resetQuestion();
+    // Solo's card is dealt now, so a camera restart during the wait asks
+    // the same one.
     questionText = mode == GameMode.solo
         ? (repeat ?? _questions.next(questionIndex, questionsPerTurn))
         : '';
+    _segmentFloor = _newestSegment;
+    _waitingForPulse = !_pulseReady;
+    pulseWaitSinceMs = nowMs;
     _setPhase(GamePhase.ask);
+    if (!_waitingForPulse) _askQuestion();
+  }
+
+  /// The question starts: its window opens and the host asks for it (party)
+  /// or reads it (solo).
+  void _askQuestion() {
+    _waitingForPulse = false;
+    // What the room said while it waited stays out of the question.
+    _segmentFloor = _newestSegment;
+    detector = TurnDetector(
+      party: mode == GameMode.party,
+      startMs: nowMs,
+      config: _turnConfig,
+    );
+    questionStartMs = nowMs;
+    live.resetQuestion();
+    notifyListeners();
     if (mode == GameMode.party) unawaited(_say(askLine));
     if (micEnabled) {
       unawaited(
@@ -1023,7 +1076,7 @@ class GameController extends ChangeNotifier {
 
   /// Solo "Different question", while the question is on screen.
   void differentQuestion() {
-    if (mode != GameMode.solo || paused) return;
+    if (mode != GameMode.solo || paused || waitingForPulse) return;
     if (phase != GamePhase.ask && !soloHoldsQuestion) return;
     if (!_once('differentQuestion')) return;
     _beginQuestion();
@@ -1032,7 +1085,7 @@ class GameController extends ChangeNotifier {
   /// Solo "Ready to answer": show the answer screen. Tapped while the host
   /// is still reading, it ends the question there, like starting to talk.
   void readyToAnswer() {
-    if (mode != GameMode.solo || paused) return;
+    if (mode != GameMode.solo || paused || waitingForPulse) return;
     if (phase == GamePhase.ask) {
       _soloReady = true;
       unawaited(host.stopSpeaking());
@@ -1886,15 +1939,32 @@ class GameController extends ChangeNotifier {
 
   /// Files recognized text under the question or the answer by segment
   /// (SPEC.md §7). Transcripts stay in memory only.
+  /// The newest recognition segment heard so far.
+  int? _newestSegment;
+
+  /// A question's text starts after this segment: the newest one heard when
+  /// the question began and again when its wait for the pulse ended. A
+  /// segment's partials each carry everything said in it so far, so one
+  /// that lands after the question starts, before its own segment opens
+  /// (`newSegment` is a native round trip), would bring the room's chatter
+  /// from the verdict or the wait in as the question.
+  int? _segmentFloor;
+
   void _onSpeechText(SpeechText e) {
     if (!micEnabled) return;
+    final newest = _newestSegment;
+    if (newest == null || e.segment > newest) _newestSegment = e.segment;
     if (phase != GamePhase.ask &&
         phase != GamePhase.answer &&
         phase != GamePhase.settle) {
       return;
     }
+    // The room talking while the camera finds the pulse isn't the question.
+    if (waitingForPulse) return;
     final askerFrom = _askerFromSeg;
     if (askerFrom != null && e.segment < askerFrom) return;
+    final floor = _segmentFloor;
+    if (askerFrom == null && floor != null && e.segment <= floor) return;
     final answerFrom = _answerFromSeg;
     // Text from before the answer's segment is the tail of the question.
     // In solo mode there's no human asker: early speech is the answer.
@@ -1952,6 +2022,12 @@ class GameController extends ChangeNotifier {
       case GamePhase.calibrate:
         _tickCalibration(now);
       case GamePhase.ask:
+        if (_waitingForPulse) {
+          if (_pulseReady) _askQuestion();
+          // The wait's hint shows after a while.
+          notifyListeners();
+          break;
+        }
         // Host voice off: the solo question "ends" after a rough reading
         // time. Only the measurement moves on; the card stays up.
         if (mode == GameMode.solo &&

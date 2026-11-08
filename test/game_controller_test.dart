@@ -1003,7 +1003,20 @@ void main() {
       w.game.askAgain();
       expect(w.game.phase, GamePhase.ask);
       expect(w.game.questionIndex, 0);
+      // Still no face, so no pulse: the question waits instead of running
+      // into another No clean read (decision 79), and its taps do nothing.
+      expect(w.game.waitingForPulse, isTrue);
       w.game.doneAsking();
+      w.game.finalAnswer();
+      w.elapse(5000);
+      expect(w.game.phase, GamePhase.ask);
+      expect(w.game.detector, isNull);
+      // The face is back: the question starts within a pulse sample or two.
+      w.code = 'OK';
+      w.until(() => !w.game.waitingForPulse, maxMs: 2500);
+      expect(w.host.said.last, 'Alex, ask your question!');
+      w.game.doneAsking();
+      w.code = 'NO_FACE_FOUND';
       w.elapse(500);
       w.game.finalAnswer();
       w.until(() => w.game.phase != GamePhase.settle);
@@ -1435,6 +1448,17 @@ void main() {
       w.emitting = false;
       w.elapse(6500);
       w.emitting = true;
+      // The restarted SDK has no pulse yet: the question waits, unread, and
+      // its buttons do nothing (decision 79).
+      w.elapse(1000);
+      expect(w.game.waitingForPulse, isTrue);
+      expect(w.host.said.length - 1, first, reason: 'not read while waiting');
+      w.game.readyToAnswer();
+      w.game.differentQuestion();
+      w.elapse(700);
+      expect(w.game.phase, GamePhase.ask);
+      expect(w.game.detector, isNull);
+      w.waitForPulse();
       final second = w.host.said.length - 1;
       expect(second, greaterThan(first), reason: 'the question was re-asked');
       expect(w.host.said[second], w.host.said[first]);
