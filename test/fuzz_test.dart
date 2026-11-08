@@ -268,6 +268,13 @@ void checkInvariants(World w, List<Object> errors, String where) {
   } else {
     _stalledSince[w] = null;
   }
+  // Live changes wait for a tick only while there is one: held back with no
+  // ticker, the camera screens would freeze (SPEC.md decision 78).
+  expect(
+    g.live.batched,
+    g.tickerRunning,
+    reason: '$where: live batching out of step with the ticker',
+  );
   if (needsTurns.contains(g.phase)) {
     expect(g.turns, isNotEmpty, reason: '$where: ${g.phase} without a game');
     expect(

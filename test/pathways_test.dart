@@ -3,6 +3,7 @@
 // targets (iOS), labelled tap targets, and WCAG text contrast measured on
 // the rendered pixels.
 
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math' as math;
@@ -20,6 +21,7 @@ import 'package:susometer/settings/app_settings.dart';
 import 'package:susometer/theme/expression_stamp.dart';
 import 'package:susometer/theme/game_widgets.dart';
 import 'package:susometer/theme/tokens.dart';
+import 'package:susometer/voice/speech_service.dart';
 
 import 'rig.dart';
 
@@ -146,6 +148,51 @@ extension on Rig {
     await wait(300);
     if (game.phase == GamePhase.howToPlay) await tap("Got it, let's play");
   }
+}
+
+/// Frames drawn in [seconds] of 60 Hz vsyncs while the room talks, as on a
+/// phone: a new mic level every 100 ms, out of step with the snapshots, and
+/// a longer partial transcript every 330 ms. A vsync draws a frame only if
+/// something asked for one since the last.
+Future<int> framesWhileTalking(Rig rig, {int seconds = 3}) async {
+  final tester = rig.tester;
+  var n = 0;
+  Timer? levels;
+  final offset = Timer(const Duration(milliseconds: 37), () {
+    levels = Timer.periodic(const Duration(milliseconds: 100), (_) {
+      n++;
+      rig.speech.controller.add(
+        SpeechLevel(0.2 + 0.1 * (n % 7), rig.presage.now),
+      );
+    });
+  });
+  var words = 0;
+  final partials = Timer.periodic(const Duration(milliseconds: 330), (_) {
+    words++;
+    rig.say(List.filled(words, 'maybe').join(' '));
+  });
+  var frames = 0;
+  for (var i = 0; i < seconds * 60; i++) {
+    await tester.binding.delayed(const Duration(microseconds: 16667));
+    if (tester.binding.hasScheduledFrame) {
+      frames++;
+      await tester.pump();
+    }
+  }
+  offset.cancel();
+  levels?.cancel();
+  partials.cancel();
+  return frames;
+}
+
+/// [framesWhileTalking] for 2 s, checked to be one frame per 100 ms tick.
+Future<void> expectOneFramePerTick(Rig rig, String where) async {
+  final frames = await framesWhileTalking(rig, seconds: 2);
+  expect(
+    frames,
+    inInclusiveRange(16, 24),
+    reason: '$where drew $frames frames in 2 s',
+  );
 }
 
 void main() {
@@ -1176,6 +1223,170 @@ void main() {
     expect(find.semantics.byLabel('Final answer'), findsNothing);
     expect(find.semantics.byLabel('Resume'), findsNothing);
     handle.dispose();
+    await rig.finish();
+  });
+
+  testWidgets('the camera screens draw once per tick while the room talks', (
+    tester,
+  ) async {
+    // Every frame drawn over the native camera preview takes time on the
+    // iOS main thread, where the SDK also hands over each camera frame (and
+    // queues them rather than drop one). The mic bars used to animate each
+    // 100 ms level for 90 ms, so with anyone talking the question screens
+    // drew on nearly every vsync (174 of 180 here; twice that at 120 Hz),
+    // and the snapshots, mic level and transcript each drew on their own.
+    final rig = Rig(tester);
+    await rig.pumpApp();
+    await rig.startParty(['Sam', 'Alex']);
+    await rig.tap('I agree, measure me');
+    await rig.until(
+      () => rig.game.currentWarmup != null,
+      what: 'first warm-up',
+    );
+    final calibrate = await framesWhileTalking(rig);
+    expect(rig.game.phase, GamePhase.calibrate);
+    await rig.until(() => rig.game.phase == GamePhase.ask);
+    await rig.wait(1000);
+    final ask = await framesWhileTalking(rig);
+    expect(rig.game.phase, GamePhase.ask);
+    // Still live: the asker's words so far are on the card.
+    expect(find.textContaining('maybe maybe maybe'), findsOneWidget);
+    rig.game.doneAsking();
+    await rig.wait(1000);
+    rig.presage.talk(true);
+    await rig.wait(500);
+    final answer = await framesWhileTalking(rig);
+    expect(rig.game.phase, GamePhase.answer);
+    // 3 s at one frame per 100 ms tick is 30.
+    for (final (name, frames) in [
+      ('calibration', calibrate),
+      ('ask', ask),
+      ('answer', answer),
+    ]) {
+      expect(
+        frames,
+        inInclusiveRange(25, 36),
+        reason: '$name drew $frames frames in 3 s',
+      );
+    }
+    await rig.finish();
+  });
+
+  testWidgets('one frame per tick, and up to date, across the seams', (
+    tester,
+  ) async {
+    final rig = Rig(tester);
+    await rig.pumpApp();
+    await rig.startParty(['Sam', 'Alex']);
+    await rig.tap('I agree, measure me');
+    await rig.until(
+      () => rig.game.currentWarmup != null,
+      what: 'first warm-up',
+    );
+    await expectOneFramePerTick(rig, 'calibration');
+    // A lost face shows within a snapshot and a tick.
+    rig.presage.code = 'NO_FACE_FOUND';
+    await tester.pump(const Duration(milliseconds: 200));
+    expect(find.text('Looking for a face'), findsOneWidget);
+    rig.presage.code = 'OK';
+    await tester.pump(const Duration(milliseconds: 200));
+    expect(find.text('Face found'), findsOneWidget);
+
+    await rig.until(() => rig.game.phase == GamePhase.ask);
+    await rig.wait(1000);
+    await expectOneFramePerTick(rig, 'ask');
+    // Words reach the card within one tick.
+    rig.say('pineapple');
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(find.textContaining('pineapple'), findsOneWidget);
+
+    rig.services.settings.proofPanel = true;
+    await rig.wait(300);
+    expect(find.text('PROOF PANEL · raw SmartSpectra'), findsOneWidget);
+    await expectOneFramePerTick(rig, 'ask with the Proof Panel');
+    rig.services.settings.proofPanel = false;
+    await rig.wait(300);
+
+    rig.presage.code = 'TOO_DARK';
+    await rig.wait(2000);
+    expect(find.text('Too dark'), findsOneWidget);
+    await expectOneFramePerTick(rig, 'ask with a camera problem');
+    rig.presage.code = 'OK';
+    await rig.wait(1500);
+    expect(find.text('Too dark'), findsNothing);
+
+    // Under the Pause sheet the ticker keeps running: no more than a tick's
+    // frames.
+    rig.game.pause();
+    await rig.wait(300);
+    expect(find.text('Paused'), findsOneWidget);
+    final paused = await framesWhileTalking(rig, seconds: 2);
+    expect(paused, lessThanOrEqualTo(24), reason: 'Pause drew $paused');
+    // The camera behind the sheet keeps up. Paused, the tick redraws
+    // nothing else, so only its flush of live changes can.
+    rig.presage.code = 'TOO_DARK';
+    await rig.wait(2000);
+    expect(find.text('Too dark'), findsOneWidget);
+    rig.presage.code = 'OK';
+    await rig.wait(1500);
+    expect(find.text('Too dark'), findsNothing);
+    await rig.tap('Resume');
+    await rig.wait(1000);
+    expect(rig.game.phase, GamePhase.ask);
+    await expectOneFramePerTick(rig, 'ask after Pause');
+
+    // A trip away stops the ticker (live changes go straight through) and
+    // the return starts it again.
+    await rig.leaveApp(3000);
+    expect(rig.game.phase, GamePhase.ask);
+    expect(rig.game.tickerRunning, isTrue);
+    await expectOneFramePerTick(rig, 'ask after a trip away');
+    rig.say('banana');
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(find.textContaining('banana'), findsOneWidget);
+
+    // The SDK goes quiet: the watchdog restarts it mid-question.
+    rig.presage.emitting = false;
+    await rig.wait(6500);
+    rig.presage.emitting = true;
+    await rig.until(
+      () => rig.game.phase == GamePhase.ask && rig.game.live.sample != null,
+      what: 'camera back',
+    );
+    await rig.wait(1000);
+    await expectOneFramePerTick(rig, 'ask after the camera restarted');
+
+    rig.game.doneAsking();
+    await rig.wait(1000);
+    rig.presage.talk(true);
+    await rig.wait(500);
+    expect(find.text('Hot seat · talking'), findsOneWidget);
+    await expectOneFramePerTick(rig, 'answer');
+    rig.presage.talk(false);
+    await rig.wait(500);
+    rig.game.finalAnswer();
+    await rig.wait(300);
+    expect(rig.game.phase, GamePhase.settle);
+    await expectOneFramePerTick(rig, 'settle');
+    await rig.finish();
+  });
+
+  testWidgets('solo: one frame per tick on the question card', (tester) async {
+    final rig = Rig(tester);
+    await rig.pumpApp();
+    await rig.tap('Solo · host asks');
+    await rig.startParty(['Sam']);
+    await rig.tap('I agree, measure me');
+    // Solo measures the answer while the card is still up.
+    await rig.until(() => find.text('Ready to answer').evaluate().isNotEmpty);
+    await rig.wait(1000);
+    await expectOneFramePerTick(rig, 'solo question card');
+    await rig.tap('Ready to answer');
+    await rig.wait(1000);
+    expect(find.text('Final answer'), findsOneWidget);
+    rig.presage.talk(true);
+    await rig.wait(500);
+    await expectOneFramePerTick(rig, 'solo answer');
     await rig.finish();
   });
 }
