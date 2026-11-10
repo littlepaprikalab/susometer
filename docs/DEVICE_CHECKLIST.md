@@ -77,6 +77,11 @@ Settings → **Signal check** → **Start both**. Allow microphone and speech re
   "I don't know". **Could the asker read it from where they sat, or did the hot seat read it
   out?**
 - [ ] Time a whole game against the lobby's "about N min in all".
+- [ ] On the leaderboard, tap *Play again*: a sheet asks first. *Keep the scores* keeps them;
+  double-tap *Play again* fast and the scores are still there. (Decision 82.)
+- [ ] **For the lie detector (decision 82):** over the whole game, count the verdicts (Legit /
+  Hmm… / Sus) and note who won Best lie detector. **Did they just pick Legit every time?** If Sus
+  was under about one verdict in four, a right Sus call should count double.
 - [ ] Next question: answer **immediately**, before tapping *Done asking*. Tap it, then *Final
   answer*: the pause tile on the verdict should be short, not the time it took to tap.
 - [ ] From *{name}, ask your question!* to *{name}, your answer?* to *Locking in the reading…*,

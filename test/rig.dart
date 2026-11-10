@@ -230,8 +230,13 @@ class Rig {
 /// the way a person's next deliberate tap would.
 Future<void> waitOutTapGuard(WidgetTester tester) async {
   bool guarded() {
-    final f = find.byKey(phaseTapGuardKey);
-    return f.evaluate().isNotEmpty && tester.widget<IgnorePointer>(f).ignoring;
+    for (final key in const [phaseTapGuardKey, sheetTapGuardKey]) {
+      final f = find.byKey(key);
+      if (f.evaluate().isNotEmpty && tester.widget<IgnorePointer>(f).ignoring) {
+        return true;
+      }
+    }
+    return false;
   }
 
   for (var i = 0; i < 10 && guarded(); i++) {

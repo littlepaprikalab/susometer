@@ -58,7 +58,8 @@ Built for the DEV [Presage SmartSpectra SDK Challenge](https://dev.to/challenges
 7. **Countdown → Verdict:** drumroll, 3-2-1, then the scoreboard, how the room called it, the
    applause meter and what moved, and who asks next.
 8. **Leaderboard:** Best poker face, Most sus, Best lie detector, Biggest spike, and a Replay of
-   every question. A tie is shared. *Wipe everything* clears it all.
+   every question. A tie is shared. *Play again* asks before it wipes the scores; *Wipe
+   everything* clears it all.
 
 ## Requirements
 

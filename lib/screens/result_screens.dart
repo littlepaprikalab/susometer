@@ -623,9 +623,18 @@ class _VotesSummary extends StatelessWidget {
 
 /// 6 · Leaderboard (mock: Leaderboard.dc.html).
 class LeaderboardScreen extends StatelessWidget {
-  const LeaderboardScreen({super.key, this.onShare, this.shareKey});
+  const LeaderboardScreen({
+    super.key,
+    this.onShare,
+    this.onPlayAgain,
+    this.shareKey,
+  });
 
   final VoidCallback? onShare;
+
+  /// "Play again". The game's own (which wipes at once) unless the page
+  /// asks first, as GameRoot does.
+  final VoidCallback? onPlayAgain;
   final GlobalKey? shareKey;
 
   @override
@@ -710,7 +719,7 @@ class LeaderboardScreen extends StatelessWidget {
           ChunkyButton(
             label: 'Play again',
             fontSize: 21,
-            onPressed: game.playAgain,
+            onPressed: onPlayAgain ?? game.playAgain,
           ),
           const SizedBox(height: 10),
           Row(
@@ -957,7 +966,10 @@ class _RankRow extends StatelessWidget {
 
 /// 7 · Replay (mock: Replay.dc.html).
 class ReplayScreen extends StatefulWidget {
-  const ReplayScreen({super.key});
+  const ReplayScreen({super.key, this.onPlayAgain});
+
+  /// "Play again": see [LeaderboardScreen.onPlayAgain].
+  final VoidCallback? onPlayAgain;
 
   @override
   State<ReplayScreen> createState() => _ReplayScreenState();
@@ -1049,7 +1061,7 @@ class _ReplayScreenState extends State<ReplayScreen> {
                   label: 'Play again',
                   height: 56,
                   fontSize: 19,
-                  onPressed: game.playAgain,
+                  onPressed: widget.onPlayAgain ?? game.playAgain,
                 ),
               ),
             ],

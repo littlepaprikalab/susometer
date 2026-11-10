@@ -220,6 +220,9 @@ void main() {
 
     // E2, E5 and solo mode.
     await rig.tap('Play again');
+    await rig.wait(600);
+    await shot(tester, key, '07c-play-again');
+    await rig.tap('Wipe and play again');
     await rig.wait(300);
     rig.speech.permissions = const SpeechPermissions(
       mic: 'denied',

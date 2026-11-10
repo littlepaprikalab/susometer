@@ -112,7 +112,10 @@ void main() {
     final peak = first.pulseTrace.map((p) => p.$2).reduce(math.max).round();
     expect(find.text('normal ${first.basePulse!.round()}'), findsWidgets);
     expect(find.text('peak $peak BPM'), findsWidgets);
+    // Play again asks first (decision 82): it wipes the game just played.
     await rig.tap('Play again');
+    expect(find.text('Play again?'), findsOneWidget);
+    await rig.tap('Wipe and play again');
     await rig.wait(300);
     expect(find.text('Start the show'), findsOneWidget);
     expect(find.text('Alex'), findsOneWidget);

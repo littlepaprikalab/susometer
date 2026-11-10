@@ -531,4 +531,116 @@ void main() {
     expect(find.text('Suggest one'), findsNothing);
     await rig.finish();
   });
+
+  // --- Play again asks first (SPEC.md decision 82) --------------------------
+
+  /// Two players, one question each, on the leaderboard.
+  Future<Rig> played(WidgetTester tester) async {
+    final rig = Rig(tester);
+    await rig.pumpApp();
+    await rig.startParty(['Sam', 'Alex']);
+    for (var p = 0; p < 2; p++) {
+      await rig.toAsk();
+      await rig.toCallIt();
+      await rig.toVerdict();
+      await rig.tap('End turn');
+      await rig.wait(500);
+    }
+    expect(rig.game.phase, GamePhase.leaderboard);
+    return rig;
+  }
+
+  testWidgets('Play again asks before it wipes the scores, from the '
+      'leaderboard and from the replay', (tester) async {
+    final rig = await played(tester);
+    await rig.tap('Play again');
+    expect(find.text('Play again?'), findsOneWidget);
+    expect(rig.game.phase, GamePhase.leaderboard);
+    expect(rig.game.turns, isNotEmpty, reason: 'nothing wiped yet');
+
+    final handle = tester.ensureSemantics();
+    await expectLater(tester, meetsGuideline(iOSTapTargetGuideline));
+    await expectLater(tester, meetsGuideline(labeledTapTargetGuideline));
+    await expectLater(tester, meetsGuideline(textContrastGuideline));
+    // VoiceOver finds only the sheet, not the buttons behind it.
+    await waitOutTapGuard(tester);
+    expect(find.semantics.byLabel('Keep the scores'), findsOne);
+    expect(
+      find.semantics.byLabel('Watch the replay'),
+      findsNothing,
+      reason: 'VoiceOver could reach the leaderboard behind the sheet',
+    );
+    handle.dispose();
+
+    await rig.tap('Keep the scores');
+    expect(find.text('Play again?'), findsNothing);
+    expect(find.text('And the winners are…'), findsOneWidget);
+    expect(rig.game.awards, isNotNull);
+
+    // A tap outside the sheet keeps them too.
+    await rig.tap('Play again');
+    await waitOutTapGuard(tester);
+    await tester.tapAt(const Offset(195, 120));
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(find.text('Play again?'), findsNothing);
+    expect(rig.game.phase, GamePhase.leaderboard);
+
+    // The replay's Play again asks the same.
+    await rig.tap('Watch the replay');
+    await rig.wait(300);
+    await rig.tap('Play again');
+    expect(find.text('Play again?'), findsOneWidget);
+    expect(rig.game.phase, GamePhase.replay);
+    await rig.tap('Wipe and play again');
+    await rig.wait(300);
+    expect(rig.game.phase, GamePhase.lobby);
+    expect(rig.game.turns, isEmpty);
+    expect(find.text('Play again?'), findsNothing);
+    expect(find.text('Sam'), findsOneWidget, reason: 'contestants stay');
+    expect(find.text('Alex'), findsOneWidget);
+    await rig.finish();
+  });
+
+  testWidgets('a double tap on Play again never wipes: the sheet comes up '
+      'under the finger and ignores its second tap', (tester) async {
+    final rig = await played(tester);
+    for (final screen in ['leaderboard', 'replay']) {
+      if (screen == 'replay') {
+        await rig.tap('Watch the replay');
+        await rig.wait(600);
+      }
+      await waitOutTapGuard(tester);
+      final at = tester.getCenter(find.text('Play again'));
+      await tester.tapAt(at);
+      await tester.pump(const Duration(milliseconds: 80));
+      await tester.tapAt(at);
+      await tester.pump(const Duration(milliseconds: 80));
+      // And a third, for a nervous thumb.
+      await tester.tapAt(at);
+      await tester.pump(const Duration(milliseconds: 80));
+      expect(find.text('Play again?'), findsOneWidget, reason: screen);
+      expect(rig.game.turns, isNotEmpty, reason: '$screen: still there');
+      await rig.tap('Keep the scores');
+      expect(find.text('Play again?'), findsNothing);
+    }
+    await rig.finish();
+  });
+
+  testWidgets('with nothing played there is nothing to ask about', (
+    tester,
+  ) async {
+    final rig = Rig(tester);
+    await rig.pumpApp();
+    await rig.startParty(['Sam', 'Alex']);
+    await rig.tap('Skip my turn');
+    await rig.wait(700);
+    await rig.tap('Skip my turn');
+    await rig.wait(300);
+    expect(rig.game.phase, GamePhase.leaderboard);
+    await rig.tap('Play again');
+    await rig.wait(300);
+    expect(find.text('Play again?'), findsNothing);
+    expect(rig.game.phase, GamePhase.lobby);
+    await rig.finish();
+  });
 }
