@@ -330,6 +330,21 @@ class GameController extends ChangeNotifier {
   int get minPlayers => mode == GameMode.party ? 2 : 1;
   bool get canStart => players.length >= minPlayers;
 
+  /// What a turn costs before its first question (consent, the sit-still,
+  /// three warm-ups) and what each question costs from the ask to the
+  /// verdict, in seconds. From `test/party_sim.dart`'s simulated rooms
+  /// (about 65 s and 36 s), rounded up for the chatter a real room adds.
+  static const turnSetupS = 75;
+  static const questionS = 40;
+
+  /// Roughly how long the game in the lobby would take, in minutes, so a
+  /// room of eight sees what seven questions each adds up to before it
+  /// starts (SPEC.md decision 80). Null until there are enough players.
+  int? get estimatedMinutes => canStart
+      ? (players.length * (turnSetupS + questionsPerTurn * questionS) / 60)
+            .round()
+      : null;
+
   // Lobby settings only change in the lobby: mid-game they would break turn
   // order, question counts or how transcripts are routed.
 
@@ -957,10 +972,17 @@ class GameController extends ChangeNotifier {
   /// with the one after the hot seat, so everyone gets to ask (SPEC.md
   /// decision 76). The same question asked again keeps its asker. Null in
   /// solo mode.
-  Player? get currentAsker {
+  Player? get currentAsker => _askerFor(questionIndex);
+
+  /// Party: who asks the question after this one, so the screens can tell
+  /// them before the host does and they come with a question ready (SPEC.md
+  /// decision 80). Null on the turn's last question and in solo mode.
+  Player? get nextAsker => isLastQuestion ? null : _askerFor(questionIndex + 1);
+
+  Player? _askerFor(int question) {
     if (mode != GameMode.party || turns.length < 2) return null;
     final others = turns.length - 1;
-    final i = (playerIndex + 1 + questionIndex % others) % turns.length;
+    final i = (playerIndex + 1 + question % others) % turns.length;
     return turns[i].player;
   }
 

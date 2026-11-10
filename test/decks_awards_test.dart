@@ -11,6 +11,7 @@ QuestionResult scored(
   int index,
   int score, {
   Map<String, Vote> votes = const {},
+  double raw = 0,
 }) {
   final r = QuestionResult(
     index: index,
@@ -22,7 +23,7 @@ QuestionResult scored(
       zBlink: 0,
       zExpr: 0,
       zHesitation: 0,
-      raw: 0,
+      raw: raw,
       score: score,
       verdict: verdictFor(score, legitBelow: 35, susFrom: 60),
     ),
@@ -277,6 +278,91 @@ void main() {
       ];
       final a = Awards.compute(turns, mode: GameMode.party);
       expect(a.lieDetector!.player, alex, reason: '2/2 beats 2/3');
+    });
+
+    group('ties are shared, never handed to one player (decision 80)', () {
+      test('level at the bottom: both are Best poker face', () {
+        final a = Awards.compute([
+          PlayerTurn(sam)..results.addAll([scored(0, 0), scored(1, 0)]),
+          PlayerTurn(alex)..results.addAll([scored(0, 40), scored(1, 30)]),
+          PlayerTurn(priya)..results.addAll([scored(0, 0), scored(1, 0)]),
+        ], mode: GameMode.party);
+        expect(a.pokerFace!.players, [sam, priya], reason: 'in turn order');
+        expect(a.pokerFace!.names, 'Sam & Priya');
+        expect(a.mostSus!.players, [alex]);
+        expect(a.ranked.map((r) => r.player), [alex, sam, priya]);
+        expect([for (var i = 0; i < 3; i++) a.placeOf(i)], [1, 2, 2]);
+      });
+
+      test('level at the top: both are Most sus', () {
+        final a = Awards.compute([
+          PlayerTurn(sam)..results.add(scored(0, 70)),
+          PlayerTurn(alex)..results.add(scored(0, 10)),
+          PlayerTurn(priya)..results.addAll([scored(0, 60), scored(1, 80)]),
+          PlayerTurn(jordan)..results.add(scored(0, 70)),
+        ], mode: GameMode.party);
+        expect(a.mostSus!.players, [sam, priya, jordan]);
+        expect(a.mostSus!.names, 'Sam, Priya & Jordan');
+        expect(a.pokerFace!.players, [alex]);
+        expect([for (var i = 0; i < 4; i++) a.placeOf(i)], [1, 1, 1, 4]);
+      });
+
+      test('everyone level: one shared poker face, nobody most sus, and a '
+          'score of 0 is no spike', () {
+        final a = Awards.compute([
+          PlayerTurn(sam)..results.add(scored(0, 0)),
+          PlayerTurn(alex)..results.add(scored(0, 0)),
+          PlayerTurn(priya)..results.add(scored(0, 0)),
+        ], mode: GameMode.party);
+        expect(a.pokerFace!.players, [sam, alex, priya]);
+        expect(a.mostSus, isNull);
+        expect(a.biggestSpike, isNull);
+        expect([for (var i = 0; i < 3; i++) a.placeOf(i)], [1, 1, 1]);
+      });
+
+      test('one scored player still gets both cards', () {
+        final a = Awards.compute([
+          PlayerTurn(sam)..results.add(scored(0, 44)),
+          PlayerTurn(alex)..skipped = true,
+        ], mode: GameMode.party);
+        expect(a.pokerFace!.players, [sam]);
+        expect(a.mostSus!.players, [sam]);
+      });
+
+      test('lie detectors level on matches and votes share it, in turn '
+          'order whoever tapped first', () {
+        final turns = [
+          PlayerTurn(sam)
+            ..results.addAll([
+              // Priya taps before Alex both times.
+              scored(0, 80, votes: {'p': Vote.sus, 'a': Vote.sus}),
+              scored(1, 10, votes: {'p': Vote.legit, 'a': Vote.legit}),
+            ]),
+          PlayerTurn(alex),
+          PlayerTurn(priya),
+        ];
+        final a = Awards.compute(turns, mode: GameMode.party);
+        expect(a.lieDetector!.players, [alex, priya]);
+        expect(a.lieDetector!.names, 'Alex & Priya');
+        expect(a.lieDetector!.matches, 2);
+        expect(a.lieDetector!.votes, 2);
+      });
+
+      test('a spike level on the score goes to the one higher before '
+          'rounding', () {
+        final a = Awards.compute([
+          PlayerTurn(sam)..results.add(scored(0, 62, raw: 0.548)),
+          PlayerTurn(alex)..results.add(scored(0, 62, raw: 0.553)),
+        ], mode: GameMode.party);
+        expect(a.biggestSpike!.player, alex);
+      });
+
+      test('names read as a list', () {
+        expect(joinNames(const []), '');
+        expect(joinNames(const ['Sam']), 'Sam');
+        expect(joinNames(const ['Sam', 'Alex']), 'Sam & Alex');
+        expect(joinNames(const ['Sam', 'Alex', 'Priya']), 'Sam, Alex & Priya');
+      });
     });
 
     test('solo mode has no Best lie detector', () {

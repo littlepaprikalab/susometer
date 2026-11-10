@@ -656,6 +656,7 @@ class _PulseWaitCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final name = game.currentPlayer.name;
+    final asker = game.currentAsker;
     final text = game.pulseWaitIsLong
         ? 'Still no pulse. Face the light and hold still, or Pause to skip.'
         : "The question starts once the camera has $name's pulse.";
@@ -667,7 +668,13 @@ class _PulseWaitCard extends StatelessWidget {
             const SizedBox(width: 6),
             Expanded(
               child: Text(
-                'Hang on · no question yet',
+                // The asker can use the wait: they're named now, not when
+                // it ends.
+                asker == null
+                    ? 'Hang on · no question yet'
+                    : 'Hang on · ${asker.name} asks next',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
                 style: SusText.label(13),
               ),
             ),

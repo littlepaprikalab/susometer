@@ -28,6 +28,10 @@ class CallItScreen extends StatelessWidget {
     final game = GameScope.of(context);
     // No timer: the reveal waits for the tap (SPEC.md decision 76).
     final voted = game.pendingVotes.length;
+    final waiting = [
+      for (final p in game.voters)
+        if (!game.pendingVotes.containsKey(p.id)) p.name,
+    ];
     return ScreenFrame(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -107,18 +111,53 @@ class CallItScreen extends StatelessWidget {
               ),
             ),
           ),
-          const SizedBox(height: 12),
-          ChunkyButton(
-            label: 'Reveal',
-            height: 60,
-            fontSize: 22,
-            onPressed: game.reveal,
+          const SizedBox(height: 10),
+          // Reveal never waits for anyone (someone may be sitting this one
+          // out), but one eager tap used to cost the rest of the room its
+          // votes. So the button says who it would cut off, and only turns
+          // into the solid "go" button once everyone's in (SPEC.md
+          // decision 80).
+          SizedBox(
+            height: MediaQuery.textScalerOf(context).scale(14) * 1.5,
+            child: Semantics(
+              liveRegion: true,
+              child: FitText(
+                stillToCall(waiting),
+                sizes: const [14, 13, 12],
+                overflow: FitOverflow.keepStart,
+                textAlign: TextAlign.center,
+                style: (size) => SusText.body(size, weight: FontWeight.w700),
+              ),
+            ),
           ),
+          const SizedBox(height: 8),
+          if (waiting.isEmpty)
+            ChunkyButton(
+              label: 'Reveal',
+              height: 60,
+              fontSize: 22,
+              onPressed: game.reveal,
+            )
+          else
+            ChunkyButton.light(
+              label: 'Reveal',
+              height: 60,
+              fontSize: 22,
+              onPressed: game.reveal,
+            ),
         ],
       ),
     );
   }
 }
+
+/// The line above Reveal: who hasn't picked yet ([waiting], in voter order).
+/// Two names at most, so it stays one readable line with seven voters.
+String stillToCall(List<String> waiting) => switch (waiting.length) {
+  0 => "Everyone's in. Reveal!",
+  1 || 2 => 'Still to call it: ${joinNames(waiting)}',
+  final n => 'Still to call it: ${waiting.first} and ${n - 1} more',
+};
 
 /// One voter on Call it!: their name, then Legit and Sus to pick from
 /// (SPEC.md decision 77). The pick fills with its verdict's color and a
@@ -417,6 +456,14 @@ class VerdictScreen extends StatelessWidget {
                       ),
                     ),
                   ),
+                  // The room's calls come straight after the score, above
+                  // the fold even on a small phone at large text: under the
+                  // chart, nobody scrolled down to see who'd matched
+                  // (SPEC.md decision 80).
+                  if (r.votes.isNotEmpty || game.mode == GameMode.party) ...[
+                    const SizedBox(height: 16),
+                    _VotesSummary(game: game, result: r),
+                  ],
                   const SizedBox(height: 18),
                   ApplauseMeter(score: b.score),
                   const SizedBox(height: 6),
@@ -462,15 +509,26 @@ class VerdictScreen extends StatelessWidget {
                     const SizedBox(height: 14),
                     _PulseCard(result: r),
                   ],
-                  if (r.votes.isNotEmpty || game.mode == GameMode.party) ...[
-                    const SizedBox(height: 14),
-                    _VotesSummary(game: game, result: r),
-                  ],
                 ],
               ),
             ),
           ),
           const SizedBox(height: 12),
+          // Who asks next, while the room is still looking at the verdict:
+          // on Ask they'd hear it only as their question was due.
+          if (game.nextAsker case final asker?) ...[
+            SizedBox(
+              height: MediaQuery.textScalerOf(context).scale(14) * 1.5,
+              child: FitText(
+                'Up next: ${asker.name} asks',
+                sizes: const [14, 13, 12],
+                overflow: FitOverflow.keepStart,
+                textAlign: TextAlign.center,
+                style: (size) => SusText.body(size, weight: FontWeight.w700),
+              ),
+            ),
+            const SizedBox(height: 8),
+          ],
           Row(
             children: [
               if (!last) ...[
@@ -521,7 +579,11 @@ class _VotesSummary extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Text(
-          'How the room called it',
+          // A Hmm… matches neither call (SPEC.md §5.6): say so, or a voter
+          // with no "matched" by their name reads it as a miss.
+          verdict == Verdict.hmm
+              ? 'How the room called it · Hmm… matches nobody'
+              : 'How the room called it',
           textAlign: TextAlign.center,
           style: SusText.label(14),
         ),
@@ -533,15 +595,20 @@ class _VotesSummary extends StatelessWidget {
           children: [
             for (final p in game.voters)
               if (result.votes[p.id] != null)
-                DotChip(
-                  outlined: true,
-                  fontSize: 13,
-                  label:
-                      '${p.name}: ${result.votes[p.id] == Vote.sus ? 'Sus' : 'Legit'}'
-                      '${_matched(result.votes[p.id]!, verdict) ? ' · matched' : ''}',
-                  dot: result.votes[p.id] == Vote.sus
-                      ? SusColors.tomato
-                      : SusColors.teal,
+                // A long name's chip shrinks to the row rather than run off
+                // the screen at large text sizes.
+                FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: DotChip(
+                    outlined: true,
+                    fontSize: 13,
+                    label:
+                        '${p.name}: ${result.votes[p.id] == Vote.sus ? 'Sus' : 'Legit'}'
+                        '${_matched(result.votes[p.id]!, verdict) ? ' · matched' : ''}',
+                    dot: result.votes[p.id] == Vote.sus
+                        ? SusColors.tomato
+                        : SusColors.teal,
+                  ),
                 ),
           ],
         ),
@@ -587,25 +654,30 @@ class LeaderboardScreen extends StatelessWidget {
                       ),
                     )
                   else ...[
+                    // A tie is shared (SPEC.md decision 80). With everyone
+                    // level there's no Most sus, and Best poker face gets
+                    // the whole row.
                     Row(
                       children: [
                         Expanded(
                           child: _AwardCard(
                             title: 'Best poker face',
-                            name: awards.pokerFace!.player.name,
+                            name: awards.pokerFace!.names,
                             detail: 'avg ${awards.pokerFace!.average.round()}',
                             dot: SusColors.teal,
                           ),
                         ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: _AwardCard(
-                            title: 'Most sus',
-                            name: awards.mostSus!.player.name,
-                            detail: 'avg ${awards.mostSus!.average.round()}',
-                            dot: SusColors.tomato,
+                        if (awards.mostSus case final mostSus?) ...[
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: _AwardCard(
+                              title: 'Most sus',
+                              name: mostSus.names,
+                              detail: 'avg ${mostSus.average.round()}',
+                              dot: SusColors.tomato,
+                            ),
                           ),
-                        ),
+                        ],
                       ],
                     ),
                     if (awards.lieDetector != null) ...[
@@ -618,7 +690,7 @@ class LeaderboardScreen extends StatelessWidget {
                     ],
                     const SizedBox(height: 14),
                     for (var i = 0; i < awards.ranked.length; i++) ...[
-                      _RankRow(pos: i + 1, avg: awards.ranked[i]),
+                      _RankRow(pos: awards.placeOf(i), avg: awards.ranked[i]),
                       const SizedBox(height: 7),
                     ],
                   ],
@@ -751,10 +823,17 @@ class _LieDetectorCard extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text('Best lie detector', style: SusText.label(13)),
-                Text(award.player.name, style: SusText.display(22)),
+                // Shared when voters are level; shrinks to fit like the
+                // other award names.
+                FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerLeft,
+                  child: Text(award.names, style: SusText.display(22)),
+                ),
               ],
             ),
           ),
+          const SizedBox(width: 8),
           Text(
             'Matched the\nmeter ${award.matches} of ${award.votes}',
             textAlign: TextAlign.right,
