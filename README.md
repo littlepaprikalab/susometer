@@ -46,10 +46,11 @@ Built for the DEV [Presage SmartSpectra SDK Challenge](https://dev.to/challenges
    questions. Once it's locked in, tap *Start the questions* when everyone's ready.
 4. **Ask:** the host says who asks ("Alex, ask your question!"); everyone else takes turns,
    starting with the next player. The question appears on screen as they speak, and the player
-   taps *Done asking* when it's over. In solo mode the host reads one from the deck, and it stays
-   on screen until you tap *Ready to answer*. Solo questions get hotter through the turn and end
-   on the hottest, the same way for every player; "someone in this room" questions only come up
-   when others are playing.
+   taps *Done asking* when it's over. Nothing to ask? *Suggest one* puts a question from the
+   deck on the card for the asker to read out (*Another one* swaps it). In solo mode the host
+   reads one from the deck, and it stays on screen until you tap *Ready to answer*. Solo
+   questions get hotter through the turn and end on the hottest, the same way for every player;
+   "someone in this room" questions only come up when others are playing.
 5. **Answer:** the player answers out loud and smashes *Final answer*.
 6. **Call it!:** everyone else picks *Legit* or *Sus* next to their name *before* the reveal
    (tap your pick again to take it back), then someone taps *Reveal*. The screen says who's

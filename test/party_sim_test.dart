@@ -203,6 +203,42 @@ void main() {
     expect(b.deadTaps, isEmpty);
   });
 
+  test('askers with nothing to ask: Suggest one keeps the room moving, and '
+      "the room's dithering never ends up in the question", () {
+    final b = games(
+      4,
+      3,
+      6,
+      people: (seed) => [
+        ('Sam', Persona.all[seed % Persona.all.length]),
+        ('Alex', Persona.blank),
+        ('Priya', Persona.steady),
+        ('Jordan', Persona.blank),
+      ],
+    );
+    // ignore: avoid_print
+    if (verbose) print(b.table('4 × 3, two askers with nothing to ask'));
+    final suggested = b.questions.where((q) => q.suggestions > 0).toList();
+    expect(
+      suggested.length,
+      greaterThan(10),
+      reason: 'the batch asks for some',
+    );
+    for (final r in b.reports) {
+      expect(r.finished, isTrue);
+      expect(r.questions.length, 12);
+      for (final t in r.turns) {
+        for (final q in t.results) {
+          expect(q.scored, isTrue, reason: 'a suggested question still scores');
+          expect(q.question, isNot(contains("don't know")));
+          expect(q.question, startsWith('Have you ever'));
+        }
+      }
+    }
+    expect(b.deadTaps, isEmpty, reason: 'Suggest one always deals one');
+    expect(b.reAsked, 0);
+  });
+
   test('awards never hand a tie to one player', () {
     // Many answers score exactly 0, so level averages turn up in real
     // rooms, most often with three questions each. Whoever is level shares.

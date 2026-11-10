@@ -2,10 +2,15 @@
 // parties in test/party_sim_test.dart found no dead ends, but a walk through
 // the real screens as three players did find things a room would trip on.
 // Each test here pins one of that decision's changes.
+import 'dart:io';
+
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:susometer/game/decks.dart';
 import 'package:susometer/game/game_controller.dart';
 import 'package:susometer/game/models.dart';
+import 'package:susometer/presage/camera_preview.dart';
 import 'package:susometer/screens/result_screens.dart';
 import 'package:susometer/theme/tokens.dart';
 import 'package:susometer/theme/widgets.dart';
@@ -386,6 +391,144 @@ void main() {
     expect(find.text('1.'), findsNWidgets(3));
     expect(find.text('2'), findsNothing);
     expect(tester.takeException(), isNull);
+    await rig.finish();
+  });
+
+  // --- Suggest one (SPEC.md decision 81) -----------------------------------
+
+  testWidgets('Suggest one puts a deck question on the asker card and keeps '
+      'it there while the asker reads it out', (tester) async {
+    final rig = Rig(tester);
+    await rig.pumpApp();
+    await rig.startParty(['Sam', 'Alex', 'Priya']);
+    await rig.toAsk();
+    await rig.wait(500);
+    expect(find.text('Alex, ask your question!'), findsOneWidget);
+    expect(find.text('Listening for the question…'), findsOneWidget);
+    expect(find.text('Suggest one'), findsOneWidget);
+    final camera = tester.getRect(find.byType(CameraPreview));
+
+    await rig.tap('Suggest one');
+    final first = rig.game.suggestion!;
+    expect(find.text(first), findsOneWidget);
+    expect(find.text('Asker · try this one'), findsOneWidget);
+    expect(find.text('Read it out, or ask your own.'), findsOneWidget);
+    expect(find.text('Listening for the question…'), findsNothing);
+    expect(find.text('Suggest one'), findsNothing);
+    expect(
+      tester.getRect(find.byType(CameraPreview)),
+      camera,
+      reason: 'the camera stays put: the player is being measured',
+    );
+    expect(rig.game.phase, GamePhase.ask);
+
+    // Not that one: another.
+    await rig.wait(700);
+    await rig.tap('Another one');
+    final second = rig.game.suggestion!;
+    expect(second, isNot(first));
+    expect(find.text(second), findsOneWidget);
+    expect(find.text(first), findsNothing);
+
+    // Alex reads it out. The card keeps the question, with what the mic
+    // hears along the bottom.
+    rig.say(second.substring(0, 12));
+    await rig.wait(300);
+    expect(find.text(second), findsOneWidget);
+    expect(find.text('Heard: '), findsOneWidget);
+    expect(find.text(second.substring(0, 12)), findsOneWidget);
+    rig.say(second);
+    await rig.wait(300);
+    expect(find.text(second), findsNWidgets(2), reason: 'the card and Heard');
+
+    final handle = tester.ensureSemantics();
+    await expectLater(tester, meetsGuideline(iOSTapTargetGuideline));
+    await expectLater(tester, meetsGuideline(labeledTapTargetGuideline));
+    await expectLater(tester, meetsGuideline(textContrastGuideline));
+    handle.dispose();
+
+    await rig.tap('Done asking');
+    expect(find.text('Q: “$second”'), findsOneWidget);
+    expect(find.text('Asker · try this one'), findsNothing);
+    await rig.finish();
+  });
+
+  for (final (screen, scale) in const [
+    (Size(390, 844), 1.0),
+    (Size(375, 667), 1.3),
+  ]) {
+    testWidgets('every deck question fits the asker card whole '
+        '(${screen.width.round()}×${screen.height.round()}, text ×$scale)', (
+      tester,
+    ) async {
+      tester.platformDispatcher.textScaleFactorTestValue = scale;
+      addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+      // Every card at heat 1, so question 1 deals the whole deck.
+      DeckLibrary read(String name) => DeckLibrary(
+        warmup: DeckLibrary.fallback.warmup,
+        mild: [
+          for (final q in DeckLibrary.parse(
+            File('assets/decks/$name.json').readAsStringSync(),
+          ))
+            DeckQuestion(q.text, heat: 1),
+        ],
+        spicy: const [],
+      );
+      for (final name in ['mild', 'spicy']) {
+        final deck = read(name);
+        final rig = Rig(tester);
+        await rig.pumpApp(size: screen);
+        rig.game.setDecks(deck);
+        await rig.startParty(['Sam', 'Alex', 'Priya']);
+        await rig.toAsk();
+        final seen = <String>{};
+        // The dealer goes through the pile before repeating.
+        for (var i = 0; i < deck.mild.length; i++) {
+          await rig.wait(700);
+          rig.game.suggestQuestion();
+          await tester.pump(const Duration(milliseconds: 100));
+          final q = rig.game.suggestion!;
+          if (!seen.add(q)) continue;
+          final text = find.text(q);
+          expect(text, findsOneWidget);
+          expect(
+            tester.renderObject<RenderParagraph>(text).didExceedMaxLines,
+            isFalse,
+            reason: '"$q" is cut off',
+          );
+          final card = tester.getRect(text);
+          expect(
+            tester.getRect(find.byType(CameraPreview)).top,
+            greaterThan(card.bottom),
+            reason: '"$q" runs into the camera',
+          );
+        }
+        expect(seen.length, deck.mild.length, reason: 'the whole $name deck');
+        expect(tester.takeException(), isNull);
+        await rig.finish();
+      }
+    });
+  }
+
+  testWidgets("the lobby's deck is for suggestions in a party, and solo has "
+      'no Suggest one', (tester) async {
+    final rig = Rig(tester);
+    await rig.pumpApp();
+    expect(find.text('Question deck · for suggestions'), findsOneWidget);
+    await rig.tap('Solo · host asks');
+    expect(find.text('Question deck'), findsOneWidget);
+    rig.presage.storedKey = 'k';
+    await rig.addPlayer('Sam');
+    await rig.tap('3');
+    await rig.tap('Start the show');
+    await rig.wait(300);
+    expect(find.textContaining('Stuck? Tap Suggest one.'), findsOneWidget);
+    await rig.tap("Got it, let's play");
+    await rig.tap('I agree, measure me');
+    await rig.until(() => rig.game.phase == GamePhase.answer);
+    await rig.wait(500);
+    expect(find.text('Different question'), findsOneWidget);
+    expect(find.text('Suggest one'), findsNothing);
     await rig.finish();
   });
 }

@@ -217,7 +217,7 @@ class _LobbyScreenState extends State<LobbyScreen> {
                     Text(
                       game.mode == GameMode.solo
                           ? 'Question deck'
-                          : 'Question deck · for solo mode',
+                          : 'Question deck · for suggestions',
                       style: SusText.label(14),
                     ),
                     const SizedBox(height: 8),

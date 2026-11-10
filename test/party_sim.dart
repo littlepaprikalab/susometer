@@ -42,6 +42,7 @@ class Persona {
     this.stressed = 0.2,
     this.skipsTurn = 0.0,
     this.eagerReveal = false,
+    this.stuck = 0.0,
   });
 
   final String kind;
@@ -89,6 +90,10 @@ class Persona {
   /// Taps Reveal as soon as their own vote is in.
   final bool eagerReveal;
 
+  /// As the asker: chance of having nothing to ask, so the hot seat taps
+  /// "Suggest one" and they read it out (SPEC.md decision 81).
+  final double stuck;
+
   static const steady = Persona('steady');
   static const eager = Persona(
     'eager',
@@ -127,6 +132,9 @@ class Persona {
   );
   static const nervous = Persona('nervous', stressed: 0.55, warmupSkip: 0.2);
 
+  /// Not dealt by [party]: only rooms that ask for one have one.
+  static const blank = Persona('blank', stuck: 0.8, askThink: (3000, 9000));
+
   static const all = [steady, eager, slow, forgetful, fidgety, nervous];
 }
 
@@ -137,6 +145,9 @@ class QuestionLog {
   final String hotSeat;
   final String? asker;
   bool stressed = false;
+
+  /// "Suggest one" taps on this question.
+  int suggestions = 0;
   int asksNeeded = 1;
   bool skipped = false;
   int pulseWaitMs = 0;
@@ -213,7 +224,9 @@ class PartySim {
     this.pulseRecoveryMs = 3000,
     this.hostVoice = true,
   }) : rng = math.Random(seed),
-       w = World(async),
+       // The same seed deals the same warm-ups and suggestions, so a
+       // report repeats exactly.
+       w = World(async, random: math.Random(seed)),
        report = PartyReport(people.length, questions) {
     w
       ..autoTaps = false
@@ -339,6 +352,7 @@ class PartySim {
     game.detector?.tQ1,
     game.detector?.tA1,
     game.soloHoldsQuestion,
+    game.suggestion,
     identical(game.currentResult, _lastResult),
   ].join('|');
 
@@ -532,12 +546,29 @@ class PartySim {
     final them = asker == null ? me : _persona(asker);
     // The asker hears their name, thinks, and asks.
     _wait(_between(them.askThink));
+    if (asker != null && them.stuck > 0 && _chance(them.stuck)) {
+      // Nothing comes: the room says so, and the hot seat taps for one,
+      // now and then twice.
+      w.say("I don't know what to ask");
+      _wait(1500);
+      _tap('Suggest one', game.suggestQuestion);
+      log.suggestions++;
+      if (_chance(0.3)) {
+        _wait(_between(me.tap) + 700);
+        _tap('Another one', game.suggestQuestion);
+        log.suggestions++;
+      }
+      // The asker reads it off the card.
+      _wait(1200);
+    }
     if (_chance(me.glance)) {
       _lookAway(1000 + rng.nextInt(1500), 'FACE_NOT_FORWARD', inMs: 300);
     }
     final speak = _between(them.askSpeak);
+    var asked = '';
     for (var said = 0; said < speak; said += 400) {
-      w.say('Have you ever ${'la ' * (1 + said ~/ 400)}');
+      asked = 'Have you ever ${'la ' * (1 + said ~/ 400)}';
+      w.say(asked);
       _wait(400);
     }
     final tQ1 = w.now;
@@ -565,7 +596,10 @@ class PartySim {
       _lookAway(1000 + rng.nextInt(2000), 'EXCESSIVE_MOTION', inMs: 400);
     }
     for (var said = 0; said < answer; said += 500) {
-      w.say('Well ${'um ' * (1 + said ~/ 500)}');
+      final words = 'Well ${'um ' * (1 + said ~/ 500)}';
+      // An answer given before Done asking starts in the question's own
+      // recognition segment, whose partials carry all of it so far.
+      w.say(early && said == 0 ? '$asked$words' : words);
       _wait(500);
     }
     w.talk(false);

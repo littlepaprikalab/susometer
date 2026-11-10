@@ -33,6 +33,7 @@ class World {
     this.async, {
     TurnConfig turnConfig = const TurnConfig(),
     ScoringConfig config = const ScoringConfig(),
+    Random? random,
   }) {
     presage = RunningPresage(this);
     game = GameController(
@@ -47,6 +48,8 @@ class World {
       config: config,
       turnConfig: turnConfig,
       now: () => now,
+      // Which cards the decks deal: seeded when a run must repeat exactly.
+      random: random,
     );
     _emitter = Timer.periodic(
       const Duration(milliseconds: 100),

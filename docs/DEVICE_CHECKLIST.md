@@ -71,6 +71,11 @@ Settings → **Signal check** → **Start both**. Allow microphone and speech re
 - [ ] After *Call it!* (phone held out to the room), tap *Next question* straight away: **how
   often does "Finding {name}'s pulse…" show, and for how many seconds?** (The simulated parties
   assume 3 s; decision 80.)
+- [ ] *Suggest one* (decision 81): say "I don't know what to ask", then tap it. A deck question
+  shows on the card; *Another one* swaps it. Have the asker read it out: the card keeps the
+  question, "Heard: …" follows along, and the verdict's question is what they said, without the
+  "I don't know". **Could the asker read it from where they sat, or did the hot seat read it
+  out?**
 - [ ] Time a whole game against the lobby's "about N min in all".
 - [ ] Next question: answer **immediately**, before tapping *Done asking*. Tap it, then *Final
   answer*: the pause tile on the verdict should be short, not the time it took to tap.

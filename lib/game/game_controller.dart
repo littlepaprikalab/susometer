@@ -517,6 +517,7 @@ class GameController extends ChangeNotifier {
     playerIndex = 0;
     questionIndex = 0;
     awards = null;
+    _clearSuggestion();
     _clearPause();
     _voiceLostMidTurn = false;
     notice = micEnabled ? null : 'Playing without voice: no transcripts.';
@@ -1042,6 +1043,7 @@ class GameController extends ChangeNotifier {
     _earlyFromSeg = null;
     _earlySeq++;
     _soloReady = false;
+    if (_suggestionAt != (playerIndex, questionIndex)) _clearSuggestion();
     live.resetQuestion();
     // Solo's card is dealt now, so a camera restart during the wait asks
     // the same one.
@@ -1070,15 +1072,70 @@ class GameController extends ChangeNotifier {
     live.resetQuestion();
     notifyListeners();
     if (mode == GameMode.party) unawaited(_say(askLine));
-    if (micEnabled) {
-      unawaited(
-        speech
-            .newSegment()
-            .then((seg) => _askerFromSeg = seg)
-            .catchError((Object _) => null),
-      );
-    }
+    _openAskerSegment();
     if (mode == GameMode.solo) unawaited(_soloReadQuestion());
+  }
+
+  /// Opens the recognition segment the question's words are filed under. If
+  /// the question starts listening again meanwhile (a suggestion), the
+  /// older segment's late answer is dropped, or what the room said before
+  /// would come back in as the question.
+  void _openAskerSegment() {
+    final seq = ++_askerSeq;
+    if (!micEnabled) return;
+    unawaited(
+      speech
+          .newSegment()
+          .then((seg) {
+            if (seq == _askerSeq) _askerFromSeg = seg;
+          })
+          .catchError((Object _) => null),
+    );
+  }
+
+  int _askerSeq = 0;
+
+  // ---------------------------------------------------------------------------
+  // Party: a question for an asker who has none (SPEC.md decision 81)
+
+  /// The deck question on the asker's card, once someone has tapped
+  /// "Suggest one" on this question; null until then. It's only a prompt:
+  /// the asker still says it (or anything else) out loud, and the question
+  /// on the Verdict and Replay is what was heard.
+  String? suggestion;
+
+  /// The turn and question [suggestion] was dealt for. The same question
+  /// asked again (No clean read, a camera restart) keeps it on the card.
+  (int, int)? _suggestionAt;
+
+  /// Party "Suggest one" / "Another one": deals a question from the lobby's
+  /// deck, at the heat solo would use for this point in the turn.
+  ///
+  /// Listening starts over: what the room said while it wondered what to
+  /// ask isn't the question, and shouldn't open its window.
+  void suggestQuestion() {
+    if (mode != GameMode.party || phase != GamePhase.ask) return;
+    if (paused || waitingForPulse || detector == null) return;
+    if (!_once('suggest')) return;
+    final dealt = _questions.next(questionIndex, questionsPerTurn);
+    if (dealt.isEmpty) return;
+    suggestion = dealt;
+    _suggestionAt = (playerIndex, questionIndex);
+    _segmentFloor = _newestSegment;
+    _askerFromSeg = null;
+    _earlyFromSeg = null;
+    _earlySeq++;
+    _askerTranscript.clear();
+    detector = TurnDetector(party: true, startMs: nowMs, config: _turnConfig);
+    questionStartMs = nowMs;
+    live.resetQuestion();
+    _openAskerSegment();
+    notifyListeners();
+  }
+
+  void _clearSuggestion() {
+    suggestion = null;
+    _suggestionAt = null;
   }
 
   Future<void> _soloReadQuestion() async {
@@ -1495,6 +1552,7 @@ class GameController extends ChangeNotifier {
   }
 
   Future<void> _nextPlayer() async {
+    _clearSuggestion();
     if (turns.isEmpty) {
       _setPhase(GamePhase.lobby);
       return;
@@ -1567,6 +1625,7 @@ class GameController extends ChangeNotifier {
     awards = null;
     currentResult = null;
     detector = null;
+    _clearSuggestion();
     log.clear();
     live
       ..resetQuestion()

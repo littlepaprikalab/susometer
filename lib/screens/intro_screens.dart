@@ -22,7 +22,8 @@ class HowToPlayScreen extends StatelessWidget {
     ),
     (
       'Asker: say it out loud',
-      'The host says who asks, then writes your question on screen.',
+      'The host says who asks, then writes your question on screen. '
+          'Stuck? Tap Suggest one.',
     ),
     (
       'Hot seat: tap, then answer',

@@ -327,11 +327,30 @@ class _Actions extends StatelessWidget {
                         ),
                       ],
                     )
-                  : ChunkyButton(
-                      label: 'Done asking',
-                      height: 48,
-                      fontSize: 16,
-                      onPressed: game.doneAsking,
+                  // A question from the deck for an asker with none (SPEC.md
+                  // decision 81), set like solo's Different question.
+                  : Row(
+                      children: [
+                        Expanded(
+                          child: ChunkyButton.light(
+                            label: game.suggestion == null
+                                ? 'Suggest one'
+                                : 'Another one',
+                            height: 48,
+                            fontSize: 15,
+                            onPressed: game.suggestQuestion,
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: ChunkyButton(
+                            label: 'Done asking',
+                            height: 48,
+                            fontSize: 15,
+                            onPressed: game.doneAsking,
+                          ),
+                        ),
+                      ],
                     ),
             ),
           ],
@@ -375,6 +394,14 @@ class _AskerCard extends StatelessWidget {
       builder: (context, _) {
         final text = game.live.askerText;
         final placeholder = text.isEmpty || !game.micEnabled;
+        final suggestion = game.suggestion;
+        if (suggestion != null) {
+          return _SuggestionCard(
+            game: game,
+            suggestion: suggestion,
+            heard: game.micEnabled ? text : '',
+          );
+        }
         return _TranscriptCard(
           children: [
             Row(
@@ -414,6 +441,87 @@ class _AskerCard extends StatelessWidget {
           ],
         );
       },
+    );
+  }
+}
+
+/// 4a party, after "Suggest one": a deck question for the asker to read
+/// out. It stays up while they ask, since the live transcript would push it
+/// off the card mid-sentence; what the mic hears runs along the bottom
+/// instead, so the room still sees it's listening.
+class _SuggestionCard extends StatelessWidget {
+  const _SuggestionCard({
+    required this.game,
+    required this.suggestion,
+    required this.heard,
+  });
+
+  final GameController game;
+  final String suggestion;
+  final String heard;
+
+  @override
+  Widget build(BuildContext context) {
+    final line = MediaQuery.textScalerOf(context).scale(13) * 1.5;
+    final small = SusText.body(
+      13,
+      weight: FontWeight.w600,
+      color: SusColors.brown,
+    );
+    return _TranscriptCard(
+      children: [
+        Row(
+          children: [
+            const Icon(Icons.lightbulb_outline_rounded, size: 17),
+            const SizedBox(width: 6),
+            Expanded(
+              child: Text(
+                'Asker · try this one',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: SusText.label(13),
+              ),
+            ),
+            if (game.micEnabled) LevelBars(level: game.live.micLevel),
+          ],
+        ),
+        const SizedBox(height: 8),
+        Expanded(
+          child: Semantics(
+            liveRegion: true,
+            child: FitText(
+              suggestion,
+              // Down to 12 so the longest card in either deck shows whole
+              // on the smallest phone at the largest text (a test deals
+              // them all).
+              sizes: const [24, 21, 18, 16, 14, 12],
+              overflow: FitOverflow.keepStart,
+              style: (size) => SusText.display(size),
+            ),
+          ),
+        ),
+        const SizedBox(height: 4),
+        SizedBox(
+          height: line,
+          child: Row(
+            children: [
+              // Apart from the words, so trimming them to their newest end
+              // never trims the label away.
+              if (heard.isNotEmpty) Text('Heard: ', style: small),
+              Expanded(
+                child: FitText(
+                  heard.isEmpty ? 'Read it out, or ask your own.' : heard,
+                  sizes: const [13],
+                  overflow: heard.isEmpty
+                      ? FitOverflow.keepStart
+                      : FitOverflow.keepEnd,
+                  style: (_) => small,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 }
