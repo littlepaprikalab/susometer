@@ -526,6 +526,60 @@ class EndShowSheet extends StatelessWidget {
   }
 }
 
+/// Play again, asked first (SPEC.md decision 82): it wipes the game the room
+/// has just finished, and it's the biggest button on the leaderboard.
+class NewGameSheet extends StatelessWidget {
+  const NewGameSheet({
+    super.key,
+    required this.onKeepScores,
+    required this.onPlayAgain,
+  });
+
+  final VoidCallback onKeepScores;
+  final VoidCallback onPlayAgain;
+
+  @override
+  Widget build(BuildContext context) {
+    return SheetCard(
+      child: Semantics(
+        scopesRoute: true,
+        explicitChildNodes: true,
+        namesRoute: true,
+        label: 'Play again?',
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text('Play again?', style: SusText.display(30)),
+            const SizedBox(height: 14),
+            Text(
+              'Same contestants, new game. These scores, the replay and the '
+              "transcripts are wiped, and there's no getting them back.",
+              style: SusText.body(15),
+            ),
+            const SizedBox(height: 14),
+            ChunkyButton(
+              label: 'Wipe and play again',
+              color: SusColors.ink,
+              textColor: SusColors.mustard,
+              height: 56,
+              fontSize: 19,
+              onPressed: onPlayAgain,
+            ),
+            const SizedBox(height: 10),
+            ChunkyButton(
+              label: 'Keep the scores',
+              height: 52,
+              fontSize: 16,
+              onPressed: onKeepScores,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 /// Pause (from 4a/4b, SPEC.md §4): Resume · Skip question · End the show,
 /// plus a quick mute.
 class PauseSheet extends StatelessWidget {

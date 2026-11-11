@@ -102,6 +102,7 @@ void abuse(
     // Final answer and Reveal more often than the timers used to fire.
     (fw(4, 18), g.finalAnswer),
     (fw(2, 1), g.differentQuestion),
+    (fw(2, 2), g.suggestQuestion),
     (fw(2, 4), g.readyToAnswer),
     (
       fw(3, 4),
@@ -310,6 +311,14 @@ void checkInvariants(World w, List<Object> errors, String where) {
     g.tickerRunning,
     reason: '$where: live batching out of step with the ticker',
   );
+  // A suggestion (decision 81) only ever belongs to a party question of a
+  // game in play, and never outlives that game.
+  if (g.suggestion != null) {
+    expect(g.mode, GameMode.party, reason: '$where: suggestion in solo');
+    expect(g.turns, isNotEmpty, reason: '$where: suggestion without a game');
+    expect(g.phase, isNot(GamePhase.lobby), reason: where);
+    expect(g.phase, isNot(GamePhase.consent), reason: where);
+  }
   if (needsTurns.contains(g.phase)) {
     expect(g.turns, isNotEmpty, reason: '$where: ${g.phase} without a game');
     expect(

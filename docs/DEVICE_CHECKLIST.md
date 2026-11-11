@@ -62,6 +62,31 @@ Settings → **Signal check** → **Start both**. Allow microphone and speech re
   the questions*, no new warm-ups (decision 76).
 - [ ] *Call it!* (decision 77): each voter taps *Legit* or *Sus* by their name. **Does everyone
   get it without being told?** Tap your pick again: it clears. Tap the other: it switches.
+- [ ] *Call it!* with 3 or more players (decision 80): the line above *Reveal* names who hasn't
+  picked, and *Reveal* turns from cream to teal when the last pick goes in. **Does anyone still
+  tap *Reveal* before the others have voted?**
+- [ ] On the verdict, the room's calls show right under the score without scrolling, and "Up
+  next: {name} asks" names the asker the host then calls. **Did that player have a question
+  ready?** (They can't see the screen unless the hot seat shows it.)
+- [ ] After *Call it!* (phone held out to the room), tap *Next question* straight away: **how
+  often does "Finding {name}'s pulse…" show, and for how many seconds?** (The simulated parties
+  assume 3 s; decision 80.)
+- [ ] *Suggest one* (decision 81): say "I don't know what to ask", then tap it. A deck question
+  shows on the card; *Another one* swaps it. Have the asker read it out: the card keeps the
+  question, "Heard: …" follows along, and the verdict's question is what they said, without the
+  "I don't know". **Could the asker read it from where they sat, or did the hot seat read it
+  out?**
+- [ ] *Suggest one* is on the asker's card, top right, well away from *Done asking* (decision
+  84). **Did the hot seat find it without being told? Can a thumb reach it one-handed?**
+- [ ] Ask a real question, then tap *Suggest one* by mistake and *Done asking* straight after,
+  without anyone speaking: the answer screen and the verdict still show the question that was
+  asked (decision 83).
+- [ ] Time a whole game against the lobby's "about N min in all".
+- [ ] On the leaderboard, tap *Play again*: a sheet asks first. *Keep the scores* keeps them;
+  double-tap *Play again* fast and the scores are still there. (Decision 82.)
+- [ ] **For the lie detector (decision 82):** over the whole game, count the verdicts (Legit /
+  Hmm… / Sus) and note who won Best lie detector. **Did they just pick Legit every time?** If Sus
+  was under about one verdict in four, a right Sus call should count double.
 - [ ] Next question: answer **immediately**, before tapping *Done asking*. Tap it, then *Final
   answer*: the pause tile on the verdict should be short, not the time it took to tap.
 - [ ] From *{name}, ask your question!* to *{name}, your answer?* to *Locking in the reading…*,

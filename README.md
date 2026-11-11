@@ -31,7 +31,9 @@ Built for the DEV [Presage SmartSpectra SDK Challenge](https://dev.to/challenges
 ## How a game goes
 
 1. **Lobby:** add 2–8 contestants (or 1+ in *Solo · host asks*), pick 3/5/7 questions per turn
-   and a Mild or Spicy deck. The **?** next to the gear explains the score and the #tags.
+   and a Mild or Spicy deck. The lobby says about how long that game will take (eight players
+   with seven questions each is most of an hour). The **?** next to the gear explains the score
+   and the #tags.
 2. **Consent:** the phone goes to the hot-seat player, who reads what the camera measures and
    what happens to the data, then taps *I agree, measure me* or *Skip my turn*.
 3. **Calibrate:** about 20 s of sitting still, then 3 easy warm-up questions read by the host,
@@ -44,16 +46,20 @@ Built for the DEV [Presage SmartSpectra SDK Challenge](https://dev.to/challenges
    questions. Once it's locked in, tap *Start the questions* when everyone's ready.
 4. **Ask:** the host says who asks ("Alex, ask your question!"); everyone else takes turns,
    starting with the next player. The question appears on screen as they speak, and the player
-   taps *Done asking* when it's over. In solo mode the host reads one from the deck, and it stays
-   on screen until you tap *Ready to answer*. Solo questions get hotter through the turn and end
-   on the hottest, the same way for every player; "someone in this room" questions only come up
-   when others are playing.
+   taps *Done asking* when it's over. Nothing to ask? *Suggest one* puts a question from the
+   deck on the card for the asker to read out (*Another one* swaps it). In solo mode the host
+   reads one from the deck, and it stays on screen until you tap *Ready to answer*. Solo
+   questions get hotter through the turn and end on the hottest, the same way for every player;
+   "someone in this room" questions only come up when others are playing.
 5. **Answer:** the player answers out loud and smashes *Final answer*.
 6. **Call it!:** everyone else picks *Legit* or *Sus* next to their name *before* the reveal
-   (tap your pick again to take it back), then someone taps *Reveal*.
-7. **Countdown → Verdict:** drumroll, 3-2-1, then the scoreboard, applause meter and what moved.
+   (tap your pick again to take it back), then someone taps *Reveal*. The screen says who's
+   still to pick, and *Reveal* turns solid once everyone has; it never waits for them.
+7. **Countdown → Verdict:** drumroll, 3-2-1, then the scoreboard, how the room called it, the
+   applause meter and what moved, and who asks next.
 8. **Leaderboard:** Best poker face, Most sus, Best lie detector, Biggest spike, and a Replay of
-   every question. *Wipe everything* clears it all.
+   every question. A tie is shared. *Play again* asks before it wipes the scores; *Wipe
+   everything* clears it all.
 
 ## Requirements
 
@@ -220,8 +226,11 @@ seconds") and an *Ask it again* button. Every constant lives in
 for a screenshot, or E5 *Try again*), the SDK needs 12 s or more for its first pulse. A question
 asked meanwhile used to come out No clean read every time, then pass when asked again. Now a
 question doesn't start until the camera has a fresh pulse from its current session: the screen
-says *Finding Sam's pulse…*, and only Pause works until then. Usually there's no wait at all. After
-25 s it suggests facing the light, or Pause to skip. (SPEC decision 79.)
+says *Finding Sam's pulse…*, and only Pause works until then. In solo there's usually no wait at
+all. In a party the phone is held out to the room for *Call it!*, so the next question often
+waits a few seconds for the camera to find the player again (about one question in three in the
+simulated parties below), and the wait says who asks next. After 25 s it suggests facing the
+light, or Pause to skip. (SPEC decisions 79 and 80.)
 
 **Expression #tag.** While the camera measures, the player's strongest expression is stamped in
 its top-right corner as a #tag, in the SDK's own words (#surprise, #happy, #neutral…). SmartSpectra
@@ -354,6 +363,19 @@ flutter test
 Tests run without a device. They cover scoring and turn detection with synthetic SmartSpectra
 streams, full games on fake time (controller and through the real screens at 390×844 with the
 real fonts), accessibility actions and color contrast.
+
+**Simulated parties.** [`test/party_sim.dart`](test/party_sim.dart) plays whole games with
+made-up people (eager, slow, forgetful, fidgety, nervous) through the real game logic, and
+[`test/party_sim_test.dart`](test/party_sim_test.dart) holds the room's experience to a bar:
+every game ends, no tap does nothing, a glance away never costs a question, everyone asks as
+often as everyone else. To print what it measured (game length, time per screen, waits, votes
+cut off by *Reveal*):
+
+```bash
+PARTY_SIM_REPORT=1 flutter test test/party_sim_test.dart
+```
+
+The people's timings are assumptions, not measurements. SPEC decision 80 has the findings.
 
 - **Swift type check on Linux/macOS without Xcode:** `tool/swift_typecheck/run.sh` checks the
   native bridge against stand-in modules (the SmartSpectra one mirrors the 3.4.0 interface).

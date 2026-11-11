@@ -29,6 +29,10 @@ const phaseTapGuard = Duration(milliseconds: 450);
 /// The guard's [IgnorePointer], so tests can wait it out.
 const phaseTapGuardKey = ValueKey('phaseTapGuard');
 
+/// The same guard on the Play again sheet, which comes up under the finger
+/// that tapped Play again.
+const sheetTapGuardKey = ValueKey('sheetTapGuard');
+
 class _GameRootState extends State<GameRoot> with WidgetsBindingObserver {
   bool _confirmEnd = false;
   final GlobalKey _shareKey = GlobalKey();
@@ -60,6 +64,7 @@ class _GameRootState extends State<GameRoot> with WidgetsBindingObserver {
   @override
   void dispose() {
     _freshTimer?.cancel();
+    _sheetTimer?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
@@ -79,6 +84,33 @@ class _GameRootState extends State<GameRoot> with WidgetsBindingObserver {
 
   void _askEnd() => setState(() => _confirmEnd = true);
   void _closeEnd() => setState(() => _confirmEnd = false);
+
+  bool _confirmNew = false;
+  bool _freshSheet = false;
+  Timer? _sheetTimer;
+
+  /// Leaderboard and Replay "Play again": ask first when there's a game to
+  /// lose (SPEC.md decision 82). With nothing played, there's nothing to ask
+  /// about.
+  void _askNew() {
+    final game = GameScope.of(context);
+    if (!game.turns.any((t) => t.results.isNotEmpty)) {
+      game.playAgain();
+      return;
+    }
+    // The sheet's buttons come up where Play again was: the second tap of a
+    // double tap mustn't land on one.
+    _sheetTimer?.cancel();
+    _sheetTimer = Timer(phaseTapGuard, () {
+      if (mounted) setState(() => _freshSheet = false);
+    });
+    setState(() {
+      _confirmNew = true;
+      _freshSheet = true;
+    });
+  }
+
+  void _closeNew() => setState(() => _confirmNew = false);
 
   Widget _screen(GameController game) {
     return switch (game.phase) {
@@ -106,8 +138,9 @@ class _GameRootState extends State<GameRoot> with WidgetsBindingObserver {
       GamePhase.sdkOffline => const SdkOfflineScreen(),
       GamePhase.leaderboard => LeaderboardScreen(
         onShare: () => shareResults(context, _shareKey),
+        onPlayAgain: _askNew,
       ),
-      GamePhase.replay => const ReplayScreen(),
+      GamePhase.replay => ReplayScreen(onPlayAgain: _askNew),
     };
   }
 
@@ -124,6 +157,13 @@ class _GameRootState extends State<GameRoot> with WidgetsBindingObserver {
         // question's wait for the pulse, which puts Done asking (or Ready
         // to answer) where the wait's status was.
         _notePhase((game.shownPhase, game.waitingForPulse));
+        // The Play again question belongs to the scores on screen: if the
+        // game leaves them any other way, it mustn't come back up with the
+        // next game's.
+        final onScores =
+            game.phase == GamePhase.leaderboard ||
+            game.phase == GamePhase.replay;
+        if (!onScores) _confirmNew = false;
         return Stack(
           children: [
             if (game.phase == GamePhase.leaderboard && game.awards != null)
@@ -170,6 +210,29 @@ class _GameRootState extends State<GameRoot> with WidgetsBindingObserver {
               Positioned.fill(
                 child: BlockSemantics(
                   child: SheetOverlay(child: PauseSheet(onEndShow: _askEnd)),
+                ),
+              ),
+            // Only over the scores it would wipe: if the game moves on
+            // some other way, the question goes with it.
+            if (_confirmNew && onScores)
+              Positioned.fill(
+                child: BlockSemantics(
+                  // Absorbs, not ignores: an ignored tap would fall through
+                  // to Share results or Watch the replay behind the sheet.
+                  child: AbsorbPointer(
+                    key: sheetTapGuardKey,
+                    absorbing: _freshSheet,
+                    child: SheetOverlay(
+                      onDismiss: _closeNew,
+                      child: NewGameSheet(
+                        onKeepScores: _closeNew,
+                        onPlayAgain: () {
+                          _closeNew();
+                          game.playAgain();
+                        },
+                      ),
+                    ),
+                  ),
                 ),
               ),
             if (_confirmEnd && game.inGame)

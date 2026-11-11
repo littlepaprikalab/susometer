@@ -231,6 +231,42 @@ class LiveState extends ChangeNotifier {
   }
 }
 
+/// A party question as it stood when "Suggest one" started listening over
+/// (see [GameController.suggestQuestion]).
+class _HeardBefore {
+  _HeardBefore({
+    required this.detector,
+    required this.transcript,
+    required this.askerFromSeg,
+    required this.earlyFromSeg,
+    required this.startMs,
+    required this.upToSeg,
+  });
+
+  final TurnDetector detector;
+  final TranscriptBuffer transcript;
+  final int? askerFromSeg;
+
+  /// The segment an answer given before Done asking is filed under, if the
+  /// player had started one; the asker carrying on hands it back.
+  int? earlyFromSeg;
+  final int startMs;
+
+  /// The newest recognition segment at the tap: words in it or before it
+  /// were said before the tap, however late they arrive.
+  final int? upToSeg;
+
+  void hear(SpeechText e, {required bool paused}) {
+    final from = askerFromSeg;
+    if (from != null && e.segment < from) return;
+    transcript.add(e);
+    if (paused) return;
+    for (final event in detector.onSpeech(e.tMs)) {
+      if (event is EarlyAnswerWithdrawn) earlyFromSeg = null;
+    }
+  }
+}
+
 /// Status of each permission, for E2.
 class PermissionReport {
   const PermissionReport({
@@ -329,6 +365,21 @@ class GameController extends ChangeNotifier {
   static const maxPlayers = 8;
   int get minPlayers => mode == GameMode.party ? 2 : 1;
   bool get canStart => players.length >= minPlayers;
+
+  /// What a turn costs before its first question (consent, the sit-still,
+  /// three warm-ups) and what each question costs from the ask to the
+  /// verdict, in seconds. From `test/party_sim.dart`'s simulated rooms
+  /// (about 65 s and 36 s), rounded up for the chatter a real room adds.
+  static const turnSetupS = 75;
+  static const questionS = 40;
+
+  /// Roughly how long the game in the lobby would take, in minutes, so a
+  /// room of eight sees what seven questions each adds up to before it
+  /// starts (SPEC.md decision 80). Null until there are enough players.
+  int? get estimatedMinutes => canStart
+      ? (players.length * (turnSetupS + questionsPerTurn * questionS) / 60)
+            .round()
+      : null;
 
   // Lobby settings only change in the lobby: mid-game they would break turn
   // order, question counts or how transcripts are routed.
@@ -502,6 +553,7 @@ class GameController extends ChangeNotifier {
     playerIndex = 0;
     questionIndex = 0;
     awards = null;
+    _clearSuggestion();
     _clearPause();
     _voiceLostMidTurn = false;
     notice = micEnabled ? null : 'Playing without voice: no transcripts.';
@@ -931,7 +983,7 @@ class GameController extends ChangeNotifier {
   /// answer if the asker doesn't carry on.
   int? _earlyFromSeg;
   int _earlySeq = 0;
-  final TranscriptBuffer _askerTranscript = TranscriptBuffer();
+  TranscriptBuffer _askerTranscript = TranscriptBuffer();
   final TranscriptBuffer _answerTranscript = TranscriptBuffer();
   int? settleUntilMs;
   QuestionResult? currentResult;
@@ -957,10 +1009,17 @@ class GameController extends ChangeNotifier {
   /// with the one after the hot seat, so everyone gets to ask (SPEC.md
   /// decision 76). The same question asked again keeps its asker. Null in
   /// solo mode.
-  Player? get currentAsker {
+  Player? get currentAsker => _askerFor(questionIndex);
+
+  /// Party: who asks the question after this one, so the screens can tell
+  /// them before the host does and they come with a question ready (SPEC.md
+  /// decision 80). Null on the turn's last question and in solo mode.
+  Player? get nextAsker => isLastQuestion ? null : _askerFor(questionIndex + 1);
+
+  Player? _askerFor(int question) {
     if (mode != GameMode.party || turns.length < 2) return null;
     final others = turns.length - 1;
-    final i = (playerIndex + 1 + questionIndex % others) % turns.length;
+    final i = (playerIndex + 1 + question % others) % turns.length;
     return turns[i].player;
   }
 
@@ -1020,6 +1079,9 @@ class GameController extends ChangeNotifier {
     _earlyFromSeg = null;
     _earlySeq++;
     _soloReady = false;
+    // A question that starts over starts from nothing heard.
+    _before = null;
+    if (_suggestionAt != (playerIndex, questionIndex)) _clearSuggestion();
     live.resetQuestion();
     // Solo's card is dealt now, so a camera restart during the wait asks
     // the same one.
@@ -1031,6 +1093,12 @@ class GameController extends ChangeNotifier {
     pulseWaitSinceMs = nowMs;
     _setPhase(GamePhase.ask);
     if (!_waitingForPulse) _askQuestion();
+    // No question runs without its ticker: nothing else ends its wait for
+    // the pulse, closes its window or watches the camera. A restart that
+    // gave up before its ticker (Pause tapped while the mic was still
+    // starting) left one missing, and Skip question from that Pause then
+    // began the next question without it (SPEC.md decision 83).
+    if (!paused && _ticker == null) _startTicker();
   }
 
   /// The question starts: its window opens and the host asks for it (party)
@@ -1048,15 +1116,112 @@ class GameController extends ChangeNotifier {
     live.resetQuestion();
     notifyListeners();
     if (mode == GameMode.party) unawaited(_say(askLine));
-    if (micEnabled) {
-      unawaited(
-        speech
-            .newSegment()
-            .then((seg) => _askerFromSeg = seg)
-            .catchError((Object _) => null),
-      );
-    }
+    _openAskerSegment();
     if (mode == GameMode.solo) unawaited(_soloReadQuestion());
+  }
+
+  /// Opens the recognition segment the question's words are filed under. If
+  /// the question starts listening again meanwhile (a suggestion), the
+  /// older segment's late answer is dropped, or what the room said before
+  /// would come back in as the question.
+  void _openAskerSegment() {
+    final seq = ++_askerSeq;
+    if (!micEnabled) return;
+    unawaited(
+      speech
+          .newSegment()
+          .then((seg) {
+            if (seq == _askerSeq) _askerFromSeg = seg;
+          })
+          .catchError((Object _) => null),
+    );
+  }
+
+  int _askerSeq = 0;
+
+  // ---------------------------------------------------------------------------
+  // Party: a question for an asker who has none (SPEC.md decision 81)
+
+  /// The deck question on the asker's card, once someone has tapped
+  /// "Suggest one" on this question; null until then. It's only a prompt:
+  /// the asker still says it (or anything else) out loud, and the question
+  /// on the Verdict and Replay is what was heard.
+  String? suggestion;
+
+  /// The turn and question [suggestion] was dealt for. The same question
+  /// asked again (No clean read, a camera restart) keeps it on the card.
+  (int, int)? _suggestionAt;
+
+  /// Party "Suggest one" / "Another one": deals a question from the lobby's
+  /// deck, at the heat solo would use for this point in the turn.
+  ///
+  /// If the room has said anything on this question, listening starts over:
+  /// what it said while it wondered what to ask isn't the question, and
+  /// shouldn't open its window. But the button sits beside Done asking, and
+  /// a thumb that lands on it after a real question would throw that
+  /// question away. So what was heard is kept aside ([_HeardBefore]) until
+  /// something new is heard; if nothing is, Done asking takes it back.
+  void suggestQuestion() {
+    if (mode != GameMode.party || phase != GamePhase.ask) return;
+    final d = detector;
+    if (paused || waitingForPulse || d == null) return;
+    if (!_once('suggest')) return;
+    final dealt = _questions.next(questionIndex, questionsPerTurn);
+    if (dealt.isEmpty) return;
+    suggestion = dealt;
+    _suggestionAt = (playerIndex, questionIndex);
+    // Nothing heard since the question (or the last suggestion) began:
+    // there's nothing to start over from, and nothing more to keep aside.
+    final heard = d.lastAskerSpeechMs != null || !_askerTranscript.isEmpty;
+    if (heard) {
+      _before = _HeardBefore(
+        detector: d,
+        transcript: _askerTranscript,
+        askerFromSeg: _askerFromSeg,
+        earlyFromSeg: _earlyFromSeg,
+        startMs: questionStartMs,
+        upToSeg: _newestSegment,
+      );
+      _askerTranscript = TranscriptBuffer();
+      _segmentFloor = _newestSegment;
+      _askerFromSeg = null;
+      _earlyFromSeg = null;
+      _earlySeq++;
+      detector = TurnDetector(party: true, startMs: nowMs, config: _turnConfig);
+      questionStartMs = nowMs;
+      live.resetQuestion();
+      _openAskerSegment();
+    }
+    notifyListeners();
+  }
+
+  /// The question as it stood when Suggest one started listening over, and
+  /// still being followed (its talk edges, its recognizer's late words),
+  /// until something new is heard.
+  _HeardBefore? _before;
+
+  /// Done asking, Final answer or Skip with nothing heard since Suggest
+  /// one: the question is the one asked before the tap.
+  void _takeBackHeardBefore() {
+    final before = _before;
+    if (before == null) return;
+    _before = null;
+    detector = before.detector;
+    _askerTranscript = before.transcript;
+    _askerFromSeg = before.askerFromSeg;
+    _earlyFromSeg = before.earlyFromSeg;
+    questionStartMs = before.startMs;
+    // Segments asked for since the tap belong to the listening it replaces.
+    _askerSeq++;
+    _earlySeq++;
+    live.askerText = _questionSoFar;
+    live.notify();
+  }
+
+  void _clearSuggestion() {
+    suggestion = null;
+    _suggestionAt = null;
+    _before = null;
   }
 
   Future<void> _soloReadQuestion() async {
@@ -1102,6 +1267,7 @@ class GameController extends ChangeNotifier {
   /// Pause sheet moves the game on (SPEC.md decision 76).
   void doneAsking() {
     if (phase != GamePhase.ask || paused) return;
+    _takeBackHeardBefore();
     _apply(detector?.onDoneAskingTap(nowMs) ?? const []);
   }
 
@@ -1110,6 +1276,7 @@ class GameController extends ChangeNotifier {
     if (phase != GamePhase.answer && phase != GamePhase.ask) return;
     // The pause is part of no answer: Resume starts the question over.
     if (paused) return;
+    if (phase == GamePhase.ask) _takeBackHeardBefore();
     _apply(detector?.onFinalAnswerTap(nowMs) ?? const []);
   }
 
@@ -1317,6 +1484,7 @@ class GameController extends ChangeNotifier {
     // Already skipped, and the next question is still waiting on the camera
     // (Pause and Skip again during the restart): one result per question.
     if (currentTurn.results.any((r) => r.index == questionIndex)) return;
+    if (phase == GamePhase.ask) _takeBackHeardBefore();
     final asked = _questionSoFar;
     final q = mode == GameMode.solo
         ? questionText
@@ -1473,6 +1641,7 @@ class GameController extends ChangeNotifier {
   }
 
   Future<void> _nextPlayer() async {
+    _clearSuggestion();
     if (turns.isEmpty) {
       _setPhase(GamePhase.lobby);
       return;
@@ -1545,6 +1714,7 @@ class GameController extends ChangeNotifier {
     awards = null;
     currentResult = null;
     detector = null;
+    _clearSuggestion();
     log.clear();
     live
       ..resetQuestion()
@@ -1870,6 +2040,7 @@ class GameController extends ChangeNotifier {
         }
       } else if (!paused) {
         _apply(detector?.onPlayerTalkEdge(talking, e.tMs) ?? const []);
+        _before?.detector.onPlayerTalkEdge(talking, e.tMs);
       }
     }
 
@@ -1916,6 +2087,7 @@ class GameController extends ChangeNotifier {
         live.micLevel = e.level;
         if (!paused && (phase == GamePhase.ask || phase == GamePhase.answer)) {
           _apply(detector?.onLevel(e.level, e.tMs) ?? const []);
+          _before?.detector.onLevel(e.level, e.tMs);
         }
         live.notify();
       case SpeechStateChange():
@@ -1961,6 +2133,16 @@ class GameController extends ChangeNotifier {
     }
     // The room talking while the camera finds the pulse isn't the question.
     if (waitingForPulse) return;
+    // Late words from the recognizer for what was said before Suggest one
+    // go to the question kept aside, in case Done asking takes it back.
+    final before = _before;
+    if (before != null && phase == GamePhase.ask) {
+      final upTo = before.upToSeg;
+      if (upTo != null && e.segment <= upTo) {
+        before.hear(e, paused: paused);
+        return;
+      }
+    }
     final askerFrom = _askerFromSeg;
     if (askerFrom != null && e.segment < askerFrom) return;
     final floor = _segmentFloor;
@@ -1973,6 +2155,9 @@ class GameController extends ChangeNotifier {
         (phase == GamePhase.ask ||
             answerFrom == null ||
             e.segment < answerFrom);
+    // Something new was heard: the listening that started at Suggest one
+    // is the question now.
+    if (phase == GamePhase.ask) _before = null;
     if (isQuestion) {
       _askerTranscript.add(e);
     } else {
@@ -2036,6 +2221,7 @@ class GameController extends ChangeNotifier {
           _apply(detector?.onHostFinishedQuestion(now) ?? const []);
         }
         _apply(detector?.tick(now) ?? const []);
+        _before?.detector.tick(now);
         notifyListeners();
       case GamePhase.answer:
         _apply(detector?.tick(now) ?? const []);

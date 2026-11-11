@@ -1766,6 +1766,79 @@ void main() {
       });
     });
 
+    test('the next asker is known a question ahead, and none after the '
+        "turn's last", () {
+      fakeAsync((async) {
+        final w = World(async);
+        w.startGame(['Sam', 'Alex', 'Priya'], questions: 3);
+        // Before the first question: Calibrate can already say who's first.
+        expect(w.game.currentAsker!.name, 'Alex');
+        w.calibrate();
+        for (final (asker, next) in [
+          ('Alex', 'Priya'),
+          ('Priya', 'Alex'),
+          ('Alex', null),
+        ]) {
+          expect(w.game.currentAsker!.name, asker);
+          w.askAndAnswer();
+          expect(w.game.phase, GamePhase.verdict);
+          expect(w.game.nextAsker?.name, next);
+          w.game.nextQuestion();
+          w.elapse(100);
+          if (next != null) expect(w.game.currentAsker!.name, next);
+        }
+        expect(w.game.phase, GamePhase.consent);
+        w.dispose();
+      });
+    });
+
+    test('solo has no next asker either', () {
+      fakeAsync((async) {
+        final w = World(async);
+        w.game.setMode(GameMode.solo);
+        w.startGame(['Sam'], questions: 3);
+        w.calibrate();
+        expect(w.game.nextAsker, isNull);
+        w.dispose();
+      });
+    });
+
+    test("the lobby's estimate: none until the game can start, then it "
+        'grows with players and questions', () {
+      fakeAsync((async) {
+        final w = World(async);
+        final game = w.game;
+        expect(game.estimatedMinutes, isNull);
+        game.addPlayer('Sam');
+        expect(game.estimatedMinutes, isNull, reason: 'a party needs two');
+        game.addPlayer('Alex');
+        // 2 × (75 s + 5 × 40 s) = 550 s.
+        expect(game.estimatedMinutes, 9);
+        game.setQuestionsPerTurn(7);
+        expect(game.estimatedMinutes, 12);
+        for (final n in ['Priya', 'Jordan', 'Kai', 'Mo', 'Lee', 'Ana']) {
+          game.addPlayer(n);
+        }
+        // 8 × (75 s + 7 × 40 s): most of an hour.
+        expect(game.estimatedMinutes, 47);
+        game.setQuestionsPerTurn(3);
+        expect(game.estimatedMinutes, 26);
+        w.dispose();
+      });
+    });
+
+    test('a solo player gets an estimate too', () {
+      fakeAsync((async) {
+        final w = World(async);
+        w.game
+          ..setMode(GameMode.solo)
+          ..addPlayer('Sam')
+          ..setQuestionsPerTurn(3);
+        expect(w.game.estimatedMinutes, 3);
+        w.dispose();
+      });
+    });
+
     test('a question asked again keeps its asker', () {
       fakeAsync((async) {
         final w = World(async);

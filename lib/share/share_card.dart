@@ -49,19 +49,19 @@ class ShareCard extends StatelessWidget {
                 if (awards.pokerFace != null)
                   _line(
                     'Best poker face',
-                    awards.pokerFace!.player.name,
+                    awards.pokerFace!.names,
                     'avg ${awards.pokerFace!.average.round()}',
                   ),
                 if (awards.mostSus != null)
                   _line(
                     'Most sus',
-                    awards.mostSus!.player.name,
+                    awards.mostSus!.names,
                     'avg ${awards.mostSus!.average.round()}',
                   ),
                 if (awards.lieDetector != null)
                   _line(
                     'Best lie detector',
-                    awards.lieDetector!.player.name,
+                    awards.lieDetector!.names,
                     '${awards.lieDetector!.matches} of ${awards.lieDetector!.votes}',
                   ),
                 if (awards.biggestSpike != null)
@@ -73,7 +73,7 @@ class ShareCard extends StatelessWidget {
                 const SizedBox(height: 10),
                 for (var i = 0; i < awards.ranked.length; i++)
                   _line(
-                    '${i + 1}.',
+                    '${awards.placeOf(i)}.',
                     awards.ranked[i].player.name,
                     '${awards.ranked[i].average.round()}',
                   ),

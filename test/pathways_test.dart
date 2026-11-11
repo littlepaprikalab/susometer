@@ -1358,6 +1358,47 @@ void main() {
     await rig.finish();
   });
 
+  testWidgets('a suggestion on the asker card: one frame per tick while it '
+      'is read out, at about the cost of the plain card', (tester) async {
+    // The card measures its text to pick a size on every rebuild, with more
+    // sizes to try than the transcript it replaces (decision 81).
+    final rig = Rig(tester);
+    await rig.pumpApp();
+    await rig.startParty(['Sam', 'Alex']);
+    await rig.tap('I agree, measure me');
+    await rig.until(() => rig.game.phase == GamePhase.ask);
+    await rig.until(() => !rig.game.waitingForPulse);
+    await rig.wait(1000);
+
+    Future<double> msPerFrame() async {
+      var n = 0;
+      final sw = Stopwatch()..start();
+      for (var i = 0; i < 100; i++) {
+        rig.say(List.filled(1 + i % 12, 'maybe').join(' '));
+        rig.speech.controller.add(
+          SpeechLevel(0.2 + 0.1 * (i % 7), rig.presage.now),
+        );
+        await tester.pump(const Duration(milliseconds: 100));
+        n++;
+      }
+      return sw.elapsedMicroseconds / n / 1000;
+    }
+
+    final plain = await msPerFrame();
+    await rig.tap('Suggest one');
+    expect(find.text('Try this one'), findsOneWidget);
+    await expectOneFramePerTick(rig, 'the suggestion card');
+    expect(find.text('Heard: '), findsOneWidget, reason: 'still live');
+    final suggested = await msPerFrame();
+    // ignore: avoid_print
+    print(
+      'Ask frame: ${plain.toStringAsFixed(2)} ms plain, '
+      '${suggested.toStringAsFixed(2)} ms with a suggestion (debug)',
+    );
+    expect(suggested, lessThan(plain * 2 + 2), reason: '$suggested vs $plain');
+    await rig.finish();
+  });
+
   testWidgets('one frame per tick, and up to date, across the seams', (
     tester,
   ) async {

@@ -22,7 +22,8 @@ class HowToPlayScreen extends StatelessWidget {
     ),
     (
       'Asker: say it out loud',
-      'The host says who asks, then writes your question on screen.',
+      'The host says who asks, then writes your question on screen. '
+          'Stuck? Tap Suggest one.',
     ),
     (
       'Hot seat: tap, then answer',
@@ -431,7 +432,7 @@ class CalibrateScreen extends StatelessWidget {
           const SizedBox(height: 6),
           _OneLine(
             ready
-                ? 'Tap when ready. The host says who asks first.'
+                ? readyHint(game)
                 : chat
                 ? 'Answer out loud, then tap Next.'
                 : 'Easy warm-up questions come next.',
@@ -442,6 +443,15 @@ class CalibrateScreen extends StatelessWidget {
       ),
     );
   }
+}
+
+/// Under Start the questions: who asks first, so they have one ready (the
+/// host only names them as the question is due). Solo has no asker.
+String readyHint(GameController game) {
+  final asker = game.currentAsker;
+  if (asker == null) return 'Tap when ready. The host asks the questions.';
+  final first = game.currentTurn.results.isEmpty ? 'first' : 'next';
+  return 'Tap when ready. ${asker.name} asks $first.';
 }
 
 /// A line of Calibrate copy in a slot one line tall, whatever it says: it

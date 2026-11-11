@@ -341,14 +341,18 @@ class _Actions extends StatelessWidget {
 }
 
 class _TranscriptCard extends StatelessWidget {
-  const _TranscriptCard({required this.children});
+  const _TranscriptCard({required this.children, this.tallHeader = false});
 
   final List<Widget> children;
+
+  /// The first child is an [_AskerHeader], which is a tap target's height
+  /// and brings its own room above and below.
+  final bool tallHeader;
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+      padding: EdgeInsets.fromLTRB(16, tallHeader ? 0 : 12, 16, 12),
       decoration: BoxDecoration(
         color: SusColors.cream,
         borderRadius: BorderRadius.circular(20),
@@ -375,24 +379,25 @@ class _AskerCard extends StatelessWidget {
       builder: (context, _) {
         final text = game.live.askerText;
         final placeholder = text.isEmpty || !game.micEnabled;
+        final suggestion = game.suggestion;
+        if (suggestion != null) {
+          return _SuggestionCard(
+            game: game,
+            suggestion: suggestion,
+            heard: game.micEnabled ? text : '',
+          );
+        }
         return _TranscriptCard(
+          tallHeader: true,
           children: [
-            Row(
-              children: [
-                const Icon(Icons.mic_none_rounded, size: 17),
-                const SizedBox(width: 6),
-                Expanded(
-                  child: Text(
-                    game.micEnabled
-                        ? 'Asker · listening'
-                        : 'Asker · ask out loud',
-                    style: SusText.label(13),
-                  ),
-                ),
-                if (game.micEnabled) LevelBars(level: game.live.micLevel),
-              ],
+            _AskerHeader(
+              game: game,
+              icon: Icons.mic_none_rounded,
+              label: game.micEnabled
+                  ? 'Asker · listening'
+                  : 'Asker · ask out loud',
+              action: 'Suggest one',
             ),
-            const SizedBox(height: 10),
             Expanded(
               child: Semantics(
                 liveRegion: true,
@@ -414,6 +419,164 @@ class _AskerCard extends StatelessWidget {
           ],
         );
       },
+    );
+  }
+}
+
+/// The asker card's top row: what the card is doing, the mic level, and the
+/// button that deals a question from the deck (SPEC.md decision 81).
+///
+/// The button lives here, on the card it fills, and not in the bottom row:
+/// beside Done asking, a thumb reaching for one could land on the other
+/// (decision 84). The row is a tap target tall, so the button is easy to
+/// hit though it's drawn small.
+class _AskerHeader extends StatelessWidget {
+  const _AskerHeader({
+    required this.game,
+    required this.icon,
+    required this.label,
+    required this.action,
+  });
+
+  final GameController game;
+  final IconData icon;
+  final String label;
+
+  /// "Suggest one", or "Another one" once a suggestion is up.
+  final String action;
+
+  static const height = 44.0;
+
+  @override
+  Widget build(BuildContext context) {
+    final largeText = MediaQuery.textScalerOf(context).scale(13) > 14.5;
+    return SizedBox(
+      height: height,
+      child: Row(
+        children: [
+          Icon(icon, size: 17),
+          const SizedBox(width: 6),
+          // The label keeps its words: it shrinks a little before it would
+          // lose any, and at large text the mic bars make room for it (the
+          // card's own text shows the mic is live).
+          Expanded(
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: Alignment.centerLeft,
+              child: Text(label, maxLines: 1, style: SusText.label(13)),
+            ),
+          ),
+          const SizedBox(width: 8),
+          if (game.micEnabled && !largeText) ...[
+            LevelBars(level: game.live.micLevel, count: 5),
+            const SizedBox(width: 8),
+          ],
+          Semantics(
+            button: true,
+            label: action,
+            excludeSemantics: true,
+            onTap: game.suggestQuestion,
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: game.suggestQuestion,
+              child: SizedBox(
+                height: height,
+                child: Center(
+                  child: Container(
+                    constraints: const BoxConstraints(minWidth: 44),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 5,
+                    ),
+                    decoration: BoxDecoration(
+                      color: SusColors.cream,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: SusColors.ink, width: 2.5),
+                    ),
+                    child: Text(
+                      action,
+                      maxLines: 1,
+                      style: SusText.body(13, weight: FontWeight.w800),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// 4a party, after "Suggest one": a deck question for the asker to read
+/// out. It stays up while they ask, since the live transcript would push it
+/// off the card mid-sentence; what the mic hears runs along the bottom
+/// instead, so the room still sees it's listening.
+class _SuggestionCard extends StatelessWidget {
+  const _SuggestionCard({
+    required this.game,
+    required this.suggestion,
+    required this.heard,
+  });
+
+  final GameController game;
+  final String suggestion;
+  final String heard;
+
+  @override
+  Widget build(BuildContext context) {
+    final line = MediaQuery.textScalerOf(context).scale(13) * 1.5;
+    final small = SusText.body(
+      13,
+      weight: FontWeight.w600,
+      color: SusColors.brown,
+    );
+    return _TranscriptCard(
+      tallHeader: true,
+      children: [
+        _AskerHeader(
+          game: game,
+          icon: Icons.lightbulb_outline_rounded,
+          label: 'Try this one',
+          action: 'Another one',
+        ),
+        Expanded(
+          child: Semantics(
+            liveRegion: true,
+            child: FitText(
+              suggestion,
+              // Down to 12 so the longest card in either deck shows whole
+              // on the smallest phone at the largest text (a test deals
+              // them all).
+              sizes: const [24, 21, 18, 16, 14, 12],
+              overflow: FitOverflow.keepStart,
+              style: (size) => SusText.display(size),
+            ),
+          ),
+        ),
+        const SizedBox(height: 4),
+        SizedBox(
+          height: line,
+          child: Row(
+            children: [
+              // Apart from the words, so trimming them to their newest end
+              // never trims the label away.
+              if (heard.isNotEmpty) Text('Heard: ', style: small),
+              Expanded(
+                child: FitText(
+                  heard.isEmpty ? 'Read it out, or ask your own.' : heard,
+                  sizes: const [13],
+                  overflow: heard.isEmpty
+                      ? FitOverflow.keepStart
+                      : FitOverflow.keepEnd,
+                  style: (_) => small,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 }
@@ -656,6 +819,7 @@ class _PulseWaitCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final name = game.currentPlayer.name;
+    final asker = game.currentAsker;
     final text = game.pulseWaitIsLong
         ? 'Still no pulse. Face the light and hold still, or Pause to skip.'
         : "The question starts once the camera has $name's pulse.";
@@ -667,7 +831,13 @@ class _PulseWaitCard extends StatelessWidget {
             const SizedBox(width: 6),
             Expanded(
               child: Text(
-                'Hang on · no question yet',
+                // The asker can use the wait: they're named now, not when
+                // it ends.
+                asker == null
+                    ? 'Hang on · no question yet'
+                    : 'Hang on · ${asker.name} asks next',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
                 style: SusText.label(13),
               ),
             ),

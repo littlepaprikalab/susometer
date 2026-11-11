@@ -195,7 +195,16 @@ class _LobbyScreenState extends State<LobbyScreen> {
                       onAdd: () => _add(game),
                     ),
                     const SizedBox(height: 14),
-                    Text('Questions per turn', style: SusText.label(14)),
+                    Text(
+                      // How long that makes the whole game, once there are
+                      // enough players to say.
+                      switch (game.estimatedMinutes) {
+                        null => 'Questions per turn',
+                        final minutes =>
+                          'Questions per turn · about $minutes min in all',
+                      },
+                      style: SusText.label(14),
+                    ),
                     const SizedBox(height: 8),
                     _Choices<int>(
                       values: const [3, 5, 7],
@@ -208,7 +217,7 @@ class _LobbyScreenState extends State<LobbyScreen> {
                     Text(
                       game.mode == GameMode.solo
                           ? 'Question deck'
-                          : 'Question deck · for solo mode',
+                          : 'Question deck · for suggestions',
                       style: SusText.label(14),
                     ),
                     const SizedBox(height: 8),

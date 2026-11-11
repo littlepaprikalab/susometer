@@ -191,6 +191,9 @@ void main() {
     rig.presage.code = 'OK';
     await rig.tap('Ask it again');
     await rig.wait(300);
+    // The question waits for a pulse after the dark spell (decision 79), and
+    // the end of the wait starts the tap guard again.
+    await rig.until(() => !rig.game.waitingForPulse);
     await waitOutTapGuard(tester);
     await tester.tap(find.bySemanticsLabel('Pause the game'));
     await rig.wait(300);
@@ -217,6 +220,9 @@ void main() {
 
     // E2, E5 and solo mode.
     await rig.tap('Play again');
+    await rig.wait(600);
+    await shot(tester, key, '07c-play-again');
+    await rig.tap('Wipe and play again');
     await rig.wait(300);
     rig.speech.permissions = const SpeechPermissions(
       mic: 'denied',
