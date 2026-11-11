@@ -666,28 +666,34 @@ class LeaderboardScreen extends StatelessWidget {
                     // A tie is shared (SPEC.md decision 80). With everyone
                     // level there's no Most sus, and Best poker face gets
                     // the whole row.
-                    Row(
-                      children: [
-                        Expanded(
-                          child: _AwardCard(
-                            title: 'Best poker face',
-                            name: awards.pokerFace!.names,
-                            detail: 'avg ${awards.pokerFace!.average.round()}',
-                            dot: SusColors.teal,
-                          ),
-                        ),
-                        if (awards.mostSus case final mostSus?) ...[
-                          const SizedBox(width: 10),
+                    IntrinsicHeight(
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
                           Expanded(
                             child: _AwardCard(
-                              title: 'Most sus',
-                              name: mostSus.names,
-                              detail: 'avg ${mostSus.average.round()}',
-                              dot: SusColors.tomato,
+                              title: 'Best poker face',
+                              name: awards.pokerFace!.names,
+                              shared: awards.pokerFace!.players.length > 1,
+                              detail:
+                                  'avg ${awards.pokerFace!.average.round()}',
+                              dot: SusColors.teal,
                             ),
                           ),
+                          if (awards.mostSus case final mostSus?) ...[
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: _AwardCard(
+                                title: 'Most sus',
+                                name: mostSus.names,
+                                shared: mostSus.players.length > 1,
+                                detail: 'avg ${mostSus.average.round()}',
+                                dot: SusColors.tomato,
+                              ),
+                            ),
+                          ],
                         ],
-                      ],
+                      ),
                     ),
                     if (awards.lieDetector != null) ...[
                       const SizedBox(height: 10),
@@ -761,10 +767,14 @@ class _AwardCard extends StatelessWidget {
     required this.name,
     required this.detail,
     required this.dot,
+    this.shared = false,
   });
 
   final String title;
   final String name;
+
+  /// More than one winner: see [_WinnerNames].
+  final bool shared;
   final String detail;
   final Color dot;
 
@@ -784,11 +794,7 @@ class _AwardCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(title, style: SusText.label(13)),
-          FittedBox(
-            fit: BoxFit.scaleDown,
-            alignment: Alignment.centerLeft,
-            child: Text(name, style: SusText.display(26)),
-          ),
+          _WinnerNames(name, shared: shared, size: 26),
           Row(
             children: [
               Container(
@@ -802,6 +808,27 @@ class _AwardCard extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// An award's winner. One name shrinks to fit on its line, as it always
+/// did. Shared names wrap at a size that stays readable: shrunk onto one
+/// line, four names came out at 10 pt and eight would be unreadable.
+class _WinnerNames extends StatelessWidget {
+  const _WinnerNames(this.names, {required this.shared, required this.size});
+
+  final String names;
+  final bool shared;
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    if (shared) return Text(names, style: SusText.display(17));
+    return FittedBox(
+      fit: BoxFit.scaleDown,
+      alignment: Alignment.centerLeft,
+      child: Text(names, style: SusText.display(size)),
     );
   }
 }
@@ -832,12 +859,10 @@ class _LieDetectorCard extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text('Best lie detector', style: SusText.label(13)),
-                // Shared when voters are level; shrinks to fit like the
-                // other award names.
-                FittedBox(
-                  fit: BoxFit.scaleDown,
-                  alignment: Alignment.centerLeft,
-                  child: Text(award.names, style: SusText.display(22)),
+                _WinnerNames(
+                  award.names,
+                  shared: award.players.length > 1,
+                  size: 22,
                 ),
               ],
             ),

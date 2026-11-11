@@ -157,6 +157,13 @@ class _GameRootState extends State<GameRoot> with WidgetsBindingObserver {
         // question's wait for the pulse, which puts Done asking (or Ready
         // to answer) where the wait's status was.
         _notePhase((game.shownPhase, game.waitingForPulse));
+        // The Play again question belongs to the scores on screen: if the
+        // game leaves them any other way, it mustn't come back up with the
+        // next game's.
+        final onScores =
+            game.phase == GamePhase.leaderboard ||
+            game.phase == GamePhase.replay;
+        if (!onScores) _confirmNew = false;
         return Stack(
           children: [
             if (game.phase == GamePhase.leaderboard && game.awards != null)
@@ -207,14 +214,14 @@ class _GameRootState extends State<GameRoot> with WidgetsBindingObserver {
               ),
             // Only over the scores it would wipe: if the game moves on
             // some other way, the question goes with it.
-            if (_confirmNew &&
-                (game.phase == GamePhase.leaderboard ||
-                    game.phase == GamePhase.replay))
+            if (_confirmNew && onScores)
               Positioned.fill(
                 child: BlockSemantics(
-                  child: IgnorePointer(
+                  // Absorbs, not ignores: an ignored tap would fall through
+                  // to Share results or Watch the replay behind the sheet.
+                  child: AbsorbPointer(
                     key: sheetTapGuardKey,
-                    ignoring: _freshSheet,
+                    absorbing: _freshSheet,
                     child: SheetOverlay(
                       onDismiss: _closeNew,
                       child: NewGameSheet(

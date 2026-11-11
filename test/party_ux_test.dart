@@ -643,4 +643,122 @@ void main() {
     expect(rig.game.phase, GamePhase.lobby);
     await rig.finish();
   });
+
+  // --- Reliability pass (SPEC.md decision 83) --------------------------------
+
+  testWidgets('the Play again sheet: nothing behind it takes a tap while it '
+      'comes up, it survives a trip out of the app, and it never comes back '
+      "with another game's scores", (tester) async {
+    final rig = await played(tester);
+    await waitOutTapGuard(tester);
+    // A tap on Play again, then one straight after on Share results.
+    final share = tester.getCenter(find.text('Share results'));
+    await tester.tapAt(tester.getCenter(find.text('Play again')));
+    await tester.pump(const Duration(milliseconds: 80));
+    await tester.tapAt(share);
+    await tester.pump(const Duration(milliseconds: 80));
+    await tester.runAsync(
+      () => Future<void>.delayed(const Duration(milliseconds: 300)),
+    );
+    await rig.wait(200);
+    expect(rig.device.shares, 0, reason: 'the tap fell through the sheet');
+    expect(find.text('Play again?'), findsOneWidget);
+
+    // Out of the app and back: still asking, nothing wiped.
+    await rig.leaveApp(20000);
+    expect(find.text('Play again?'), findsOneWidget);
+    expect(rig.game.phase, GamePhase.leaderboard);
+    expect(rig.game.awards, isNotNull);
+
+    // The game is wiped some other way while the sheet is up (Settings'
+    // Wipe all game data does this): the question goes with the scores.
+    await rig.game.playAgain();
+    await rig.wait(300);
+    expect(rig.game.phase, GamePhase.lobby);
+    expect(find.text('Play again?'), findsNothing);
+    await rig.tap('Start the show');
+    await rig.wait(300);
+    for (var p = 0; p < 2; p++) {
+      await rig.toAsk();
+      await rig.toCallIt();
+      await rig.toVerdict();
+      await rig.tap('End turn');
+      await rig.wait(500);
+    }
+    expect(rig.game.phase, GamePhase.leaderboard);
+    expect(
+      find.text('Play again?'),
+      findsNothing,
+      reason: "the last game's question came back",
+    );
+    await rig.finish();
+  });
+
+  for (final (screen, scale) in const [
+    (Size(390, 844), 1.0),
+    (Size(375, 667), 1.3),
+  ]) {
+    testWidgets('four long names sharing an award stay readable '
+        '(${screen.width.round()}×${screen.height.round()}, text ×$scale)', (
+      tester,
+    ) async {
+      tester.platformDispatcher.textScaleFactorTestValue = scale;
+      addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+      final rig = Rig(tester);
+      await rig.pumpApp(size: screen);
+      const names = [
+        'Christopher-Alexand',
+        'Maximilian-Sebastia',
+        'Anastasia-Elizabeth',
+        'Bartholomew-Ferdina',
+        'Zed',
+      ];
+      await rig.startParty(names);
+      for (var p = 0; p < names.length; p++) {
+        await rig.toAsk();
+        // Zed's pulse runs 12 over normal: a Hmm… against four zeros.
+        if (p == 4) rig.presage.pulse = 82;
+        await rig.toCallIt();
+        for (final v in rig.game.voters) {
+          rig.game.castVote(v.id, Vote.legit);
+        }
+        await rig.wait(700);
+        await rig.toVerdict();
+        await rig.tap('End turn');
+        await rig.wait(500);
+      }
+      expect(rig.game.phase, GamePhase.leaderboard);
+      final awards = rig.game.awards!;
+      expect(awards.pokerFace!.players.length, 4);
+      expect(awards.mostSus!.names, 'Zed');
+      final shared = find.text(awards.pokerFace!.names).hitTestable();
+      expect(shared, findsOneWidget);
+      // Wrapped at its own size, not shrunk onto one line.
+      expect(
+        find.ancestor(of: shared, matching: find.byType(FittedBox)),
+        findsNothing,
+      );
+      final paragraph = tester.renderObject<RenderParagraph>(shared);
+      expect(paragraph.text.style!.fontSize, 17);
+      expect(paragraph.didExceedMaxLines, isFalse);
+      // The two award cards are a pair: the same height, side by side.
+      final cards = find.ancestor(
+        of: find.text('Most sus'),
+        matching: find.byType(IntrinsicHeight),
+      );
+      final row = tester.getRect(cards);
+      final sus = tester.getRect(find.text('Zed').hitTestable().first);
+      expect(row.contains(sus.center), isTrue);
+      expect(tester.takeException(), isNull);
+      // The share card takes the same names without overflowing.
+      await rig.tap('Share results');
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(seconds: 1)),
+      );
+      await rig.wait(200);
+      expect(rig.device.shares, 1);
+      expect(tester.takeException(), isNull);
+      await rig.finish();
+    });
+  }
 }
