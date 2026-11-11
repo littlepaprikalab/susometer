@@ -1386,7 +1386,7 @@ void main() {
 
     final plain = await msPerFrame();
     await rig.tap('Suggest one');
-    expect(find.text('Asker · try this one'), findsOneWidget);
+    expect(find.text('Try this one'), findsOneWidget);
     await expectOneFramePerTick(rig, 'the suggestion card');
     expect(find.text('Heard: '), findsOneWidget, reason: 'still live');
     final suggested = await msPerFrame();

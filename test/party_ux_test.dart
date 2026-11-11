@@ -411,7 +411,7 @@ void main() {
     await rig.tap('Suggest one');
     final first = rig.game.suggestion!;
     expect(find.text(first), findsOneWidget);
-    expect(find.text('Asker · try this one'), findsOneWidget);
+    expect(find.text('Try this one'), findsOneWidget);
     expect(find.text('Read it out, or ask your own.'), findsOneWidget);
     expect(find.text('Listening for the question…'), findsNothing);
     expect(find.text('Suggest one'), findsNothing);
@@ -449,9 +449,81 @@ void main() {
 
     await rig.tap('Done asking');
     expect(find.text('Q: “$second”'), findsOneWidget);
-    expect(find.text('Asker · try this one'), findsNothing);
+    expect(find.text('Try this one'), findsNothing);
     await rig.finish();
   });
+
+  for (final (screen, scale) in const [
+    (Size(390, 844), 1.0),
+    (Size(390, 844), 1.3),
+    (Size(375, 667), 1.0),
+    (Size(375, 667), 1.3),
+  ]) {
+    testWidgets('Suggest one sits on the asker card, far from Done asking '
+        '(${screen.width.round()}×${screen.height.round()}, text ×$scale)', (
+      tester,
+    ) async {
+      // Beside Done asking, a thumb reaching for one could land on the
+      // other (SPEC.md decision 84).
+      tester.platformDispatcher.textScaleFactorTestValue = scale;
+      addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+      final rig = Rig(tester);
+      await rig.pumpApp(size: screen);
+      await rig.startParty(['Sam', 'Alex', 'Priya']);
+      await rig.toAsk();
+      await rig.wait(500);
+
+      /// How much of its own size [text] is drawn at (1 when not shrunk).
+      double drawnScale(String text) {
+        final box = tester.renderObject<RenderBox>(find.text(text));
+        final left = box.localToGlobal(Offset.zero).dx;
+        final right = box.localToGlobal(Offset(box.size.width, 0)).dx;
+        return (right - left) / box.size.width;
+      }
+
+      for (final (label, action) in [
+        ('Asker · listening', 'Suggest one'),
+        ('Try this one', 'Another one'),
+      ]) {
+        final handle = tester.ensureSemantics();
+        final button = tester.getRect(find.bySemanticsLabel(action));
+        handle.dispose();
+        final done = tester.getRect(
+          find.widgetWithText(ChunkyButton, 'Done asking'),
+        );
+        final pause = tester.getRect(find.bySemanticsLabel('Pause the game'));
+        expect(button.height, greaterThanOrEqualTo(44), reason: action);
+        expect(button.width, greaterThanOrEqualTo(44), reason: action);
+        expect(
+          done.top - button.bottom,
+          greaterThan(300),
+          reason: '$action at $button is too near Done asking at $done',
+        );
+        expect(pause.top - button.bottom, greaterThan(300));
+        // Done asking has the bottom row to itself again, beside Pause.
+        expect(done.width, greaterThan(screen.width * 0.6));
+        // The label keeps all its words, near enough full size to read.
+        expect(find.text(label), findsOneWidget);
+        expect(
+          tester
+              .renderObject<RenderParagraph>(find.text(label))
+              .didExceedMaxLines,
+          isFalse,
+        );
+        expect(drawnScale(label), greaterThan(0.85), reason: label);
+        expect(tester.takeException(), isNull);
+        if (action == 'Suggest one') {
+          await rig.tap('Suggest one');
+          expect(rig.game.suggestion, isNotNull);
+        }
+      }
+      final handle = tester.ensureSemantics();
+      await expectLater(tester, meetsGuideline(iOSTapTargetGuideline));
+      await expectLater(tester, meetsGuideline(labeledTapTargetGuideline));
+      handle.dispose();
+      await rig.finish();
+    });
+  }
 
   for (final (screen, scale) in const [
     (Size(390, 844), 1.0),

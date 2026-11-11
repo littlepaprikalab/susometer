@@ -327,30 +327,11 @@ class _Actions extends StatelessWidget {
                         ),
                       ],
                     )
-                  // A question from the deck for an asker with none (SPEC.md
-                  // decision 81), set like solo's Different question.
-                  : Row(
-                      children: [
-                        Expanded(
-                          child: ChunkyButton.light(
-                            label: game.suggestion == null
-                                ? 'Suggest one'
-                                : 'Another one',
-                            height: 48,
-                            fontSize: 15,
-                            onPressed: game.suggestQuestion,
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: ChunkyButton(
-                            label: 'Done asking',
-                            height: 48,
-                            fontSize: 15,
-                            onPressed: game.doneAsking,
-                          ),
-                        ),
-                      ],
+                  : ChunkyButton(
+                      label: 'Done asking',
+                      height: 48,
+                      fontSize: 16,
+                      onPressed: game.doneAsking,
                     ),
             ),
           ],
@@ -360,14 +341,18 @@ class _Actions extends StatelessWidget {
 }
 
 class _TranscriptCard extends StatelessWidget {
-  const _TranscriptCard({required this.children});
+  const _TranscriptCard({required this.children, this.tallHeader = false});
 
   final List<Widget> children;
+
+  /// The first child is an [_AskerHeader], which is a tap target's height
+  /// and brings its own room above and below.
+  final bool tallHeader;
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+      padding: EdgeInsets.fromLTRB(16, tallHeader ? 0 : 12, 16, 12),
       decoration: BoxDecoration(
         color: SusColors.cream,
         borderRadius: BorderRadius.circular(20),
@@ -403,23 +388,16 @@ class _AskerCard extends StatelessWidget {
           );
         }
         return _TranscriptCard(
+          tallHeader: true,
           children: [
-            Row(
-              children: [
-                const Icon(Icons.mic_none_rounded, size: 17),
-                const SizedBox(width: 6),
-                Expanded(
-                  child: Text(
-                    game.micEnabled
-                        ? 'Asker · listening'
-                        : 'Asker · ask out loud',
-                    style: SusText.label(13),
-                  ),
-                ),
-                if (game.micEnabled) LevelBars(level: game.live.micLevel),
-              ],
+            _AskerHeader(
+              game: game,
+              icon: Icons.mic_none_rounded,
+              label: game.micEnabled
+                  ? 'Asker · listening'
+                  : 'Asker · ask out loud',
+              action: 'Suggest one',
             ),
-            const SizedBox(height: 10),
             Expanded(
               child: Semantics(
                 liveRegion: true,
@@ -441,6 +419,92 @@ class _AskerCard extends StatelessWidget {
           ],
         );
       },
+    );
+  }
+}
+
+/// The asker card's top row: what the card is doing, the mic level, and the
+/// button that deals a question from the deck (SPEC.md decision 81).
+///
+/// The button lives here, on the card it fills, and not in the bottom row:
+/// beside Done asking, a thumb reaching for one could land on the other
+/// (decision 84). The row is a tap target tall, so the button is easy to
+/// hit though it's drawn small.
+class _AskerHeader extends StatelessWidget {
+  const _AskerHeader({
+    required this.game,
+    required this.icon,
+    required this.label,
+    required this.action,
+  });
+
+  final GameController game;
+  final IconData icon;
+  final String label;
+
+  /// "Suggest one", or "Another one" once a suggestion is up.
+  final String action;
+
+  static const height = 44.0;
+
+  @override
+  Widget build(BuildContext context) {
+    final largeText = MediaQuery.textScalerOf(context).scale(13) > 14.5;
+    return SizedBox(
+      height: height,
+      child: Row(
+        children: [
+          Icon(icon, size: 17),
+          const SizedBox(width: 6),
+          // The label keeps its words: it shrinks a little before it would
+          // lose any, and at large text the mic bars make room for it (the
+          // card's own text shows the mic is live).
+          Expanded(
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: Alignment.centerLeft,
+              child: Text(label, maxLines: 1, style: SusText.label(13)),
+            ),
+          ),
+          const SizedBox(width: 8),
+          if (game.micEnabled && !largeText) ...[
+            LevelBars(level: game.live.micLevel, count: 5),
+            const SizedBox(width: 8),
+          ],
+          Semantics(
+            button: true,
+            label: action,
+            excludeSemantics: true,
+            onTap: game.suggestQuestion,
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: game.suggestQuestion,
+              child: SizedBox(
+                height: height,
+                child: Center(
+                  child: Container(
+                    constraints: const BoxConstraints(minWidth: 44),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 5,
+                    ),
+                    decoration: BoxDecoration(
+                      color: SusColors.cream,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: SusColors.ink, width: 2.5),
+                    ),
+                    child: Text(
+                      action,
+                      maxLines: 1,
+                      style: SusText.body(13, weight: FontWeight.w800),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -469,23 +533,14 @@ class _SuggestionCard extends StatelessWidget {
       color: SusColors.brown,
     );
     return _TranscriptCard(
+      tallHeader: true,
       children: [
-        Row(
-          children: [
-            const Icon(Icons.lightbulb_outline_rounded, size: 17),
-            const SizedBox(width: 6),
-            Expanded(
-              child: Text(
-                'Asker · try this one',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: SusText.label(13),
-              ),
-            ),
-            if (game.micEnabled) LevelBars(level: game.live.micLevel),
-          ],
+        _AskerHeader(
+          game: game,
+          icon: Icons.lightbulb_outline_rounded,
+          label: 'Try this one',
+          action: 'Another one',
         ),
-        const SizedBox(height: 8),
         Expanded(
           child: Semantics(
             liveRegion: true,

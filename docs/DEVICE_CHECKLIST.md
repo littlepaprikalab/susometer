@@ -76,10 +76,11 @@ Settings → **Signal check** → **Start both**. Allow microphone and speech re
   question, "Heard: …" follows along, and the verdict's question is what they said, without the
   "I don't know". **Could the asker read it from where they sat, or did the hot seat read it
   out?**
+- [ ] *Suggest one* is on the asker's card, top right, well away from *Done asking* (decision
+  84). **Did the hot seat find it without being told? Can a thumb reach it one-handed?**
 - [ ] Ask a real question, then tap *Suggest one* by mistake and *Done asking* straight after,
   without anyone speaking: the answer screen and the verdict still show the question that was
-  asked (decision 83). **Over a whole game, did anyone hit *Suggest one* when they meant *Done
-  asking*?**
+  asked (decision 83).
 - [ ] Time a whole game against the lobby's "about N min in all".
 - [ ] On the leaderboard, tap *Play again*: a sheet asks first. *Keep the scores* keeps them;
   double-tap *Play again* fast and the scores are still there. (Decision 82.)
