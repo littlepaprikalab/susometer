@@ -664,6 +664,28 @@ void main() {
     expect(rig.device.shares, 0, reason: 'the tap fell through the sheet');
     expect(find.text('Play again?'), findsOneWidget);
 
+    // The same on the Replay, where Wipe everything sits behind the sheet's
+    // own buttons and acts at once.
+    await rig.tap('Keep the scores');
+    await rig.tap('Watch the replay');
+    await rig.wait(600);
+    await waitOutTapGuard(tester);
+    final wipe = tester.getCenter(find.text('Wipe everything'));
+    await tester.tapAt(tester.getCenter(find.text('Play again')));
+    await tester.pump(const Duration(milliseconds: 80));
+    await tester.tapAt(wipe);
+    await tester.pump(const Duration(milliseconds: 80));
+    await rig.wait(300);
+    expect(rig.game.phase, GamePhase.replay, reason: 'wiped behind the sheet');
+    expect(rig.game.turns, isNotEmpty);
+    expect(rig.game.players, isNotEmpty);
+    expect(find.text('Play again?'), findsOneWidget);
+    await rig.tap('Keep the scores');
+    await tester.tap(find.byTooltip('Back to scores'));
+    await rig.wait(300);
+    await rig.tap('Play again');
+    expect(find.text('Play again?'), findsOneWidget);
+
     // Out of the app and back: still asking, nothing wiped.
     await rig.leaveApp(20000);
     expect(find.text('Play again?'), findsOneWidget);
