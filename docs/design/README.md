@@ -67,6 +67,12 @@ The spec wins where the two disagree (see SPEC.md, "Decisions made during build"
   pulse and blink cards sit over the bottom of the camera, the question is pinned inside the
   answer card, Pause stays bottom-left (the SPEC §4 state machine has Pause on 4b too), and *Final answer* fills
   the rest of the bottom row. Ask and Answer both show "Q 1 / 5" instead of dots.
+- **Question screens (4a, 4b):** no host bubble. The card has its room and carries its line:
+  "{asker}, ask your question!" and "{name}, your answer?" are the card's text until words
+  arrive (SPEC.md decision 85).
+- **Solo question (4a):** the tomato card is the button. A teal button drawn inside it says
+  "Don't answer yet · tap here first", and a tap anywhere on the card shows the answer screen.
+  *Different question* is alone beside Pause. The mock has no way on to the answer.
 - **Pulse card:** adds a small trend line for the current question, against a dashed line at the
   player's calibrated normal. The same Pulse and Blinks cards replace the Ask mock's "84 BPM" chip,
   so the camera overlay doesn't change between Ask and Answer.

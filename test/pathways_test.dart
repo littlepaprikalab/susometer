@@ -18,6 +18,7 @@ import 'package:susometer/game_root.dart';
 import 'package:susometer/presage/camera_preview.dart';
 import 'package:susometer/presage/presage_models.dart';
 import 'package:susometer/screens/intro_screens.dart';
+import 'package:susometer/screens/question_screens.dart';
 import 'package:susometer/settings/app_settings.dart';
 import 'package:susometer/theme/expression_stamp.dart';
 import 'package:susometer/theme/game_widgets.dart';
@@ -223,15 +224,15 @@ void main() {
     // The question stays on screen until Sam is ready.
     await rig.wait(3000);
     expect(find.text('Q: “${rig.game.questionText}”'), findsNothing);
-    expect(find.text('Ready to answer'), findsOneWidget);
+    expect(find.text(readyCardLabel), findsOneWidget);
     await checkScreen(tester, 'ask-solo');
-    await rig.tap('Ready to answer');
+    await rig.tap(readyCardLabel);
     await rig.wait(100);
     expect(find.text('Q: “${rig.game.questionText}”'), findsOneWidget);
     await checkScreen(tester, 'answer-solo');
     for (var q = 0; q < 3; q++) {
       await rig.until(() => rig.game.phase == GamePhase.answer);
-      if (q > 0) await rig.tap('Ready to answer');
+      if (q > 0) await rig.tap(readyCardLabel);
       rig.presage.talk(true);
       await rig.wait(1500);
       rig.presage.talk(false);
@@ -553,7 +554,6 @@ void main() {
           await tester.pump();
           for (final text in [
             ...texts,
-            "Finding $longName's pulse…",
             'Finding the pulse…',
             'Sit still and look at the camera',
           ]) {
@@ -581,7 +581,9 @@ void main() {
     // A screenshot's preview: the camera restarts, with no pulse for 12 s.
     await rig.leaveApp(2000);
     expect(rig.game.waitingForPulse, isTrue);
-    expect(find.text("Finding $longName's pulse…"), findsOneWidget);
+    // No host bubble on the question screens (SPEC.md decision 85): the
+    // card and the status beside Pause say it.
+    expect(find.byType(HostBubble), findsNothing);
     expect(
       find.text("The question starts once the camera has $longName's pulse."),
       findsOneWidget,
@@ -826,9 +828,9 @@ void main() {
             same('answer starts');
             if (mode == GameMode.solo) {
               // The question stays up until the player is ready.
-              expect(find.text('Ready to answer'), findsOneWidget);
+              expect(find.text(readyCardLabel), findsOneWidget);
               expect(find.text('Final answer'), findsNothing);
-              await rig.tap('Ready to answer');
+              await rig.tap(readyCardLabel);
               await rig.wait(100);
               same('ready to answer');
             }
@@ -1058,7 +1060,7 @@ void main() {
     await rig.finish();
   });
 
-  testWidgets('solo: a double tap on Ready to answer never ends the answer', (
+  testWidgets('solo: a double tap on the question card never ends the answer', (
     tester,
   ) async {
     final rig = Rig(tester);
@@ -1069,9 +1071,10 @@ void main() {
     await rig.until(() => rig.game.phase == GamePhase.answer);
     await rig.wait(600);
     expect(rig.game.soloHoldsQuestion, isTrue);
-    // Final answer appears where Ready to answer was, with no phase change.
+    // Final answer appears with no phase change; a second tap, wherever
+    // it lands, is still held back.
     await waitOutTapGuard(tester);
-    await tester.tap(find.text('Ready to answer'));
+    await tester.tap(find.text(readyCardLabel));
     await tester.pump(const Duration(milliseconds: 60));
     await tester.pump(const Duration(milliseconds: 60));
     expect(find.text('Final answer'), findsOneWidget);
@@ -1512,10 +1515,10 @@ void main() {
     await rig.startParty(['Sam']);
     await rig.tap('I agree, measure me');
     // Solo measures the answer while the card is still up.
-    await rig.until(() => find.text('Ready to answer').evaluate().isNotEmpty);
+    await rig.until(() => find.text(readyCardLabel).evaluate().isNotEmpty);
     await rig.wait(1000);
     await expectOneFramePerTick(rig, 'solo question card');
-    await rig.tap('Ready to answer');
+    await rig.tap(readyCardLabel);
     await rig.wait(1000);
     expect(find.text('Final answer'), findsOneWidget);
     rig.presage.talk(true);

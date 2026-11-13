@@ -48,7 +48,7 @@ Built for the DEV [Presage SmartSpectra SDK Challenge](https://dev.to/challenges
    starting with the next player. The question appears on screen as they speak, and the player
    taps *Done asking* when it's over. Nothing to ask? *Suggest one* puts a question from the
    deck on the card for the asker to read out (*Another one* swaps it). In solo mode the host
-   reads one from the deck, and it stays on screen until you tap *Ready to answer*. Solo
+   reads one from the deck, and it stays on screen until you tap the question card. Solo
    questions get hotter through the turn and end on the hottest, the same way for every player;
    "someone in this room" questions only come up when others are playing.
 5. **Answer:** the player answers out loud and smashes *Final answer*.
@@ -282,7 +282,7 @@ while the hot-seat player isn't talking is the question; speech while they are i
 
 **Only taps move the game on.** Nothing ends because of a pause, a laugh or a timer: the screen
 waits for *Next* on each warm-up, *Start the questions*, *Done asking*, *Final answer* and
-*Reveal* (solo: *Ready to answer*). The countdown after *Reveal* and the few seconds of *Locking
+*Reveal* (solo: a tap on the question card). The countdown after *Reveal* and the few seconds of *Locking
 in the reading…* (the score needs 12 s after the question) are the only steps that run on their
 own. In party mode the host names who asks each question, taking turns through the room.
 

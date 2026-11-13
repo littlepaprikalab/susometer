@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:susometer/game/game_controller.dart';
 import 'package:susometer/game/models.dart';
 import 'package:susometer/presage/presage_models.dart';
+import 'package:susometer/screens/question_screens.dart';
 import 'package:susometer/voice/speech_service.dart';
 
 import 'rig.dart';
@@ -235,7 +236,7 @@ void main() {
     expect(find.text('Skip my turn'), findsOneWidget);
     await rig.tap('Resume');
     await rig.until(() => rig.game.phase == GamePhase.answer);
-    await rig.tap('Ready to answer');
+    await rig.tap(readyCardLabel);
     rig.presage.talk(true);
     await rig.wait(1500);
     rig.presage.talk(false);

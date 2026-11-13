@@ -11,7 +11,9 @@ import 'package:susometer/game/decks.dart';
 import 'package:susometer/game/game_controller.dart';
 import 'package:susometer/game/models.dart';
 import 'package:susometer/presage/camera_preview.dart';
+import 'package:susometer/screens/question_screens.dart';
 import 'package:susometer/screens/result_screens.dart';
+import 'package:susometer/theme/game_widgets.dart';
 import 'package:susometer/theme/tokens.dart';
 import 'package:susometer/theme/widgets.dart';
 
@@ -324,7 +326,7 @@ void main() {
     expect(find.text('Hang on · no question yet'), findsOneWidget);
     await rig.until(() => !rig.game.waitingForPulse, what: 'the pulse');
     await rig.until(() => rig.game.phase == GamePhase.answer);
-    await rig.tap('Ready to answer');
+    await rig.tap(readyCardLabel);
     await rig.wait(1500);
     await rig.tap('Final answer');
     await rig.until(() => rig.game.phase == GamePhase.verdict);
@@ -403,8 +405,9 @@ void main() {
     await rig.startParty(['Sam', 'Alex', 'Priya']);
     await rig.toAsk();
     await rig.wait(500);
+    // The host's line is the card's own text until there are words
+    // (SPEC.md decision 85).
     expect(find.text('Alex, ask your question!'), findsOneWidget);
-    expect(find.text('Listening for the question…'), findsOneWidget);
     expect(find.text('Suggest one'), findsOneWidget);
     final camera = tester.getRect(find.byType(CameraPreview));
 
@@ -413,7 +416,7 @@ void main() {
     expect(find.text(first), findsOneWidget);
     expect(find.text('Try this one'), findsOneWidget);
     expect(find.text('Read it out, or ask your own.'), findsOneWidget);
-    expect(find.text('Listening for the question…'), findsNothing);
+    expect(find.text('Alex, ask your question!'), findsNothing);
     expect(find.text('Suggest one'), findsNothing);
     expect(
       tester.getRect(find.byType(CameraPreview)),
@@ -855,4 +858,191 @@ void main() {
       await rig.finish();
     });
   }
+
+  // --- The question card is the button; no host bubble (decision 85) --------
+
+  for (final (screen, scale) in const [
+    (Size(390, 844), 1.0),
+    (Size(390, 844), 1.3),
+    (Size(375, 667), 1.0),
+    (Size(375, 667), 1.3),
+  ]) {
+    testWidgets('solo: the question card is the way on to the answer '
+        '(${screen.width.round()}×${screen.height.round()}, text ×$scale)', (
+      tester,
+    ) async {
+      // The buttons under the camera were half a screen from the question
+      // the player was reading, so they answered before finding them.
+      tester.platformDispatcher.textScaleFactorTestValue = scale;
+      addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+      final rig = Rig(tester);
+      await rig.pumpApp(size: screen);
+      await rig.tap('Solo · host asks');
+      await rig.startParty(['Sam']);
+      await rig.tap('I agree, measure me');
+      await rig.until(
+        () => rig.game.phase == GamePhase.answer,
+        what: 'the host to read the question',
+      );
+      await rig.wait(600);
+      expect(rig.game.soloHoldsQuestion, isTrue);
+      final q = rig.game.questionText;
+
+      // The card says it; no button or bubble does.
+      expect(find.text('Ready to answer'), findsNothing);
+      expect(find.byType(HostBubble), findsNothing);
+      final face = find.text(readyCardLabel);
+      expect(face, findsOneWidget);
+      final faceBox = tester.renderObject<RenderParagraph>(face);
+      expect(faceBox.didExceedMaxLines, isFalse);
+      final left = faceBox.localToGlobal(Offset.zero).dx;
+      final right = faceBox.localToGlobal(Offset(faceBox.size.width, 0)).dx;
+      expect(
+        (right - left) / faceBox.size.width,
+        greaterThan(0.85),
+        reason: 'the button keeps its words near full size',
+      );
+
+      // One button, the size of the card, read out as the question.
+      final handle = tester.ensureSemantics();
+      final button = find.bySemanticsLabel(q);
+      expect(button, findsOneWidget);
+      expect(
+        tester.getSemantics(button),
+        isSemantics(isButton: true, hasTapAction: true),
+      );
+      final card = tester.getRect(button);
+      final text = tester.getRect(find.text(q));
+      expect(card.height, greaterThan(200));
+      expect(card.contains(text.center), isTrue);
+      expect(card.contains(tester.getCenter(face)), isTrue);
+      expect(
+        tester.renderObject<RenderParagraph>(find.text(q)).didExceedMaxLines,
+        isFalse,
+      );
+      expect(tester.getRect(face).top, greaterThan(text.bottom));
+
+      // Different question has the bottom row beside Pause, the camera
+      // between it and the card.
+      final different = tester.getRect(
+        find.widgetWithText(ChunkyButton, 'Different question'),
+      );
+      expect(different.width, greaterThan(screen.width * 0.6));
+      expect(different.top - card.bottom, greaterThan(250));
+      await expectLater(tester, meetsGuideline(iOSTapTargetGuideline));
+      await expectLater(tester, meetsGuideline(labeledTapTargetGuideline));
+      handle.dispose();
+
+      // Talking doesn't move it on (decision 76); a tap on the question
+      // does, and the camera stays where it was.
+      final camera = tester.getRect(find.byType(CameraPreview));
+      rig.presage.talk(true);
+      await rig.wait(1200);
+      expect(rig.game.soloHoldsQuestion, isTrue);
+      rig.presage.talk(false);
+      await waitOutTapGuard(tester);
+      await tester.tapAt(text.center);
+      await tester.pump(const Duration(milliseconds: 60));
+      expect(rig.game.soloHoldsQuestion, isFalse);
+      expect(find.text('Q: “$q”'), findsOneWidget);
+      expect(find.text(readyCardLabel), findsNothing);
+      expect(find.text('Final answer'), findsOneWidget);
+      expect(find.byType(HostBubble), findsNothing);
+      expect(tester.getRect(find.byType(CameraPreview)), camera);
+      expect(tester.takeException(), isNull);
+      await rig.finish();
+    });
+  }
+
+  for (final (screen, scale) in const [
+    (Size(390, 844), 1.0),
+    (Size(375, 667), 1.3),
+  ]) {
+    testWidgets('every deck question fits the solo card whole, above its '
+        'button (${screen.width.round()}×${screen.height.round()}, '
+        'text ×$scale)', (tester) async {
+      tester.platformDispatcher.textScaleFactorTestValue = scale;
+      addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+      // Every card at heat 1, so question 1 deals the whole deck.
+      DeckLibrary read(String name) => DeckLibrary(
+        warmup: DeckLibrary.fallback.warmup,
+        mild: [
+          for (final q in DeckLibrary.parse(
+            File('assets/decks/$name.json').readAsStringSync(),
+          ))
+            DeckQuestion(q.text, heat: 1),
+        ],
+        spicy: const [],
+      );
+      for (final name in ['mild', 'spicy']) {
+        final deck = read(name);
+        final rig = Rig(tester);
+        await rig.pumpApp(size: screen);
+        rig.game.setDecks(deck);
+        await rig.tap('Solo · host asks');
+        await rig.startParty(['Sam']);
+        await rig.tap('I agree, measure me');
+        await rig.until(
+          () => rig.game.soloHoldsQuestion,
+          what: 'the host to read question 1',
+        );
+        final seen = <String>{};
+        // The dealer goes through the pile before repeating.
+        for (var i = 0; i < deck.mild.length; i++) {
+          await rig.wait(700);
+          final q = rig.game.questionText;
+          if (seen.add(q)) {
+            final text = find.text(q);
+            expect(text, findsOneWidget);
+            expect(
+              tester.renderObject<RenderParagraph>(text).didExceedMaxLines,
+              isFalse,
+              reason: '"$q" is cut off',
+            );
+            expect(
+              tester.getRect(find.text(readyCardLabel)).top,
+              greaterThan(tester.getRect(text).bottom),
+              reason: '"$q" runs into the button',
+            );
+          }
+          rig.game.differentQuestion();
+          await tester.pump(const Duration(milliseconds: 100));
+        }
+        expect(seen.length, deck.mild.length, reason: 'the whole $name deck');
+        expect(tester.takeException(), isNull);
+        await rig.finish();
+      }
+    });
+  }
+
+  testWidgets('party: the card says what the host bubble said, and the '
+      'camera stays put', (tester) async {
+    final rig = Rig(tester);
+    await rig.pumpApp();
+    await rig.startParty(['Sam', 'Alex']);
+    await rig.toAsk();
+    await rig.wait(300);
+    expect(find.byType(HostBubble), findsNothing);
+    // Who asks, until there are words.
+    expect(find.text('Alex, ask your question!'), findsOneWidget);
+    final camera = tester.getRect(find.byType(CameraPreview));
+    rig.say('Have you ever told a fib?');
+    await rig.wait(300);
+    expect(find.text('Alex, ask your question!'), findsNothing);
+    expect(find.text('Have you ever told a fib?'), findsOneWidget);
+    await rig.tap('Done asking');
+    expect(find.byType(HostBubble), findsNothing);
+    expect(find.text('Sam, your answer?'), findsOneWidget);
+    expect(tester.getRect(find.byType(CameraPreview)), camera);
+    rig.say('Never.');
+    await rig.wait(300);
+    expect(find.text('Sam, your answer?'), findsNothing);
+    await rig.tap('Final answer');
+    await rig.wait(100);
+    expect(rig.game.phase, GamePhase.settle);
+    expect(find.byType(HostBubble), findsNothing);
+    expect(tester.getRect(find.byType(CameraPreview)), camera);
+    expect(tester.takeException(), isNull);
+    await rig.finish();
+  });
 }
