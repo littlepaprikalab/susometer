@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
 import '../app_scope.dart';
@@ -574,6 +576,13 @@ class _SuggestionCard extends StatelessWidget {
 /// way on to the answer, and talking before the tap shows nothing on screen.
 const readyCardLabel = "Don't answer yet · tap here first";
 
+/// The drawn button's face, for tests.
+const readyFaceKey = ValueKey('readyFace');
+
+/// The drawn button sits this far off level (degrees), like the camera's
+/// stamps: something put on the card to press, not part of its frame.
+const readyFaceTilt = -2.0;
+
 /// 4a solo: the host's question card, which is also the "ready to answer"
 /// button (SPEC.md decision 85).
 ///
@@ -599,7 +608,9 @@ class _SoloQuestionCardState extends State<_SoloQuestionCard> {
     final game = widget.game;
     final deck = game.deck == DeckKind.mild ? 'MILD' : 'SPICY';
     final card = Container(
-      padding: const EdgeInsets.fromLTRB(10, 14, 10, 8),
+      // Room under and beside the button for its tilt: its ends ride about
+      // 6 pt above and below level.
+      padding: const EdgeInsets.fromLTRB(10, 12, 10, 12),
       decoration: BoxDecoration(
         color: SusColors.tomato,
         borderRadius: BorderRadius.circular(22),
@@ -643,7 +654,7 @@ class _SoloQuestionCardState extends State<_SoloQuestionCard> {
                       ),
                     ],
                   ),
-                  const SizedBox(height: 10),
+                  const SizedBox(height: 8),
                   Expanded(
                     child: FitText(
                       game.questionText,
@@ -660,7 +671,13 @@ class _SoloQuestionCardState extends State<_SoloQuestionCard> {
             ),
           ),
           const SizedBox(height: 8),
-          _ReadyFace(down: _down),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 2),
+            child: Transform.rotate(
+              angle: readyFaceTilt * math.pi / 180,
+              child: _ReadyFace(down: _down),
+            ),
+          ),
         ],
       ),
     );
@@ -718,7 +735,8 @@ class _ReadyFace extends StatelessWidget {
             top: down ? shadow : 0,
             height: _height,
             child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8),
+              key: readyFaceKey,
+              padding: const EdgeInsets.symmetric(horizontal: 4),
               decoration: BoxDecoration(
                 color: SusColors.teal,
                 borderRadius: BorderRadius.circular(SusShape.buttonRadius),
@@ -739,7 +757,7 @@ class _ReadyFace extends StatelessWidget {
                       color: SusColors.cream,
                       size: 20,
                     ),
-                    const SizedBox(width: 8),
+                    const SizedBox(width: 6),
                     Text(
                       readyCardLabel,
                       maxLines: 1,

@@ -921,6 +921,27 @@ void main() {
         isFalse,
       );
       expect(tester.getRect(face).top, greaterThan(text.bottom));
+      // The drawn button is askew on purpose, like a stamp, and stays
+      // inside the card, shadow and all.
+      final drawn = tester.renderObject<RenderBox>(find.byKey(readyFaceKey));
+      final shadow = SusShape.shadowOffset.dy;
+      final corners = [
+        drawn.localToGlobal(Offset.zero),
+        drawn.localToGlobal(Offset(drawn.size.width, 0)),
+        drawn.localToGlobal(Offset(0, drawn.size.height + shadow)),
+        drawn.localToGlobal(
+          Offset(drawn.size.width, drawn.size.height + shadow),
+        ),
+      ];
+      expect(
+        (corners[0].dy - corners[1].dy).abs(),
+        greaterThan(6),
+        reason: 'the button is level',
+      );
+      final inside = card.deflate(SusShape.borderWidth);
+      for (final c in corners) {
+        expect(inside.contains(c), isTrue, reason: 'the button leaves $card');
+      }
 
       // Different question has the bottom row beside Pause, the camera
       // between it and the card.
