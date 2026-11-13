@@ -795,6 +795,7 @@ class _AnswerCard extends StatelessWidget {
         final talking = game.live.sample?.talking ?? false;
         final hes = game.live.hesitationS;
         final placeholder = text.isEmpty || !game.micEnabled;
+        final over = game.shownPhase == GamePhase.settle;
         return _TranscriptCard(
           children: [
             Row(
@@ -836,8 +837,12 @@ class _AnswerCard extends StatelessWidget {
                 liveRegion: true,
                 child: FitText(
                   // Until there are words, the prompt the host bubble
-                  // used to carry (SPEC.md decision 85).
-                  !game.micEnabled
+                  // used to carry (SPEC.md decision 85). Only while the
+                  // answer is open: once it's locking in, nothing asks
+                  // for one.
+                  over
+                      ? (placeholder ? '…' : text)
+                      : !game.micEnabled
                       ? '${game.currentPlayer.name}, answer out loud.'
                       : (text.isEmpty
                             ? '${game.currentPlayer.name}, your answer?'
