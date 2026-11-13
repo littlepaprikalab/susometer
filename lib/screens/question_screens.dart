@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
 import '../app_scope.dart';
@@ -45,7 +47,10 @@ const noAnswerNudgeMs = 20000;
 
 /// Fixed heights that keep the camera card the same size and in the same
 /// place from "Ask your question!" through "Locking in the reading…".
-const _cardHeight = 160.0;
+///
+/// The card has the room the host's line used to take above it (SPEC.md
+/// decision 85): 160 pt, the 14 pt gap and the 48 pt bubble row.
+const _cardHeight = 222.0;
 const _actionsHeight = 92.0;
 
 /// Distance from the bottom of the safe area to just above the camera's
@@ -60,35 +65,28 @@ const hotSeatOverlayBottom =
     8;
 
 /// 4a and 4b in one layout (mocks: Question.dc.html, Question-Solo.dc.html,
-/// Answer.dc.html). Ask, Answer and Settle share one frame: only the host
-/// line, the card's text and the buttons change. The camera card never
-/// moves or resizes, and its native preview isn't rebuilt between phases.
+/// Answer.dc.html). Ask, Answer and Settle share one frame: only the
+/// card's text and the buttons change. The camera card never moves or
+/// resizes, and its native preview isn't rebuilt between phases.
+///
+/// There's no host bubble here (SPEC.md decision 85): the card says what
+/// the host says, and has the bubble's room for the question.
 class HotSeatScreen extends StatelessWidget {
   const HotSeatScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
     final game = GameScope.of(context);
-    final name = game.currentPlayer.name;
     final solo = game.mode == GameMode.solo;
     // Solo keeps the question card up until the player is ready.
     final shown = game.shownPhase;
     final answering = shown == GamePhase.answer || shown == GamePhase.settle;
     final waiting = game.waitingForPulse;
-    final host = waiting
-        ? "Finding $name's pulse…"
-        : answering
-        ? '$name, your answer?'
-        : solo
-        ? "Here's one for you, $name…"
-        : game.askLine;
     return ScreenFrame(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           _Header(game: game, solo: solo),
-          const SizedBox(height: 14),
-          HostBubble(text: host, singleLine: true),
           const SizedBox(height: 14),
           SizedBox(
             height: _cardHeight,
@@ -282,7 +280,7 @@ class _Actions extends StatelessWidget {
         final hint =
             notice ??
             (solo
-                ? 'Tap Ready to answer, then answer out loud.'
+                ? 'Tap the question, then answer out loud.'
                 : '${game.currentPlayer.name}: tap Done asking, then answer.');
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -304,28 +302,15 @@ class _Actions extends StatelessWidget {
             const SizedBox(height: 8),
             beside(
               solo
-                  ? Row(
-                      children: [
-                        // No icon: two buttons share the row, and the
-                        // label needs the width to stay readable.
-                        Expanded(
-                          child: ChunkyButton.light(
-                            label: 'Different question',
-                            height: 48,
-                            fontSize: 15,
-                            onPressed: game.differentQuestion,
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: ChunkyButton(
-                            label: 'Ready to answer',
-                            height: 48,
-                            fontSize: 15,
-                            onPressed: game.readyToAnswer,
-                          ),
-                        ),
-                      ],
+                  // Alone here: the way on to the answer is the question
+                  // card itself, where the player is reading (SPEC.md
+                  // decision 85).
+                  ? ChunkyButton.light(
+                      label: 'Different question',
+                      icon: Icons.shuffle_rounded,
+                      height: 48,
+                      fontSize: 16,
+                      onPressed: game.differentQuestion,
                     )
                   : ChunkyButton(
                       label: 'Done asking',
@@ -402,10 +387,16 @@ class _AskerCard extends StatelessWidget {
               child: Semantics(
                 liveRegion: true,
                 child: FitText(
+                  // Until there are words, the host's line: who asks. It
+                  // had a bubble of its own above the card (SPEC.md
+                  // decision 85).
                   !game.micEnabled
-                      ? 'Ask your question, then tap Done asking.'
-                      : (text.isEmpty ? 'Listening for the question…' : text),
-                  sizes: placeholder ? const [22, 18] : const [28, 24, 20, 17],
+                      ? '${game.askLine.replaceFirst('!', '')}, '
+                            'then tap Done asking.'
+                      : (text.isEmpty ? game.askLine : text),
+                  sizes: placeholder
+                      ? const [26, 22, 18]
+                      : const [28, 24, 20, 17],
                   overflow: placeholder
                       ? FitOverflow.keepStart
                       : FitOverflow.keepEnd,
@@ -581,17 +572,45 @@ class _SuggestionCard extends StatelessWidget {
   }
 }
 
-/// 4a solo: the host's question card.
-class _SoloQuestionCard extends StatelessWidget {
+/// What the button drawn on the solo question card says: the card is the
+/// way on to the answer, and talking before the tap shows nothing on screen.
+const readyCardLabel = "Don't answer yet · tap here first";
+
+/// The drawn button's face, for tests.
+const readyFaceKey = ValueKey('readyFace');
+
+/// The drawn button sits this far off level (degrees), like the camera's
+/// stamps: something put on the card to press, not part of its frame.
+const readyFaceTilt = -2.0;
+
+/// 4a solo: the host's question card, which is also the "ready to answer"
+/// button (SPEC.md decision 85).
+///
+/// The player is reading the question, so that's where the tap is: the
+/// buttons under the camera were half a screen from their eyes, and they
+/// answered out loud before finding them. A teal button like the answer
+/// buttons is drawn inside the card, so it reads as something to tap, and
+/// the whole card takes the tap and presses it.
+class _SoloQuestionCard extends StatefulWidget {
   const _SoloQuestionCard({required this.game});
 
   final GameController game;
 
   @override
+  State<_SoloQuestionCard> createState() => _SoloQuestionCardState();
+}
+
+class _SoloQuestionCardState extends State<_SoloQuestionCard> {
+  bool _down = false;
+
+  @override
   Widget build(BuildContext context) {
+    final game = widget.game;
     final deck = game.deck == DeckKind.mild ? 'MILD' : 'SPICY';
-    return Container(
-      padding: const EdgeInsets.all(16),
+    final card = Container(
+      // Room under and beside the button for its tilt: its ends ride about
+      // 6 pt above and below level.
+      padding: const EdgeInsets.fromLTRB(10, 12, 10, 12),
       decoration: BoxDecoration(
         color: SusColors.tomato,
         borderRadius: BorderRadius.circular(22),
@@ -601,40 +620,156 @@ class _SoloQuestionCard extends StatelessWidget {
         ],
       ),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 4,
-                ),
-                decoration: BoxDecoration(
-                  color: SusColors.cream,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Text(
-                  'FROM THE $deck DECK',
-                  style: SusText.label(12).copyWith(letterSpacing: 0.7),
-                ),
-              ),
-              const Spacer(),
-              ListenableBuilder(
-                listenable: game.live,
-                builder: (context, _) => LevelBars(
-                  level: game.live.micLevel,
-                  color: SusColors.cream,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
           Expanded(
-            child: FitText(
-              game.questionText,
-              overflow: FitOverflow.keepStart,
-              style: (size) => SusText.display(size, color: SusColors.cream),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 6),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 4,
+                        ),
+                        decoration: BoxDecoration(
+                          color: SusColors.cream,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Text(
+                          'FROM THE $deck DECK',
+                          style: SusText.label(12).copyWith(letterSpacing: 0.7),
+                        ),
+                      ),
+                      const Spacer(),
+                      ListenableBuilder(
+                        listenable: game.live,
+                        builder: (context, _) => LevelBars(
+                          level: game.live.micLevel,
+                          color: SusColors.cream,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Expanded(
+                    child: FitText(
+                      game.questionText,
+                      // A size up on the asker card's: the question is
+                      // all this card shows, and it has the room.
+                      sizes: const [32, 28, 24, 20, 17],
+                      overflow: FitOverflow.keepStart,
+                      style: (size) =>
+                          SusText.display(size, color: SusColors.cream),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 2),
+            child: Transform.rotate(
+              angle: readyFaceTilt * math.pi / 180,
+              child: _ReadyFace(down: _down),
+            ),
+          ),
+        ],
+      ),
+    );
+    return Semantics(
+      button: true,
+      label: game.questionText,
+      hint: "Don't answer yet. Tap here first, then answer.",
+      excludeSemantics: true,
+      onTap: game.readyToAnswer,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTapDown: (_) => setState(() => _down = true),
+        onTapCancel: () => setState(() => _down = false),
+        onTapUp: (_) => setState(() => _down = false),
+        onTap: game.readyToAnswer,
+        child: card,
+      ),
+    );
+  }
+}
+
+/// The button drawn on the solo question card: a [ChunkyButton]'s look
+/// (teal, ink border, hard shadow), pressed by a tap anywhere on the card.
+/// It's only the picture; the card takes the tap.
+class _ReadyFace extends StatelessWidget {
+  const _ReadyFace({required this.down});
+
+  final bool down;
+
+  static const _height = 46.0;
+
+  @override
+  Widget build(BuildContext context) {
+    final shadow = SusShape.shadowOffset.dy;
+    return SizedBox(
+      height: _height + shadow,
+      child: Stack(
+        children: [
+          Positioned(
+            left: 0,
+            right: 0,
+            top: shadow,
+            height: _height,
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                color: SusColors.ink,
+                borderRadius: BorderRadius.circular(SusShape.buttonRadius),
+              ),
+            ),
+          ),
+          AnimatedPositioned(
+            duration: const Duration(milliseconds: 60),
+            left: 0,
+            right: 0,
+            top: down ? shadow : 0,
+            height: _height,
+            child: Container(
+              key: readyFaceKey,
+              padding: const EdgeInsets.symmetric(horizontal: 4),
+              decoration: BoxDecoration(
+                color: SusColors.teal,
+                borderRadius: BorderRadius.circular(SusShape.buttonRadius),
+                border: Border.all(
+                  color: SusColors.ink,
+                  width: SusShape.borderWidth,
+                ),
+              ),
+              alignment: Alignment.center,
+              // One line that shrinks to fit, so the button never grows.
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(
+                      Icons.touch_app_rounded,
+                      color: SusColors.cream,
+                      size: 20,
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      readyCardLabel,
+                      maxLines: 1,
+                      style: SusText.body(
+                        15,
+                        weight: FontWeight.w700,
+                        color: SusColors.cream,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             ),
           ),
         ],
@@ -660,6 +795,7 @@ class _AnswerCard extends StatelessWidget {
         final talking = game.live.sample?.talking ?? false;
         final hes = game.live.hesitationS;
         final placeholder = text.isEmpty || !game.micEnabled;
+        final over = game.shownPhase == GamePhase.settle;
         return _TranscriptCard(
           children: [
             Row(
@@ -700,10 +836,20 @@ class _AnswerCard extends StatelessWidget {
               child: Semantics(
                 liveRegion: true,
                 child: FitText(
-                  !game.micEnabled
-                      ? 'Answer out loud.'
-                      : (text.isEmpty ? '…' : text),
-                  sizes: placeholder ? const [22, 18] : const [26, 22, 18],
+                  // Until there are words, the prompt the host bubble
+                  // used to carry (SPEC.md decision 85). Only while the
+                  // answer is open: once it's locking in, nothing asks
+                  // for one.
+                  over
+                      ? (placeholder ? '…' : text)
+                      : !game.micEnabled
+                      ? '${game.currentPlayer.name}, answer out loud.'
+                      : (text.isEmpty
+                            ? '${game.currentPlayer.name}, your answer?'
+                            : text),
+                  sizes: placeholder
+                      ? const [26, 22, 18]
+                      : const [28, 24, 20, 17],
                   overflow: placeholder
                       ? FitOverflow.keepStart
                       : FitOverflow.keepEnd,

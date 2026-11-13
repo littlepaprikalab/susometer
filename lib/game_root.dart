@@ -152,10 +152,10 @@ class _GameRootState extends State<GameRoot> with WidgetsBindingObserver {
       listenable: Listenable.merge([game, services.settings]),
       builder: (context, _) {
         final showProof = services.settings.proofPanel && game.isMeasuring;
-        // Solo's Ready to answer swaps in Final answer without a phase
-        // change, so the guard follows what's shown. So does the end of a
-        // question's wait for the pulse, which puts Done asking (or Ready
-        // to answer) where the wait's status was.
+        // Solo's tap on the question card swaps in the answer screen
+        // without a phase change, so the guard follows what's shown. So
+        // does the end of a question's wait for the pulse, which puts Done
+        // asking (or Different question) where the wait's status was.
         _notePhase((game.shownPhase, game.waitingForPulse));
         // The Play again question belongs to the scores on screen: if the
         // game leaves them any other way, it mustn't come back up with the

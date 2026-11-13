@@ -135,15 +135,19 @@ Settings → **Signal check** → **Start both**. Allow microphone and speech re
 ## 4b. Solo (1 player, 3 questions)
 
 - [ ] After the host reads the question, **wait about 10 s without talking**: the question card
-  stays up, with *Different question* and *Ready to answer*. The camera doesn't move or flash.
-- [ ] Start talking without tapping: the question card stays up (decision 76). Tap *Ready to
-  answer*: the answer card shows, with your words so far.
-- [ ] Next question: tap *Ready to answer* **while the host is still reading**. The host stops
+  stays up, with its teal button ("Don't answer yet · tap here first") and *Different question*
+  under the camera. The camera doesn't move or flash.
+- [ ] Start talking without tapping: the question card stays up (decision 76). Tap the question
+  card anywhere: its button presses down, and the answer card shows, with your words so far.
+- [ ] Next question: tap the question card **while the host is still reading**. The host stops
   mid-sentence, and when you answer right away your first words are in the transcript (the mic
   reopens).
-- [ ] Double-tap *Ready to answer* fast: the answer must **not** end (the second tap lands where
-  *Final answer* appears).
-- [ ] Tap *Different question* while the host is reading, twice in a row, then *Ready to answer*
+- [ ] Double-tap the question card fast: the answer must **not** end.
+- [ ] Hold the phone the way you would to play, by its top edge too: the card isn't tapped by
+  accident, and the button on it is easy to spot at arm's length (decision 85).
+- [ ] No host bubble on the question screens, party or solo: the camera is in the same place
+  from the wait for the pulse through *Locking in the reading…* (decision 85).
+- [ ] Tap *Different question* while the host is reading, twice in a row, then the question card
   mid-sentence on the next one. Answer out loud: your words still show up on every later question
   (a lost cancel callback used to mute recognition for the rest of the session).
 - [ ] Hold the side button for Siri while the verdict sound plays, then dismiss Siri. On the next
