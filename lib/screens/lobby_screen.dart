@@ -207,7 +207,7 @@ class _LobbyScreenState extends State<LobbyScreen> {
                     ),
                     const SizedBox(height: 8),
                     _Choices<int>(
-                      values: const [3, 5, 7],
+                      values: const [1, 3, 5],
                       selected: game.questionsPerTurn,
                       label: (v) => '$v',
                       display: true,

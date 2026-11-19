@@ -374,7 +374,7 @@ class GameController extends ChangeNotifier {
   static const questionS = 40;
 
   /// Roughly how long the game in the lobby would take, in minutes, so a
-  /// room of eight sees what seven questions each adds up to before it
+  /// room of eight sees what five questions each adds up to before it
   /// starts (SPEC.md decision 80). Null until there are enough players.
   int? get estimatedMinutes => canStart
       ? (players.length * (turnSetupS + questionsPerTurn * questionS) / 60)

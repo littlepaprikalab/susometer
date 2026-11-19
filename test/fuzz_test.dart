@@ -78,7 +78,7 @@ void abuse(
       () {
         switch (rng.nextInt(4)) {
           case 0:
-            g.setQuestionsPerTurn(const [3, 5, 7][rng.nextInt(3)]);
+            g.setQuestionsPerTurn(const [1, 3, 5][rng.nextInt(3)]);
           case 1:
             g.setDeck(rng.nextBool() ? DeckKind.mild : DeckKind.spicy);
           case 2:
