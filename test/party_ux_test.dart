@@ -347,16 +347,16 @@ void main() {
       find.text('Questions per turn · about 9 min in all'),
       findsOneWidget,
     );
-    await rig.tap('7');
+    await rig.tap('1');
     expect(
-      find.text('Questions per turn · about 12 min in all'),
+      find.text('Questions per turn · about 4 min in all'),
       findsOneWidget,
     );
     for (final n in ['Priya', 'Jordan', 'Kai', 'Mo', 'Lee', 'Ana']) {
       await rig.addPlayer(n);
     }
     expect(
-      find.text('Questions per turn · about 47 min in all'),
+      find.text('Questions per turn · about 15 min in all'),
       findsOneWidget,
     );
     await rig.finish();

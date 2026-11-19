@@ -30,7 +30,7 @@ Built for the DEV [Presage SmartSpectra SDK Challenge](https://dev.to/challenges
 
 ## How a game goes
 
-1. **Lobby:** add 2–8 contestants (or 1+ in *Solo · host asks*), pick 3/5/7 questions per turn
+1. **Lobby:** add 2–8 contestants (or 1+ in *Solo · host asks*), pick 1/3/5 questions per turn
    and a Mild or Spicy deck. The lobby says about how long that game will take (eight players
    with seven questions each is most of an hour). The **?** next to the gear explains the score
    and the #tags.
