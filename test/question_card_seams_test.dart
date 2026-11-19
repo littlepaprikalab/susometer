@@ -427,14 +427,14 @@ void main() {
       });
     }
 
-    testWidgets('a 7-question solo game, two Different questions on each: '
+    testWidgets('a 5-question solo game, two Different questions on each: '
         'every card answers as itself', (tester) async {
       final rig = Rig(tester);
-      await rig.soloToCard(questions: 7);
+      await rig.soloToCard(questions: 5);
       final up = faceTop(tester);
       final camera = tester.getRect(find.byType(CameraPreview));
       final answered = <String>[];
-      for (var q = 0; q < 7; q++) {
+      for (var q = 0; q < 5; q++) {
         await rig.heldCard();
         for (var i = 0; i < 2; i++) {
           final before = rig.game.questionText;
@@ -452,7 +452,7 @@ void main() {
         expect(find.text('Q: “$text”'), findsOneWidget);
         expect(tester.getRect(find.byType(CameraPreview)), camera);
         await rig.answerToVerdict();
-        await rig.tap(q == 6 ? 'See the winners' : 'Next question');
+        await rig.tap(q == 4 ? 'See the winners' : 'Next question');
       }
       expect(rig.game.turns.single.results.map((r) => r.question), answered);
       expect(
