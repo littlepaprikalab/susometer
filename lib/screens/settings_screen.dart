@@ -24,6 +24,8 @@ class SettingsScreen extends StatelessWidget {
     return Scaffold(
       body: SafeArea(
         child: ListView(
+          // iPhone keyboards have no key to put them away.
+          keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
           padding: const EdgeInsets.fromLTRB(18, 8, 18, 24),
           children: [
             Row(
@@ -241,6 +243,9 @@ class _ApiKeyCardState extends State<ApiKeyCard> {
                       smartQuotesType: SmartQuotesType.disabled,
                       keyboardType: TextInputType.visiblePassword,
                       textInputAction: TextInputAction.done,
+                      // On iPhone a touch elsewhere doesn't close the
+                      // keyboard unless the field says so.
+                      onTapOutside: (_) => _focus.unfocus(),
                       onSubmitted: typed
                           ? (_) =>
                                 _saveAndTest(keys, services.settings.telemetry)
@@ -270,34 +275,39 @@ class _ApiKeyCardState extends State<ApiKeyCard> {
                     ),
                   ),
                   const SizedBox(width: 8),
-                  Semantics(
-                    button: true,
-                    label: _show ? 'Hide key' : 'Show key',
-                    excludeSemantics: true,
-                    onTap: typed ? () => setState(() => _show = !_show) : null,
-                    child: GestureDetector(
-                      // Show only reveals text that hasn't been saved yet.
+                  // Part of the field: Show and Hide leave the keyboard up.
+                  TextFieldTapRegion(
+                    child: Semantics(
+                      button: true,
+                      label: _show ? 'Hide key' : 'Show key',
+                      excludeSemantics: true,
                       onTap: typed
                           ? () => setState(() => _show = !_show)
                           : null,
-                      child: Opacity(
-                        opacity: typed ? 1 : 0.5,
-                        child: Container(
-                          width: 48,
-                          height: 48,
-                          decoration: BoxDecoration(
-                            color: SusColors.cream,
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(
-                              color: SusColors.ink,
-                              width: 2.5,
+                      child: GestureDetector(
+                        // Show only reveals text that hasn't been saved yet.
+                        onTap: typed
+                            ? () => setState(() => _show = !_show)
+                            : null,
+                        child: Opacity(
+                          opacity: typed ? 1 : 0.5,
+                          child: Container(
+                            width: 48,
+                            height: 48,
+                            decoration: BoxDecoration(
+                              color: SusColors.cream,
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                color: SusColors.ink,
+                                width: 2.5,
+                              ),
                             ),
-                          ),
-                          child: Icon(
-                            _show
-                                ? Icons.visibility_off_rounded
-                                : Icons.visibility_rounded,
-                            color: SusColors.ink,
+                            child: Icon(
+                              _show
+                                  ? Icons.visibility_off_rounded
+                                  : Icons.visibility_rounded,
+                              color: SusColors.ink,
+                            ),
                           ),
                         ),
                       ),
