@@ -91,6 +91,46 @@ void main() {
       expect(wave.points.last.$1, closeTo(2000, 34));
     });
 
+    test('a stalled bridge: 2 s that arrive at once still draw one line, '
+        'placed by when they happened', () {
+      final wave = feed(samples(0, 6000, 30));
+      wave.add(samples(6000 + 1000 / 30, 8000, 30)); // one late batch
+      feed(samples(8000 + 1000 / 30, 10000, 30), into: wave);
+      final lines = painter(wave.points).segments(chart);
+      expect(lines, hasLength(1));
+      expect(lines.single.last.dx, closeTo(chart.width, 0.01));
+      expect(wave.points.last.$1 - wave.points[1].$1, lessThan(8000));
+    });
+
+    test('30 minutes of calibration (light that never settles): it stays '
+        '8 s long and each snapshot costs the same late as early', () {
+      final wave = LiveWave();
+      const perBatch = 3;
+      final sw = Stopwatch();
+      final costs = <double>[];
+      var ts = 0;
+      for (var minute = 0; minute < 30; minute++) {
+        sw
+          ..reset()
+          ..start();
+        for (var b = 0; b < 600; b++) {
+          wave.add([
+            for (var i = 0; i < perBatch; i++)
+              TraceSample(ts += 33333, math.sin(ts / 1e5), 0.9),
+          ]);
+        }
+        sw.stop();
+        costs.add(sw.elapsedMicroseconds / 600);
+        expect(wave.points.length, lessThanOrEqualTo(8 * 30 + 2));
+      }
+      // ignore: avoid_print
+      print(
+        'LiveWave.add: ${costs[1].toStringAsFixed(2)} µs a snapshot in '
+        'minute 2, ${costs.last.toStringAsFixed(2)} in minute 30 (JIT)',
+      );
+      expect(costs.last, lessThan(costs[1] * 3 + 5));
+    });
+
     test('odd timestamps never grow it past its cap', () {
       final wave = LiveWave();
       for (var b = 0; b < 50; b++) {
@@ -254,12 +294,55 @@ void main() {
       final inside = 300 - 2 * edge;
       final value = t.getRect(find.text('1234567890 BPM'));
       final wave = t.getRect(find.byType(Waveform));
-      expect(
-        value.width,
-        lessThanOrEqualTo(inside * LiveStatCard.textMaxShare + 0.5),
-      );
-      expect(wave.width, greaterThanOrEqualTo(inside * 0.55));
+      expect(value.width, lessThanOrEqualTo(wave.width + 0.5));
+      expect(wave.width, greaterThanOrEqualTo((inside - 8) / 2 - 0.5));
       expect(t.takeException(), isNull);
+    });
+
+    testWidgets('on every card, at every text size, the chart is never '
+        'narrower than when the words and the chart split the room evenly', (
+      t,
+    ) async {
+      // The widths of the calibration card and the in-game Pulse card on
+      // 320, 375 and 390 pt phones (SPEC.md decision 89).
+      for (final scale in [1.0, 1.3]) {
+        t.platformDispatcher.textScaleFactorTestValue = scale;
+        for (final w in [150.0, 183.0, 192.0, 258.0, 313.0, 328.0]) {
+          for (final kind in ['plain', 'arrow', 'talking']) {
+            await pumpCard(
+              t,
+              width: w,
+              value: kind == 'arrow' ? '84 BPM' : '65 BPM',
+              delta: kind == 'arrow' ? 12 : null,
+              trailing: kind == 'talking'
+                  ? const Text('Talking', style: TextStyle(fontSize: 11))
+                  : null,
+            );
+            final inside = w - 2 * edge;
+            final wave = t.getRect(find.byType(Waveform));
+            final arrow = kind == 'arrow'
+                ? t.getRect(find.text('12')).right -
+                      t.getRect(find.byType(Icon)).left
+                : 0.0;
+            final evenSplit = kind == 'talking'
+                ? (inside - 8 - 6) / 3
+                : (inside - 8 - arrow) / 2;
+            final why = '$kind, $w pt, text ×$scale';
+            expect(
+              wave.width,
+              greaterThanOrEqualTo(evenSplit - 0.5),
+              reason: why,
+            );
+            final words = math.max(
+              t.getRect(find.text('Pulse · live')).width,
+              t.getRect(find.text(kind == 'arrow' ? '84 BPM' : '65 BPM')).width,
+            );
+            expect(words, lessThanOrEqualTo(wave.width + 0.5), reason: why);
+            expect(t.takeException(), isNull, reason: why);
+          }
+        }
+      }
+      t.platformDispatcher.clearTextScaleFactorTestValue();
     });
   });
 }

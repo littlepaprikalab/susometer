@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:clock/clock.dart';
 import 'package:flutter/material.dart';
@@ -27,6 +28,20 @@ class StreamingPresage extends FakePresage {
 
   /// Expression scores in every snapshot (none unless a test sets them).
   Map<String, double> expr = const {};
+
+  /// Pulse waveform in every snapshot, like the bridge: the samples since
+  /// the last one, 30 a second, with SDK timestamps (µs), beating at
+  /// [waveBpm]. Off unless a test turns it on. The SDK clock runs only
+  /// while the camera does and carries on from where it stopped, so a new
+  /// session's samples follow straight on from the last one's: the seam a
+  /// waveform has to break itself.
+  bool wave = false;
+  double waveBpm = 65;
+
+  /// The clock runs but no waveform comes (the SDK lost the pulse).
+  bool waveDropping = false;
+  int _waveUs = 0;
+  double _wavePhase = 0;
   final List<Map<String, Object?>> pending = [];
   int? _pulseAt;
   int _nextBlink = 0;
@@ -73,9 +88,30 @@ class StreamingPresage extends FakePresage {
         'exprAt': expr.isEmpty ? null : t,
         'frameAt': t,
         'events': List.of(pending),
+        if (wave) ..._waveSince(),
       }),
     );
     pending.clear();
+  }
+
+  /// 100 ms of waveform: a sharp peak per beat and a smaller one after it.
+  Map<String, Object?> _waveSince() {
+    final values = <double>[];
+    final ts = <int>[];
+    for (var i = 0; i < 3; i++) {
+      _waveUs += 33333;
+      _wavePhase = (_wavePhase + waveBpm / 60000 * 33.333) % 1;
+      double bump(double at, double width) =>
+          math.exp(-math.pow((_wavePhase - at) / width, 2).toDouble());
+      values.add(bump(0.15, 0.07) + 0.35 * bump(0.45, 0.1));
+      ts.add(_waveUs);
+    }
+    if (waveDropping) return const {};
+    return {
+      'trace': values,
+      'traceTs': ts,
+      'traceConf': [0.9, 0.9, 0.9],
+    };
   }
 
   @override

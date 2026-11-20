@@ -713,13 +713,6 @@ class LiveStatCard extends StatelessWidget {
   /// Inset from the camera's edges.
   static const inset = 10.0;
 
-  /// With a chart, the most of the card's inside the label and number may
-  /// take before they shrink.
-  static const textMaxShare = 0.4;
-
-  /// With a chart, the most [trailing] may take before it shrinks.
-  static const trailingMaxShare = 0.3;
-
   final String label;
   final String value;
   final double? delta;
@@ -757,34 +750,11 @@ class LiveStatCard extends StatelessWidget {
         ),
       ],
     );
-    return Container(
-      height: height,
-      padding: const EdgeInsets.symmetric(horizontal: 10),
-      decoration: BoxDecoration(
-        color: SusColors.cream,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: SusColors.ink, width: 2.5),
-      ),
-      child: LayoutBuilder(
-        builder: (context, box) => Row(
-          children: [
-            if (trend == null)
-              Expanded(child: text)
-            else ...[
-              // The words keep their own width and the chart takes all the
-              // rest (SPEC.md decision 88). Past [textMaxShare] of the card
-              // the words shrink instead, so a long number or large text
-              // can't squeeze the chart out.
-              ConstrainedBox(
-                constraints: BoxConstraints(
-                  maxWidth: box.maxWidth * textMaxShare,
-                ),
-                child: text,
-              ),
-              const SizedBox(width: 8),
-              Expanded(child: SizedBox(height: 30, child: trend)),
-            ],
-            if (d != null && d.round() != 0) ...[
+    final arrow = d == null || d.round() == 0
+        ? null
+        : Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
               Icon(
                 d > 0
                     ? Icons.arrow_drop_up_rounded
@@ -797,25 +767,102 @@ class LiveStatCard extends StatelessWidget {
                 style: SusText.body(14, weight: FontWeight.w700),
               ),
             ],
-            if (trailing != null) ...[
-              const SizedBox(width: 6),
-              if (trend == null)
-                Flexible(
-                  child: FittedBox(fit: BoxFit.scaleDown, child: trailing),
-                )
-              else
-                ConstrainedBox(
-                  constraints: BoxConstraints(
-                    maxWidth: box.maxWidth * trailingMaxShare,
-                  ),
-                  child: FittedBox(fit: BoxFit.scaleDown, child: trailing),
-                ),
-            ],
-          ],
-        ),
+          );
+    return Container(
+      height: height,
+      padding: const EdgeInsets.symmetric(horizontal: 10),
+      decoration: BoxDecoration(
+        color: SusColors.cream,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: SusColors.ink, width: 2.5),
       ),
+      child: trend == null
+          ? Row(
+              children: [
+                Expanded(child: text),
+                ?arrow,
+                if (trailing != null) ...[
+                  const SizedBox(width: _ChartCardLayout.trailingGap),
+                  Flexible(
+                    child: FittedBox(fit: BoxFit.scaleDown, child: trailing),
+                  ),
+                ],
+              ],
+            )
+          : CustomMultiChildLayout(
+              delegate: _ChartCardLayout(),
+              children: [
+                LayoutId(id: _CardPart.words, child: text),
+                LayoutId(id: _CardPart.chart, child: trend!),
+                if (arrow != null) LayoutId(id: _CardPart.arrow, child: arrow),
+                if (trailing != null)
+                  LayoutId(
+                    id: _CardPart.trailing,
+                    child: FittedBox(fit: BoxFit.scaleDown, child: trailing),
+                  ),
+              ],
+            ),
     );
   }
+}
+
+enum _CardPart { words, chart, arrow, trailing }
+
+/// [LiveStatCard] with a chart (SPEC.md decisions 88 and 89): the arrow and
+/// [LiveStatCard.trailing] keep their own width at the right, and the words
+/// and the chart share the rest. The words take at most half of it, so the
+/// chart is never narrower than them (a long number or large text shrinks
+/// instead), and the chart takes everything the words leave. "Talking" takes
+/// at most a third of the free space, as when the three split it evenly, so
+/// the chart is never narrower than it was then either.
+class _ChartCardLayout extends MultiChildLayoutDelegate {
+  static const gap = 8.0;
+  static const trailingGap = 6.0;
+  static const chartHeight = 30.0;
+
+  @override
+  void performLayout(Size size) {
+    double top(Size s) => (size.height - s.height) / 2;
+    final arrow = hasChild(_CardPart.arrow)
+        ? layoutChild(_CardPart.arrow, BoxConstraints.loose(size))
+        : Size.zero;
+    final hasTrailing = hasChild(_CardPart.trailing);
+    final free = math.max(
+      0.0,
+      size.width - arrow.width - gap - (hasTrailing ? trailingGap : 0),
+    );
+    var right = size.width;
+    if (hasTrailing) {
+      final t = layoutChild(
+        _CardPart.trailing,
+        BoxConstraints(maxWidth: free / 3, maxHeight: size.height),
+      );
+      right -= t.width;
+      positionChild(_CardPart.trailing, Offset(right, top(t)));
+      right -= trailingGap;
+    }
+    if (hasChild(_CardPart.arrow)) {
+      right -= arrow.width;
+      positionChild(_CardPart.arrow, Offset(right, top(arrow)));
+    }
+    final shared = math.max(0.0, right - gap);
+    final words = layoutChild(
+      _CardPart.words,
+      BoxConstraints(maxWidth: shared / 2, maxHeight: size.height),
+    );
+    positionChild(_CardPart.words, Offset(0, top(words)));
+    final chart = layoutChild(
+      _CardPart.chart,
+      BoxConstraints.tightFor(
+        width: math.max(0.0, shared - words.width),
+        height: math.min(chartHeight, size.height),
+      ),
+    );
+    positionChild(_CardPart.chart, Offset(words.width + gap, top(chart)));
+  }
+
+  @override
+  bool shouldRelayout(_ChartCardLayout oldDelegate) => false;
 }
 
 /// What to do about a camera problem, in the live cards' row while the

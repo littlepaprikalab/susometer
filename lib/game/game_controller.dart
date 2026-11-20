@@ -175,6 +175,9 @@ class LiveState extends ChangeNotifier {
   /// shows on the next player.
   void resetCamera() {
     expression.reset();
+    // A new or stopped camera session: its waveform starts again from the
+    // left (SPEC.md decision 89).
+    wave.clear();
     issue = null;
     _nextIssue = null;
     _nextIssueSinceMs = null;
