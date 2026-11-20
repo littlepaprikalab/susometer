@@ -88,6 +88,10 @@ void main() {
     nav.pop();
     await rig.wait(600);
 
+    // The lobby defaults to one question per turn; the shots below need a
+    // second question for the same player (E3/E4), so ask for three.
+    rig.game.setQuestionsPerTurn(3);
+    await rig.wait(100);
     await rig.tap('Start the show');
     await rig.wait(300);
     await shot(tester, key, 'E1-how-to-play');
