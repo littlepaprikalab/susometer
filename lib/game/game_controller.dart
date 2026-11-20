@@ -361,7 +361,7 @@ class GameController extends ChangeNotifier {
 
   final List<Player> players = [];
   GameMode mode = GameMode.party;
-  int questionsPerTurn = 5;
+  int questionsPerTurn = 1;
   DeckKind deck = DeckKind.mild;
   int _playerSeq = 0;
 

@@ -145,7 +145,7 @@ extension on Rig {
     for (final n in names) {
       await addPlayer(n);
     }
-    if (questions != 5) await tap('$questions');
+    if (questions != 1) await tap('$questions');
     await tap('Start the show');
     await wait(300);
     if (game.phase == GamePhase.howToPlay) await tap("Got it, let's play");

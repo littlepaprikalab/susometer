@@ -25,7 +25,7 @@ extension on Rig {
     for (final n in names) {
       await addPlayer(n);
     }
-    if (questions != 5) await tap('$questions');
+    if (questions != 1) await tap('$questions');
     await tap('Start the show');
     await wait(300);
     if (game.phase == GamePhase.howToPlay) await tap("Got it, let's play");
@@ -344,19 +344,19 @@ void main() {
     expect(find.text('Questions per turn'), findsOneWidget);
     await rig.addPlayer('Alex');
     expect(
-      find.text('Questions per turn · about 9 min in all'),
+      find.text('Questions per turn · about 4 min in all'),
       findsOneWidget,
     );
-    await rig.tap('1');
+    await rig.tap('5');
     expect(
-      find.text('Questions per turn · about 4 min in all'),
+      find.text('Questions per turn · about 9 min in all'),
       findsOneWidget,
     );
     for (final n in ['Priya', 'Jordan', 'Kai', 'Mo', 'Lee', 'Ana']) {
       await rig.addPlayer(n);
     }
     expect(
-      find.text('Questions per turn · about 15 min in all'),
+      find.text('Questions per turn · about 37 min in all'),
       findsOneWidget,
     );
     await rig.finish();

@@ -218,6 +218,7 @@ void main() {
     rig.game.hasSeenHowToPlay = true;
     await rig.tap('Solo · host asks');
     await rig.addPlayer('Sam');
+    await rig.tap('3');
     await rig.tap('Start the show');
     await rig.wait(300);
     await rig.tap('I agree, measure me');
