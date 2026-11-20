@@ -171,8 +171,8 @@ Settings → **Signal check** → **Start both**. Allow microphone and speech re
 - [ ] **Questions (decision 74):** with one player, no question mentions "someone here" or "this
   room"; add a second player and, over a few Spicy turns, some do (always at the end of a turn). Each
   turn's last question should feel like the hottest. **Does the meter read higher on it** than on
-  the first? Note which questions get skipped with *Different question*, and which warm-ups get
-  *Doesn't apply*.
+  the first? Note which questions get skipped with *Different question*, and any warm-up a
+  player found hard to answer (there's no skipping one since decision 90).
 
 ## 5. Edge cases
 

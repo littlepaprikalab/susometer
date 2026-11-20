@@ -5,7 +5,6 @@ import '../game/game_controller.dart';
 import '../game/scoring.dart';
 import '../presage/camera_preview.dart';
 import '../theme/expression_stamp.dart';
-import '../theme/fit_text.dart';
 import '../theme/game_widgets.dart';
 import '../theme/seam_button.dart';
 import '../theme/tokens.dart';
@@ -332,9 +331,7 @@ class CalibrateScreen extends StatelessWidget {
         '${elapsed ~/ 60}:${(elapsed % 60).toString().padLeft(2, '0')}';
     final stage = game.calibStage;
     final warmup = game.currentWarmup;
-    final chat = stage == CalibStage.chat || stage == CalibStage.done;
     final ready = stage == CalibStage.ready || stage == CalibStage.done;
-    final warmupNumber = game.warmupNumber;
     final bubble = switch (stage) {
       CalibStage.starting => 'Warming up the camera…',
       CalibStage.quiet => 'Sit still and look at the camera.',
@@ -378,16 +375,9 @@ class CalibrateScreen extends StatelessWidget {
             chat: game.chatBlocks,
             chatDone: game.warmupsDone,
           ),
+          // No status line under the progress: its labels and the host's
+          // line say where things are (SPEC.md decision 90).
           const SizedBox(height: 12),
-          _OneLine(
-            ready
-                ? 'Warm-ups done · your normal is locked in'
-                : chat
-                ? 'Warm-up $warmupNumber of ${game.config.calibMaxWarmups} · from the easy deck'
-                : 'Step 1 · Sit still for about 20 seconds',
-            style: SusText.label,
-          ),
-          const SizedBox(height: 6),
           Expanded(
             child: SeamLayout(
               gap: 12,
@@ -402,18 +392,6 @@ class CalibrateScreen extends StatelessWidget {
               // warm-up waits for Next, and the questions for Start. Both
               // hang across the seam, under the host's line (decision 90);
               // Next lands once there's a warm-up to move on from.
-              // Doesn't apply sits beside Next, as it did at the bottom.
-              leading: ready || warmup == null
-                  ? null
-                  : SizedBox(
-                      width: 128,
-                      child: ChunkyButton.light(
-                        label: "Doesn't apply",
-                        height: 46,
-                        fontSize: 15,
-                        onPressed: game.skipWarmup,
-                      ),
-                    ),
               button: ready
                   ? SeamButton(
                       label: game.currentTurn.results.isEmpty
@@ -445,29 +423,6 @@ String readyHint(GameController game) {
   if (asker == null) return 'Tap when ready · the host asks';
   final first = game.currentTurn.results.isEmpty ? 'first' : 'next';
   return 'Tap when ready · ${asker.name} asks $first';
-}
-
-/// A line of Calibrate copy in a slot one line tall, whatever it says: it
-/// shrinks to fit rather than wrap, so the camera below never moves when
-/// the step changes (the sit-still is measured).
-class _OneLine extends StatelessWidget {
-  const _OneLine(this.text, {required this.style});
-
-  final String text;
-  final TextStyle Function(double size) style;
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      height: MediaQuery.textScalerOf(context).scale(13) * 1.5,
-      child: FitText(
-        text,
-        sizes: const [13, 12, 11],
-        overflow: FitOverflow.keepStart,
-        style: style,
-      ),
-    );
-  }
 }
 
 class _CalibProgress extends StatelessWidget {

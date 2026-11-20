@@ -217,8 +217,8 @@ class _SeamButtonState extends State<SeamButton>
 
 /// A top card and the camera under it, with the screen's buttons hung
 /// across the seam between them (SPEC.md decision 90): the main [button]
-/// at the right, and a [leading] one (Pause, *Doesn't apply*) at the left,
-/// on the same row.
+/// at the right, and a [leading] one (Pause) at the left, on the same
+/// row.
 ///
 /// The camera gets whatever height is left, so the buttons never move it:
 /// with or without them, the two cards are laid out the same. The buttons
@@ -251,8 +251,9 @@ class SeamLayout extends StatelessWidget {
   static const rightInset = 12.0;
   static const leftInset = 12.0;
 
-  /// Width kept for the [leading] button beside the main one.
-  static const leadingRoom = 120.0;
+  /// Width kept for the [leading] button beside the main one: Pause, and a
+  /// little to spare.
+  static const leadingRoom = 70.0;
 
   /// The row's height: the main button with its shadow.
   static const rowHeight = SeamButton.height + 5;

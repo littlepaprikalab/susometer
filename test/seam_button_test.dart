@@ -1,6 +1,7 @@
 // The buttons hung across the seam between the top card and the camera
-// (SPEC.md decision 90): Next or Start the questions with Doesn't apply on
-// Calibrate, Done asking with Pause on a party's question screens. Each test
+// (SPEC.md decision 90): Next, then Start the questions on Calibrate; Pause
+// with Done asking, Final answer or what's being waited for on the
+// question screens. Each test
 // pins where they hang, what they must not cover, and that they still work
 // as buttons.
 import 'dart:convert';
@@ -123,14 +124,10 @@ List<Offset> buttonShape(WidgetTester tester) {
   return corners(tester.renderObject<RenderBox>(drawn.first));
 }
 
-/// Pause or Doesn't apply, whichever is beside it on the seam.
+/// Pause, beside the main button on the question screens' seam.
 Finder leadingButton() => find.descendant(
   of: find.byType(SeamLayout),
-  matching: find.byWidgetPredicate(
-    (w) =>
-        w is PauseButton || (w is ChunkyButton && w.label == "Doesn't apply"),
-    description: 'Pause or Doesn\'t apply',
-  ),
+  matching: find.byType(PauseButton),
 );
 
 List<Offset> leadingShape(WidgetTester tester) =>
@@ -189,7 +186,7 @@ bool inside<T extends Widget>(Element e) =>
     e.findAncestorWidgetOfExactType<T>() != null;
 
 /// Checks the button labelled [label] where it hangs, and the one beside
-/// it ([leading]: Pause or Doesn't apply): across the seam, on screen, on
+/// it ([leading]: Pause): across the seam, on screen, on
 /// one row, clear of each other, of the card's words and of the camera's
 /// chips and stamps, and labelled tap targets.
 Future<void> expectOnSeam(
@@ -311,10 +308,8 @@ void main() {
         '${screen.width.round()}×${screen.height.round()}, '
         'text ×$scale';
 
-    testWidgets('Calibrate: Next with Doesn\'t apply, then Start the '
-        'questions, hang across the seam; the camera stays put ($where)', (
-      tester,
-    ) async {
+    testWidgets('Calibrate: Next, then Start the questions, hang across the '
+        'seam; the camera stays put ($where)', (tester) async {
       tester.platformDispatcher.textScaleFactorTestValue = scale;
       addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
       final rig = Rig(tester);
@@ -326,7 +321,6 @@ void main() {
       // Sitting still: nothing to move on from, so no buttons yet.
       expect(rig.game.currentWarmup, isNull);
       expect(find.byType(SeamButton), findsNothing);
-      expect(find.text("Doesn't apply"), findsNothing);
       final still = tester.getRect(find.byType(CameraWindow));
 
       await rig.until(
@@ -334,7 +328,9 @@ void main() {
         what: 'first warm-up',
       );
       await rig.wait(SeamButton.entrance.inMilliseconds + 100);
-      await expectOnSeam(tester, 'Next', screen, leading: "Doesn't apply");
+      await expectOnSeam(tester, 'Next', screen, leading: null);
+      // No skipping a warm-up: they fit anyone (SPEC.md decision 90).
+      expect(find.text("Doesn't apply"), findsNothing);
       expect(find.text('Tap here when done speaking'), findsOneWidget);
       expect(tester.getRect(find.byType(CameraWindow)), still);
       // Nothing left under the camera: no button, no hint.
@@ -347,6 +343,8 @@ void main() {
         );
       }
       expect(find.text('Answer out loud, then tap Next.'), findsNothing);
+      // Nor a status line between the progress and the host's bubble.
+      expect(find.textContaining('from the easy deck'), findsNothing);
 
       await rig.toReady();
       await expectOnSeam(tester, 'Start the questions', screen, leading: null);
@@ -494,17 +492,6 @@ void main() {
                             bottomRoom: SeamButton.cardRoom,
                           ),
                           camera: const ColoredBox(color: SusColors.ink),
-                          leading: label == 'Next'
-                              ? SizedBox(
-                                  width: 128,
-                                  child: ChunkyButton.light(
-                                    label: "Doesn't apply",
-                                    height: 46,
-                                    fontSize: 15,
-                                    onPressed: () {},
-                                  ),
-                                )
-                              : null,
                           button: SeamButton(
                             key: ValueKey(label),
                             label: label,
@@ -528,10 +515,7 @@ void main() {
           // One frame to start the pop-in's clock, then all of it.
           await tester.pump(const Duration(milliseconds: 16));
           await tester.pump(SeamButton.entrance);
-          final shapes = [
-            buttonShape(tester),
-            if (label == 'Next') leadingShape(tester),
-          ];
+          final shapes = [buttonShape(tester)];
           final words = wordBoxes(
             tester,
             find.descendant(

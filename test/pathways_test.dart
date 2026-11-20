@@ -397,9 +397,6 @@ void main() {
         () => rig.game.currentWarmup != null,
         what: 'first warm-up',
       );
-      final first = rig.game.currentWarmup!;
-      await rig.tap("Doesn't apply");
-      expect(first.skipped, isTrue);
       await rig.until(() => rig.game.phase == GamePhase.ask);
       expect(find.textContaining('tQ0'), findsOneWidget);
       await rig.finish();
