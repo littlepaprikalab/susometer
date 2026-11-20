@@ -155,6 +155,7 @@ class PermissionsScreen extends StatelessWidget {
             hint: cameraOk
                 ? 'No transcripts · you tap between question and answer'
                 : null,
+            shorterHints: const ['No transcripts · you tap through'],
             height: cameraOk ? 56 : 48,
             fontSize: 15,
             onPressed: cameraOk ? game.playWithoutVoice : game.backToLobby,
@@ -277,6 +278,7 @@ class RedoScreen extends StatelessWidget {
                 child: ChunkyButton(
                   label: 'Ask it again',
                   hint: 'Same question, fresh reading',
+                  shorterHints: const ['Fresh reading'],
                   fontSize: 19,
                   onPressed: game.askAgain,
                 ),

@@ -398,6 +398,7 @@ class CalibrateScreen extends StatelessWidget {
                           ? 'Start the questions'
                           : 'Back to the questions',
                       hint: readyHint(game),
+                      shorterHints: readyHints(game).skip(1).toList(),
                       onPressed: game.startQuestions,
                     )
                   : warmup == null
@@ -406,6 +407,7 @@ class CalibrateScreen extends StatelessWidget {
                       label: 'Next',
                       icon: Icons.skip_next_rounded,
                       hint: 'Tap here when done speaking',
+                      shorterHints: const ['Tap when done speaking'],
                       onPressed: game.nextWarmup,
                     ),
             ),
@@ -418,11 +420,20 @@ class CalibrateScreen extends StatelessWidget {
 
 /// On Start the questions: who asks first, so they have one ready (the
 /// host only names them as the question is due). Solo has no asker.
-String readyHint(GameController game) {
+String readyHint(GameController game) => readyHints(game).first;
+
+/// [readyHint], then shorter forms for when a long name won't fit.
+List<String> readyHints(GameController game) {
   final asker = game.currentAsker;
-  if (asker == null) return 'Tap when ready · the host asks';
+  if (asker == null) {
+    return const ['Tap when ready · the host asks', 'Tap when ready'];
+  }
   final first = game.currentTurn.results.isEmpty ? 'first' : 'next';
-  return 'Tap when ready · ${asker.name} asks $first';
+  return [
+    'Tap when ready · ${asker.name} asks $first',
+    '${asker.name} asks $first',
+    'Tap when ready',
+  ];
 }
 
 class _CalibProgress extends StatelessWidget {

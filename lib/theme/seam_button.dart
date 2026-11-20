@@ -5,6 +5,7 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter/scheduler.dart';
 
 import 'tokens.dart';
+import 'widgets.dart';
 
 /// A screen's main action, hung across the seam between its top card and
 /// the camera, at the right (SPEC.md decision 90): where the players are
@@ -25,12 +26,17 @@ class SeamButton extends StatefulWidget {
     required this.hint,
     required this.onPressed,
     this.icon,
+    this.shorterHints = const [],
   });
 
   final String label;
 
-  /// When to tap it ("Tap here when done speaking").
+  /// When to tap it ("Tap here when done speaking"). VoiceOver reads this.
   final String hint;
+
+  /// Shorter forms of [hint], drawn in turn when it won't fit (ButtonHint):
+  /// a long name or large text gives way to fewer words, not smaller ones.
+  final List<String> shorterHints;
 
   final VoidCallback? onPressed;
   final IconData? icon;
@@ -39,7 +45,6 @@ class SeamButton extends StatefulWidget {
   static const height = 54.0;
 
   static const fontSize = 17.0;
-  static const hintSize = 12.5;
 
   /// How long it takes to pop in and settle.
   static const entrance = Duration(milliseconds: 420);
@@ -100,49 +105,52 @@ class _SeamButtonState extends State<SeamButton>
         borderRadius: BorderRadius.circular(SusShape.buttonRadius),
         border: Border.all(color: SusColors.ink, width: SusShape.borderWidth),
       ),
-      // As wide as its words, and no wider.
+      // As wide as its words, and no wider. The hint at its own height
+      // (shorter words before smaller ones), the label in the rest: a long
+      // hint never shrinks the label, and at the largest text the label
+      // gives a little, not the layout.
       child: Center(
         widthFactor: 1,
-        child: FittedBox(
-          fit: BoxFit.scaleDown,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  if (widget.icon != null) ...[
-                    Icon(
-                      widget.icon,
-                      color: SusColors.cream,
-                      size: SeamButton.fontSize + 5,
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Flexible(
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (widget.icon != null) ...[
+                      Icon(
+                        widget.icon,
+                        color: SusColors.cream,
+                        size: SeamButton.fontSize + 5,
+                      ),
+                      const SizedBox(width: 6),
+                    ],
+                    Text(
+                      widget.label,
+                      maxLines: 1,
+                      softWrap: false,
+                      style: SusText.body(
+                        SeamButton.fontSize,
+                        weight: FontWeight.w700,
+                        color: SusColors.cream,
+                      ).copyWith(height: ButtonHint.lineHeight),
                     ),
-                    const SizedBox(width: 6),
                   ],
-                  Text(
-                    widget.label,
-                    maxLines: 1,
-                    softWrap: false,
-                    style: SusText.body(
-                      SeamButton.fontSize,
-                      weight: FontWeight.w700,
-                      color: SusColors.cream,
-                    ),
-                  ),
-                ],
-              ),
-              Text(
-                widget.hint,
-                maxLines: 1,
-                softWrap: false,
-                style: SusText.body(
-                  SeamButton.hintSize,
-                  weight: FontWeight.w600,
-                  color: SusColors.cream,
                 ),
               ),
-            ],
-          ),
+            ),
+            ButtonHint(
+              [widget.hint, ...widget.shorterHints],
+              style: SusText.body(
+                ButtonHint.fontSize,
+                weight: FontWeight.w600,
+                color: SusColors.cream,
+              ).copyWith(height: ButtonHint.lineHeight),
+            ),
+          ],
         ),
       ),
     );
@@ -243,17 +251,12 @@ class SeamLayout extends StatelessWidget {
   /// beside the main button.
   final Widget? leading;
 
-  /// Widest the button may be, as a share of the cards' width; longer words
-  /// shrink to fit.
-  static const maxWidthShare = 0.7;
-
   /// From the cards' edges to the buttons'.
   static const rightInset = 12.0;
   static const leftInset = 12.0;
 
-  /// Width kept for the [leading] button beside the main one: Pause, and a
-  /// little to spare.
-  static const leadingRoom = 70.0;
+  /// Width kept for the [leading] button beside the main one: Pause.
+  static const leadingRoom = 56.0;
 
   /// The row's height: the main button with its shadow.
   static const rowHeight = SeamButton.height + 5;
@@ -363,23 +366,16 @@ class _SeamDelegate extends MultiChildLayoutDelegate {
         cameraTop + SeamLayout.cameraReach - SeamLayout.rowHeight / 2;
     var buttonLeft = size.width - SeamLayout.rightInset;
     if (hasChild(_Seam.button)) {
-      // With a button beside it, the main one leaves that one room: it
-      // shrinks its words before the other gets too small to read.
-      final room = hasChild(_Seam.leading)
-          ? size.width -
-                SeamLayout.leftInset -
-                SeamLayout.rightInset -
-                10 -
-                SeamLayout.leadingRoom
-          : double.infinity;
+      // As wide as the row allows: with a button beside it, it leaves that
+      // one its room, and fits its words in what's left.
+      final room =
+          size.width -
+          SeamLayout.leftInset -
+          SeamLayout.rightInset -
+          (hasChild(_Seam.leading) ? 10 + SeamLayout.leadingRoom : 0);
       final button = layoutChild(
         _Seam.button,
-        BoxConstraints(
-          maxWidth: math.max(
-            0,
-            math.min(size.width * SeamLayout.maxWidthShare, room),
-          ),
-        ),
+        BoxConstraints(maxWidth: math.max(0, room)),
       );
       buttonLeft -= button.width;
       positionChild(

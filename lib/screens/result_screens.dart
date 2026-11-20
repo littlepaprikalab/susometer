@@ -121,6 +121,9 @@ class CallItScreen extends StatelessWidget {
             ChunkyButton(
               label: 'Reveal',
               hint: stillToCall(waiting),
+              shorterHints: [
+                if (waiting.isNotEmpty) 'Still to call it: ${waiting.length}',
+              ],
               height: 60,
               fontSize: 22,
               onPressed: game.reveal,
@@ -129,6 +132,9 @@ class CallItScreen extends StatelessWidget {
             ChunkyButton.light(
               label: 'Reveal',
               hint: stillToCall(waiting),
+              shorterHints: [
+                if (waiting.isNotEmpty) 'Still to call it: ${waiting.length}',
+              ],
               height: 60,
               fontSize: 22,
               onPressed: game.reveal,

@@ -141,6 +141,9 @@ Widget? _seamAction(GameController game, bool solo) {
         hint: stuck
             ? 'No answer? Tap anyway, or Pause to skip'
             : "Tap here when you're done",
+        shorterHints: stuck
+            ? const ['No answer? Tap anyway']
+            : const ["Tap when you're done"],
         onPressed: game.finalAnswer,
       );
     default:
@@ -149,6 +152,7 @@ Widget? _seamAction(GameController game, bool solo) {
           : SeamButton(
               label: 'Done asking',
               hint: '${game.currentPlayer.name}: tap here, then answer',
+              shorterHints: const ['Tap here, then answer'],
               onPressed: game.doneAsking,
             );
   }
