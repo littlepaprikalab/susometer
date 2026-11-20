@@ -43,7 +43,8 @@ Built for the DEV [Presage SmartSpectra SDK Challenge](https://dev.to/challenges
    skipped one is replaced by another of the same kind; skip that too and it moves on. Answer
    each one out loud, then tap *Next*. This learns *your* normal pulse, blink rate,
    expressions and how fast you usually answer, while talking like you will in the real
-   questions. Once it's locked in, tap *Start the questions* when everyone's ready.
+   questions. Once it's locked in, tap *Start the questions* when everyone's ready. The button
+   that moves things on is stamped across the bottom of the card you're reading.
 4. **Ask:** the host says who asks ("Alex, ask your question!"); everyone else takes turns,
    starting with the next player. The question appears on screen as they speak, and the player
    taps *Done asking* when it's over. Nothing to ask? *Suggest one* puts a question from the

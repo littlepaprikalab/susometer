@@ -319,6 +319,10 @@ class CalibrateScreen extends StatelessWidget {
   /// deck).
   static const bubbleMinFontSize = 14.0;
 
+  /// Doesn't apply's row, shadow included. Next and Start the questions
+  /// are up on the seam (SPEC.md decision 90).
+  static const bottomRowHeight = 53.0;
+
   @override
   Widget build(BuildContext context) {
     final game = GameScope.of(context);
@@ -387,48 +391,49 @@ class CalibrateScreen extends StatelessWidget {
             style: SusText.label,
           ),
           const SizedBox(height: 6),
-          HostBubble(
-            text: bubble,
-            lines: bubbleLines,
-            minFontSize: bubbleMinFontSize,
+          Expanded(
+            child: SeamStampLayout(
+              gap: 12,
+              top: HostBubble(
+                text: bubble,
+                lines: bubbleLines,
+                minFontSize: bubbleMinFontSize,
+                bottomRoom: StampButton.cardRoom,
+              ),
+              camera: const _CalibCamera(),
+              // Nothing here moves on by itself (SPEC.md decision 76): each
+              // warm-up waits for Next, and the questions for Start. Both
+              // hang across the seam, under the host's line (decision 90);
+              // Next lands once there's a warm-up to move on from.
+              stamp: ready
+                  ? StampButton(
+                      label: game.currentTurn.results.isEmpty
+                          ? 'Start the questions'
+                          : 'Back to the questions',
+                      onPressed: game.startQuestions,
+                    )
+                  : warmup == null
+                  ? null
+                  : StampButton(
+                      label: 'Next',
+                      icon: Icons.skip_next_rounded,
+                      onPressed: game.nextWarmup,
+                    ),
+            ),
           ),
           const SizedBox(height: 12),
-          const Expanded(child: _CalibCamera()),
-          const SizedBox(height: 12),
-          // Nothing here moves on by itself (SPEC.md decision 76): each
-          // warm-up waits for Next, and the questions for Start.
-          if (ready)
-            ChunkyButton(
-              label: game.currentTurn.results.isEmpty
-                  ? 'Start the questions'
-                  : 'Back to the questions',
-              height: 52,
-              fontSize: 17,
-              onPressed: game.startQuestions,
-            )
-          else
-            Row(
-              children: [
-                Expanded(
-                  child: ChunkyButton.light(
+          // The same height in every step, so the camera never moves.
+          SizedBox(
+            height: bottomRowHeight,
+            child: ready
+                ? null
+                : ChunkyButton.light(
                     label: "Doesn't apply",
-                    height: 52,
+                    height: bottomRowHeight - SusShape.shadowOffset.dy,
                     fontSize: 16,
                     onPressed: warmup == null ? null : game.skipWarmup,
                   ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: ChunkyButton(
-                    label: 'Next',
-                    icon: Icons.skip_next_rounded,
-                    height: 52,
-                    fontSize: 17,
-                    onPressed: warmup == null ? null : game.nextWarmup,
-                  ),
-                ),
-              ],
-            ),
+          ),
           const SizedBox(height: 6),
           _OneLine(
             ready

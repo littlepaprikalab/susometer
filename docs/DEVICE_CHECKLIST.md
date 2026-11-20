@@ -76,8 +76,13 @@ Settings → **Signal check** → **Start both**. Allow microphone and speech re
   question, "Heard: …" follows along, and the verdict's question is what they said, without the
   "I don't know". **Could the asker read it from where they sat, or did the hot seat read it
   out?**
-- [ ] *Suggest one* is on the asker's card, top right, well away from *Done asking* (decision
-  84). **Did the hot seat find it without being told? Can a thumb reach it one-handed?**
+- [ ] *Suggest one* is on the asker's card, top right, the card's height away from *Done asking*
+  (decisions 84 and 90). **Did the hot seat find it without being told? Can a thumb reach it
+  one-handed?**
+- [ ] *Next*, *Start the questions* and *Done asking* are stamped across the seam between the
+  card and the camera, and land with a wobble when they appear (decision 90). **Did players find
+  them without being told? Does the wobble catch the eye, or annoy? Does the camera preview
+  stutter while one lands?**
 - [ ] Ask a real question, then tap *Suggest one* by mistake and *Done asking* straight after,
   without anyone speaking: the answer screen and the verdict still show the question that was
   asked (decision 83).

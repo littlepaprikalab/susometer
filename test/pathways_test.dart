@@ -1228,6 +1228,7 @@ void main() {
                         text: text,
                         lines: CalibrateScreen.bubbleLines,
                         minFontSize: CalibrateScreen.bubbleMinFontSize,
+                        bottomRoom: StampButton.cardRoom,
                       ),
                     ],
                   ),
@@ -1332,6 +1333,9 @@ void main() {
       () => rig.game.currentWarmup != null,
       what: 'first warm-up',
     );
+    // Next stamps in with the first warm-up (decision 90): a one-off, which
+    // its own test counts. This counts the screen once it has landed.
+    await rig.wait(StampButton.landing.inMilliseconds + 100);
     final calibrate = await framesWhileTalking(rig);
     expect(rig.game.phase, GamePhase.calibrate);
     await rig.until(() => rig.game.phase == GamePhase.ask);
@@ -1413,6 +1417,7 @@ void main() {
       () => rig.game.currentWarmup != null,
       what: 'first warm-up',
     );
+    await rig.wait(StampButton.landing.inMilliseconds + 100);
     await expectOneFramePerTick(rig, 'calibration');
     // A lost face shows within a snapshot and a tick.
     rig.presage.code = 'NO_FACE_FOUND';

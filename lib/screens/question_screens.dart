@@ -88,18 +88,31 @@ class HotSeatScreen extends StatelessWidget {
         children: [
           _Header(game: game, solo: solo),
           const SizedBox(height: 14),
-          SizedBox(
-            height: _cardHeight,
-            child: waiting
-                ? _PulseWaitCard(game: game)
-                : answering
-                ? _AnswerCard(game: game)
-                : solo
-                ? _SoloQuestionCard(game: game)
-                : _AskerCard(game: game),
+          Expanded(
+            child: SeamStampLayout(
+              gap: 14,
+              top: SizedBox(
+                height: _cardHeight,
+                child: waiting
+                    ? _PulseWaitCard(game: game)
+                    : answering
+                    ? _AnswerCard(game: game)
+                    : solo
+                    ? _SoloQuestionCard(game: game)
+                    : _AskerCard(game: game),
+              ),
+              camera: _MeasuringCamera(game: game),
+              // Done asking hangs across the seam, where the asker and the
+              // hot seat are looking (SPEC.md decision 90). Solo has none:
+              // its question card is the button (decision 85).
+              stamp: solo || waiting || answering
+                  ? null
+                  : StampButton(
+                      label: 'Done asking',
+                      onPressed: game.doneAsking,
+                    ),
+            ),
           ),
-          const SizedBox(height: 14),
-          Expanded(child: _MeasuringCamera(game: game)),
           const SizedBox(height: 12),
           SizedBox(
             height: _actionsHeight,
@@ -282,42 +295,40 @@ class _Actions extends StatelessWidget {
             (solo
                 ? 'Tap the question, then answer out loud.'
                 : '${game.currentPlayer.name}: tap Done asking, then answer.');
+        final hintText = FitText(
+          hint,
+          textAlign: solo ? TextAlign.center : TextAlign.start,
+          sizes: notice == null ? const [15, 13, 12, 11] : const [13, 12, 11],
+          overflow: FitOverflow.keepStart,
+          style: (size) => SusText.body(size, weight: FontWeight.w700),
+        );
+        if (!solo) {
+          // Done asking is up on the seam (SPEC.md decision 90); Pause
+          // keeps its place, with the hint beside it.
+          return beside(
+            SizedBox(
+              height: 51,
+              child: Align(alignment: Alignment.centerLeft, child: hintText),
+            ),
+          );
+        }
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Expanded(
-              child: Align(
-                alignment: Alignment.bottomCenter,
-                child: FitText(
-                  hint,
-                  textAlign: TextAlign.center,
-                  sizes: notice == null
-                      ? const [15, 13, 12, 11]
-                      : const [13, 12, 11],
-                  overflow: FitOverflow.keepStart,
-                  style: (size) => SusText.body(size, weight: FontWeight.w700),
-                ),
-              ),
+              child: Align(alignment: Alignment.bottomCenter, child: hintText),
             ),
             const SizedBox(height: 8),
+            // Alone here: the way on to the answer is the question card
+            // itself, where the player is reading (SPEC.md decision 85).
             beside(
-              solo
-                  // Alone here: the way on to the answer is the question
-                  // card itself, where the player is reading (SPEC.md
-                  // decision 85).
-                  ? ChunkyButton.light(
-                      label: 'Different question',
-                      icon: Icons.shuffle_rounded,
-                      height: 48,
-                      fontSize: 16,
-                      onPressed: game.differentQuestion,
-                    )
-                  : ChunkyButton(
-                      label: 'Done asking',
-                      height: 48,
-                      fontSize: 16,
-                      onPressed: game.doneAsking,
-                    ),
+              ChunkyButton.light(
+                label: 'Different question',
+                icon: Icons.shuffle_rounded,
+                height: 48,
+                fontSize: 16,
+                onPressed: game.differentQuestion,
+              ),
             ),
           ],
         );
@@ -326,9 +337,17 @@ class _Actions extends StatelessWidget {
 }
 
 class _TranscriptCard extends StatelessWidget {
-  const _TranscriptCard({required this.children, this.tallHeader = false});
+  const _TranscriptCard({
+    required this.children,
+    this.tallHeader = false,
+    this.stampRoom = false,
+  });
 
   final List<Widget> children;
+
+  /// Keeps the bottom clear for Done asking, which hangs across the card's
+  /// bottom edge (SPEC.md decision 90).
+  final bool stampRoom;
 
   /// The first child is an [_AskerHeader], which is a tap target's height
   /// and brings its own room above and below.
@@ -337,7 +356,12 @@ class _TranscriptCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: EdgeInsets.fromLTRB(16, tallHeader ? 0 : 12, 16, 12),
+      padding: EdgeInsets.fromLTRB(
+        16,
+        tallHeader ? 0 : 12,
+        16,
+        12 + (stampRoom ? StampButton.cardRoom : 0),
+      ),
       decoration: BoxDecoration(
         color: SusColors.cream,
         borderRadius: BorderRadius.circular(20),
@@ -374,6 +398,7 @@ class _AskerCard extends StatelessWidget {
         }
         return _TranscriptCard(
           tallHeader: true,
+          stampRoom: true,
           children: [
             _AskerHeader(
               game: game,
@@ -525,6 +550,7 @@ class _SuggestionCard extends StatelessWidget {
     );
     return _TranscriptCard(
       tallHeader: true,
+      stampRoom: true,
       children: [
         _AskerHeader(
           game: game,

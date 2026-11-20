@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../game/game_controller.dart';
 import '../game/models.dart';
 import '../screens/question_screens.dart';
+import '../theme/expression_stamp.dart';
 import '../theme/tokens.dart';
 
 /// Proof Panel (SPEC.md §10): a translucent overlay with the raw SmartSpectra
@@ -89,49 +90,68 @@ class ProofPanel extends StatelessWidget {
               'tQ0 ${rel(d.tQ0)} tQ1 ${rel(d.tQ1)} tA0 ${rel(d.tA0)} tA1 ${rel(d.tA1)}'
                   '${d.questionEndReason == null ? '' : ' (${d.questionEndReason!.name})'}',
           ];
+          final panel = Container(
+            padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
+            decoration: BoxDecoration(
+              color: SusColors.ink.withValues(alpha: 0.82),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text(
+                  'PROOF PANEL · raw SmartSpectra',
+                  style: TextStyle(
+                    fontFamily: 'Menlo',
+                    fontFamilyFallback: ['Courier'],
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    color: SusColors.mustard,
+                  ),
+                ),
+                for (final l in lines)
+                  Text(
+                    l,
+                    style: const TextStyle(
+                      fontFamily: 'Menlo',
+                      fontFamilyFallback: ['Courier'],
+                      fontSize: 11.5,
+                      color: SusColors.cream,
+                      height: 1.3,
+                    ),
+                  ),
+              ],
+            ),
+          );
           // Sits over the camera, between the live transcript above and the
           // Pulse/Blinks cards below, so both stay visible for the demo.
-          return Align(
-            alignment: Alignment.bottomCenter,
-            child: SafeArea(
-              child: Container(
-                margin: const EdgeInsets.fromLTRB(
-                  10,
-                  0,
-                  10,
-                  hotSeatOverlayBottom,
-                ),
-                padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
-                decoration: BoxDecoration(
-                  color: SusColors.ink.withValues(alpha: 0.82),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Text(
-                      'PROOF PANEL · raw SmartSpectra',
-                      style: TextStyle(
-                        fontFamily: 'Menlo',
-                        fontFamilyFallback: ['Courier'],
-                        fontSize: 11,
-                        fontWeight: FontWeight.w700,
-                        color: SusColors.mustard,
+          // Under the seam's stamp, too (SPEC.md decision 90): on a short
+          // phone or at large text it shrinks to fit there rather than
+          // cover the stamp or the card above it.
+          return ValueListenableBuilder<double?>(
+            valueListenable: seamStampFloor,
+            builder: (context, floor, _) => Padding(
+              padding: EdgeInsets.only(top: floor == null ? 0 : floor + 4),
+              child: SafeArea(
+                top: floor == null,
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(
+                    10,
+                    0,
+                    10,
+                    hotSeatOverlayBottom,
+                  ),
+                  child: LayoutBuilder(
+                    builder: (context, box) => Align(
+                      alignment: Alignment.bottomCenter,
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        alignment: Alignment.bottomCenter,
+                        child: SizedBox(width: box.maxWidth, child: panel),
                       ),
                     ),
-                    for (final l in lines)
-                      Text(
-                        l,
-                        style: const TextStyle(
-                          fontFamily: 'Menlo',
-                          fontFamilyFallback: ['Courier'],
-                          fontSize: 11.5,
-                          color: SusColors.cream,
-                          height: 1.3,
-                        ),
-                      ),
-                  ],
+                  ),
                 ),
               ),
             ),

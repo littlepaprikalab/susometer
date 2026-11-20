@@ -13,6 +13,7 @@ import 'package:susometer/game/models.dart';
 import 'package:susometer/presage/camera_preview.dart';
 import 'package:susometer/screens/question_screens.dart';
 import 'package:susometer/screens/result_screens.dart';
+import 'package:susometer/theme/expression_stamp.dart';
 import 'package:susometer/theme/game_widgets.dart';
 import 'package:susometer/theme/tokens.dart';
 import 'package:susometer/theme/widgets.dart';
@@ -491,20 +492,19 @@ void main() {
         final handle = tester.ensureSemantics();
         final button = tester.getRect(find.bySemanticsLabel(action));
         handle.dispose();
-        final done = tester.getRect(
-          find.widgetWithText(ChunkyButton, 'Done asking'),
-        );
+        final done = tester.getRect(find.byType(StampButton));
         final pause = tester.getRect(find.bySemanticsLabel('Pause the game'));
         expect(button.height, greaterThanOrEqualTo(44), reason: action);
         expect(button.width, greaterThanOrEqualTo(44), reason: action);
+        // Done asking now hangs across the card's bottom edge (decision
+        // 90): the card's words lie between the two, about 150 pt, where
+        // the slips came from the two side by side.
         expect(
           done.top - button.bottom,
-          greaterThan(300),
+          greaterThan(130),
           reason: '$action at $button is too near Done asking at $done',
         );
         expect(pause.top - button.bottom, greaterThan(300));
-        // Done asking has the bottom row to itself again, beside Pause.
-        expect(done.width, greaterThan(screen.width * 0.6));
         // The label keeps all its words, near enough full size to read.
         expect(find.text(label), findsOneWidget);
         expect(

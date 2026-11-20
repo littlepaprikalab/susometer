@@ -2,6 +2,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
+import 'package:flutter/scheduler.dart';
 
 import 'tokens.dart';
 
@@ -390,4 +391,340 @@ class _RenderWorn extends RenderProxyBox {
     }
     canvas.restore();
   }
+}
+
+/// A screen's main action as a rubber stamp hung across the seam between
+/// its top card and the camera (SPEC.md decision 90): where the players are
+/// already looking, not half a screen below at the bottom.
+///
+/// It's still a button first: teal like every main action, an ink border
+/// and a hard shadow it presses down onto, as on the solo question card
+/// (decision 85). The stamp is in the details: a cream frame inside the
+/// edge, the words in the display face, a little worn, and a tilt of its
+/// own.
+///
+/// It lands like the camera's stamps when it appears or its words change,
+/// then gives one wobble and holds still. Nothing keeps moving: a moving
+/// button would redraw the screen on every vsync, over the camera
+/// (decision 78).
+class StampButton extends StatefulWidget {
+  const StampButton({
+    super.key,
+    required this.label,
+    required this.onPressed,
+    this.icon,
+    this.tiltDegrees = defaultTiltDegrees,
+  });
+
+  final String label;
+  final VoidCallback? onPressed;
+  final IconData? icon;
+
+  /// Negative tips the right end up.
+  final double tiltDegrees;
+
+  static const defaultTiltDegrees = -2.5;
+
+  /// The drawn button's height, without its shadow. With the shadow it's a
+  /// tap target tall, and the touch area is the whole tilted stamp.
+  static const height = 40.0;
+
+  /// Room the card above keeps clear at its bottom, so the stamp's top edge
+  /// lands on the card's frame and padding, not on its words.
+  static const cardRoom = 10.0;
+
+  static const fontSize = 18.0;
+
+  /// How long it takes to land and settle.
+  static const landing = Duration(milliseconds: 420);
+
+  @override
+  State<StampButton> createState() => _StampButtonState();
+}
+
+class _StampButtonState extends State<StampButton>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _land = AnimationController(
+    vsync: this,
+    duration: StampButton.landing,
+  );
+  bool _down = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _stampIn());
+  }
+
+  @override
+  void didUpdateWidget(StampButton old) {
+    super.didUpdateWidget(old);
+    if (old.label != widget.label) _stampIn();
+  }
+
+  void _stampIn() {
+    if (!mounted) return;
+    if (MediaQuery.disableAnimationsOf(context)) {
+      _land.value = 1;
+    } else {
+      _land.forward(from: 0);
+    }
+  }
+
+  @override
+  void dispose() {
+    _land.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final enabled = widget.onPressed != null;
+    final pressed = _down && enabled;
+    const shadow = 4.0;
+    final face = Container(
+      height: StampButton.height,
+      padding: const EdgeInsets.all(3),
+      decoration: BoxDecoration(
+        color: SusColors.teal,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: SusColors.ink, width: SusShape.borderWidth),
+      ),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14),
+        decoration: BoxDecoration(
+          border: Border.all(color: SusColors.cream, width: 1.6),
+          borderRadius: BorderRadius.circular(7),
+        ),
+        // As wide as its words, and no wider.
+        child: Center(
+          widthFactor: 1,
+          child: FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (widget.icon != null) ...[
+                  Icon(widget.icon, color: SusColors.cream, size: 20),
+                  const SizedBox(width: 6),
+                ],
+                Text(
+                  widget.label,
+                  maxLines: 1,
+                  softWrap: false,
+                  style: SusText.display(
+                    StampButton.fontSize,
+                    color: SusColors.cream,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+    final stamp = SizedBox(
+      height: StampButton.height + shadow,
+      child: Stack(
+        children: [
+          Positioned(
+            left: 0,
+            right: 0,
+            top: shadow,
+            height: StampButton.height,
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                color: SusColors.ink,
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+          ),
+          // Sized by the face; the shadow sits behind it.
+          AnimatedPadding(
+            duration: const Duration(milliseconds: 60),
+            padding: EdgeInsets.only(top: pressed ? shadow : 0),
+            child: face,
+          ),
+        ],
+      ),
+    );
+    return Semantics(
+      button: true,
+      enabled: enabled,
+      label: widget.label,
+      excludeSemantics: true,
+      onTap: widget.onPressed,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTapDown: enabled ? (_) => setState(() => _down = true) : null,
+        onTapCancel: enabled ? () => setState(() => _down = false) : null,
+        onTapUp: enabled ? (_) => setState(() => _down = false) : null,
+        onTap: widget.onPressed,
+        child: RepaintBoundary(
+          child: AnimatedBuilder(
+            animation: _land,
+            builder: (context, child) {
+              final t = _land.value;
+              // Drops from above the screen and lands in the first 40%...
+              final drop = Curves.easeInCubic.transform((t / 0.4).clamp(0, 1));
+              final scale = 1.5 - 0.5 * drop;
+              // ...then rocks once either way and settles.
+              final settle = ((t - 0.4) / 0.6).clamp(0.0, 1.0);
+              final wobble = t <= 0.4
+                  ? 0.0
+                  : 5 * math.sin(settle * 2 * math.pi) * (1 - settle);
+              return Opacity(
+                opacity: (t / 0.2).clamp(0.0, 1.0) * (enabled ? 1 : 0.5),
+                child: Transform.rotate(
+                  angle: wobble * math.pi / 180,
+                  child: Transform.scale(scale: scale, child: child),
+                ),
+              );
+            },
+            child: _Tilt(
+              angle: widget.tiltDegrees * math.pi / 180,
+              child: _Worn(
+                seed: ExpressionStamp.seedFor(widget.label),
+                child: stamp,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// A top card and the camera under it, with an optional [stamp] hung across
+/// the seam between them, in the middle (SPEC.md decision 90): clear of the
+/// camera's corner stamp, so the button doesn't read as one more #tag, and
+/// under the line the players are reading.
+///
+/// The camera gets whatever height is left, so the stamp never moves it:
+/// with or without a stamp, the two cards are laid out the same. The stamp
+/// is laid out last, so it draws over both and takes the touches there.
+class SeamStampLayout extends StatelessWidget {
+  const SeamStampLayout({
+    super.key,
+    required this.top,
+    required this.camera,
+    required this.gap,
+    this.stamp,
+  });
+
+  final Widget top;
+  final Widget camera;
+  final double gap;
+  final Widget? stamp;
+
+  /// Widest the stamp may be, as a share of the cards' width; a longer label
+  /// shrinks to fit.
+  static const maxWidthShare = 0.66;
+
+  /// How far the stamp's box reaches into the camera, from its top edge:
+  /// past the border, and no further than the chips at 12 pt inside it.
+  static const cameraReach = 15.0;
+
+  @override
+  Widget build(BuildContext context) {
+    final stamp = this.stamp;
+    return CustomMultiChildLayout(
+      delegate: _SeamDelegate(gap),
+      children: [
+        LayoutId(id: _Seam.top, child: top),
+        LayoutId(
+          id: _Seam.camera,
+          child: _ReportFloor(child: camera),
+        ),
+        if (stamp != null) LayoutId(id: _Seam.stamp, child: stamp),
+      ],
+    );
+  }
+}
+
+/// How far down the screen a stamp on the seam can reach (from the top of
+/// the view), while a [SeamStampLayout] is up; null otherwise. The Proof
+/// Panel stays below it, so it never hides the stamp (SPEC.md decision 90).
+/// The same with or without a stamp, so the panel doesn't move when one
+/// comes or goes.
+final seamStampFloor = ValueNotifier<double?>(null);
+
+/// Reports where the camera's top edge is on screen to [seamStampFloor].
+class _ReportFloor extends SingleChildRenderObjectWidget {
+  const _ReportFloor({super.child});
+
+  @override
+  RenderObject createRenderObject(BuildContext context) => _RenderReportFloor();
+}
+
+class _RenderReportFloor extends RenderProxyBox {
+  double? _sent;
+
+  @override
+  void paint(PaintingContext context, Offset offset) {
+    super.paint(context, offset);
+    final floor = localToGlobal(Offset.zero).dy + SeamStampLayout.cameraReach;
+    if (floor == _sent) return;
+    _sent = floor;
+    // Not while painting: the panel rebuilds on the next frame.
+    SchedulerBinding.instance.addPostFrameCallback((_) {
+      if (attached && _sent == floor) seamStampFloor.value = floor;
+    });
+  }
+
+  @override
+  void detach() {
+    final sent = _sent;
+    _sent = null;
+    super.detach();
+    if (sent == null) return;
+    SchedulerBinding.instance.addPostFrameCallback((_) {
+      if (seamStampFloor.value == sent) seamStampFloor.value = null;
+    });
+  }
+}
+
+enum _Seam { top, camera, stamp }
+
+class _SeamDelegate extends MultiChildLayoutDelegate {
+  _SeamDelegate(this.gap);
+
+  final double gap;
+
+  @override
+  void performLayout(Size size) {
+    final top = layoutChild(
+      _Seam.top,
+      BoxConstraints(
+        minWidth: size.width,
+        maxWidth: size.width,
+        maxHeight: size.height,
+      ),
+    );
+    positionChild(_Seam.top, Offset.zero);
+    final cameraTop = top.height + gap;
+    layoutChild(
+      _Seam.camera,
+      BoxConstraints.tight(
+        Size(size.width, math.max(0, size.height - cameraTop)),
+      ),
+    );
+    positionChild(_Seam.camera, Offset(0, cameraTop));
+    if (hasChild(_Seam.stamp)) {
+      final stamp = layoutChild(
+        _Seam.stamp,
+        BoxConstraints(maxWidth: size.width * SeamStampLayout.maxWidthShare),
+      );
+      positionChild(
+        _Seam.stamp,
+        Offset(
+          (size.width - stamp.width) / 2,
+          cameraTop + SeamStampLayout.cameraReach - stamp.height,
+        ),
+      );
+    }
+  }
+
+  @override
+  bool shouldRelayout(_SeamDelegate old) => old.gap != gap;
 }
