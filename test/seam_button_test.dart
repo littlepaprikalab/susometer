@@ -22,6 +22,7 @@ import 'package:susometer/theme/game_widgets.dart';
 import 'package:susometer/theme/seam_button.dart';
 import 'package:susometer/theme/tokens.dart';
 import 'package:susometer/theme/widgets.dart';
+import 'package:susometer/voice/speech_service.dart';
 
 import 'rig.dart';
 
@@ -661,6 +662,64 @@ void main() {
     final shape = buttonShape(tester);
     await tester.pump(SeamButton.entrance);
     expect(buttonShape(tester), shape);
+    await rig.finish();
+  });
+
+  testWidgets('elsewhere the hint is on its button too: Permissions, and No '
+      'clean read with its buttons under the card', (tester) async {
+    final rig = Rig(tester);
+    await rig.pumpApp();
+    rig.speech.permissions = const SpeechPermissions(
+      mic: 'denied',
+      speech: 'authorized',
+      onDevice: true,
+    );
+    await rig.startParty(['Sam', 'Alex']);
+    expect(rig.game.phase, GamePhase.permissions);
+    // The no-mic note is on Play without voice, not over the buttons.
+    expect(
+      find.text('No transcripts · you tap between question and answer'),
+      findsOneWidget,
+    );
+    expect(find.textContaining('No mic?'), findsNothing);
+    final handle = tester.ensureSemantics();
+    expect(
+      tester.getSemantics(find.bySemanticsLabel('Play without voice')).hint,
+      'No transcripts · you tap between question and answer',
+    );
+    await expectLater(tester, meetsGuideline(iOSTapTargetGuideline));
+    await expectLater(tester, meetsGuideline(labeledTapTargetGuideline));
+    handle.dispose();
+    await rig.tap('Play without voice');
+    await rig.wait(300);
+    if (rig.game.phase == GamePhase.howToPlay) {
+      await rig.tap("Got it, let's play");
+    }
+
+    // A question too dark to read: No clean read.
+    await rig.toAsk();
+    rig.game.doneAsking();
+    rig.presage.code = 'TOO_DARK';
+    await rig.wait(2500);
+    await rig.tap('Final answer');
+    await rig.until(() => rig.game.phase == GamePhase.redo, what: 'redo');
+    await rig.wait(300);
+    final card = tester.getRect(
+      find.ancestor(
+        of: find.text('Shaky readings never get a score. No fake verdicts.'),
+        matching: find.byType(SusCard),
+      ),
+    );
+    final again = tester.getRect(
+      find.widgetWithText(ChunkyButton, 'Ask it again'),
+    );
+    final skip = tester.getRect(find.widgetWithText(ChunkyButton, 'Skip it'));
+    // Right under the card that says why, not at the foot of the screen.
+    expect(again.top - card.bottom, inInclusiveRange(0, 24));
+    expect(skip.top, again.top);
+    expect(find.text('Same question, fresh reading'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+    rig.presage.code = 'OK';
     await rig.finish();
   });
 }

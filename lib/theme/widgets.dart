@@ -16,6 +16,7 @@ class ChunkyButton extends StatefulWidget {
     this.fontSize = 17,
     this.expand = true,
     this.showLabel = true,
+    this.hint,
   });
 
   /// Light variant: cream fill, ink text.
@@ -28,6 +29,7 @@ class ChunkyButton extends StatefulWidget {
     this.fontSize = 17,
     this.expand = true,
     this.showLabel = true,
+    this.hint,
   }) : color = SusColors.cream,
        textColor = SusColors.ink;
 
@@ -42,6 +44,11 @@ class ChunkyButton extends StatefulWidget {
 
   /// False for an icon-only button; [label] is then only for accessibility.
   final bool showLabel;
+
+  /// When to tap it, or what follows, in small type under the label
+  /// ("Priya asks next"): the line that would otherwise sit by the button
+  /// (SPEC.md decision 90). VoiceOver reads it as the button's hint.
+  final String? hint;
 
   @override
   State<ChunkyButton> createState() => _ChunkyButtonState();
@@ -80,10 +87,63 @@ class _ChunkyButtonState extends State<ChunkyButton> {
           ),
       ],
     );
+    final hint = widget.hint;
+    final Widget face = hint == null || !widget.showLabel
+        ? content
+        // Label and hint each shrink to fit their share of the height.
+        : Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Flexible(
+                flex: 3,
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (widget.icon != null) ...[
+                        Icon(
+                          widget.icon,
+                          color: widget.textColor,
+                          size: widget.fontSize + 5,
+                        ),
+                        const SizedBox(width: 8),
+                      ],
+                      Text(
+                        widget.label,
+                        maxLines: 1,
+                        style: SusText.body(
+                          widget.fontSize,
+                          weight: FontWeight.w700,
+                          color: widget.textColor,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              Flexible(
+                flex: 2,
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(
+                    hint,
+                    maxLines: 1,
+                    style: SusText.body(
+                      12.5,
+                      weight: FontWeight.w600,
+                      color: widget.textColor,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          );
     return Semantics(
       button: true,
       enabled: enabled,
       label: widget.label,
+      hint: hint,
       excludeSemantics: true,
       onTap: widget.onPressed,
       child: GestureDetector(
@@ -133,7 +193,7 @@ class _ChunkyButtonState extends State<ChunkyButton> {
                       ),
                     ),
                     alignment: Alignment.center,
-                    child: content,
+                    child: face,
                   ),
                 ),
               ],

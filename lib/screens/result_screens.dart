@@ -89,7 +89,7 @@ class CallItScreen extends StatelessWidget {
                   ),
                   const SizedBox(height: 16),
                   Text(
-                    '${game.currentPlayer.name}, hold the phone out. Everyone else: pick Legit or Sus next to your name.',
+                    '${game.currentPlayer.name}, hold the phone out. Everyone else: pick by your name.',
                     style: SusText.body(15, weight: FontWeight.w600),
                   ),
                   const SizedBox(height: 12),
@@ -103,7 +103,7 @@ class CallItScreen extends StatelessWidget {
                   ],
                   const SizedBox(height: 12),
                   Text(
-                    'Measuring is done, so wiggle all you like. No pick, no vote. Tap your pick again to take it back.',
+                    'Tap a pick again to take it back. No pick, no vote.',
                     textAlign: TextAlign.center,
                     style: SusText.body(13, weight: FontWeight.w600),
                   ),
@@ -116,24 +116,11 @@ class CallItScreen extends StatelessWidget {
           // out), but one eager tap used to cost the rest of the room its
           // votes. So the button says who it would cut off, and only turns
           // into the solid "go" button once everyone's in (SPEC.md
-          // decision 80).
-          SizedBox(
-            height: MediaQuery.textScalerOf(context).scale(14) * 1.5,
-            child: Semantics(
-              liveRegion: true,
-              child: FitText(
-                stillToCall(waiting),
-                sizes: const [14, 13, 12],
-                overflow: FitOverflow.keepStart,
-                textAlign: TextAlign.center,
-                style: (size) => SusText.body(size, weight: FontWeight.w700),
-              ),
-            ),
-          ),
-          const SizedBox(height: 8),
+          // decisions 80 and 90).
           if (waiting.isEmpty)
             ChunkyButton(
               label: 'Reveal',
+              hint: stillToCall(waiting),
               height: 60,
               fontSize: 22,
               onPressed: game.reveal,
@@ -141,6 +128,7 @@ class CallItScreen extends StatelessWidget {
           else
             ChunkyButton.light(
               label: 'Reveal',
+              hint: stillToCall(waiting),
               height: 60,
               fontSize: 22,
               onPressed: game.reveal,
@@ -151,10 +139,10 @@ class CallItScreen extends StatelessWidget {
   }
 }
 
-/// The line above Reveal: who hasn't picked yet ([waiting], in voter order).
-/// Two names at most, so it stays one readable line with seven voters.
+/// Reveal's hint: who hasn't picked yet ([waiting], in voter order). Two
+/// names at most, so it stays one readable line with seven voters.
 String stillToCall(List<String> waiting) => switch (waiting.length) {
-  0 => "Everyone's in. Reveal!",
+  0 => "Everyone's in",
   1 || 2 => 'Still to call it: ${joinNames(waiting)}',
   final n => 'Still to call it: ${waiting.first} and ${n - 1} more',
 };
@@ -514,21 +502,6 @@ class VerdictScreen extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 12),
-          // Who asks next, while the room is still looking at the verdict:
-          // on Ask they'd hear it only as their question was due.
-          if (game.nextAsker case final asker?) ...[
-            SizedBox(
-              height: MediaQuery.textScalerOf(context).scale(14) * 1.5,
-              child: FitText(
-                'Up next: ${asker.name} asks',
-                sizes: const [14, 13, 12],
-                overflow: FitOverflow.keepStart,
-                textAlign: TextAlign.center,
-                style: (size) => SusText.body(size, weight: FontWeight.w700),
-              ),
-            ),
-            const SizedBox(height: 8),
-          ],
           Row(
             children: [
               if (!last) ...[
@@ -543,8 +516,15 @@ class VerdictScreen extends StatelessWidget {
               ],
               Expanded(
                 flex: 2,
+                // Who asks next, while the room is still looking at the
+                // verdict: on Ask they'd hear it only as their question was
+                // due (decision 80). On the button it's about (decision 90).
                 child: ChunkyButton(
                   label: primary,
+                  hint: switch (game.nextAsker) {
+                    final asker? => '${asker.name} asks next',
+                    null => null,
+                  },
                   fontSize: 19,
                   onPressed: game.nextQuestion,
                 ),

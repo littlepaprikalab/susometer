@@ -128,13 +128,16 @@ class PermissionsScreen extends StatelessWidget {
                       ],
                     ),
                   ),
-                  const SizedBox(height: 16),
-                  Text(
-                    cameraOk
-                        ? 'No mic? You can still play. There are no transcripts, and you tap to move between question and answer.'
-                        : "The camera is the one thing the show can't do without.",
-                    style: SusText.body(14, weight: FontWeight.w600),
-                  ),
+                  // Without the camera there's no playing; without the mic,
+                  // Play without voice says what it's like (SPEC.md
+                  // decision 90).
+                  if (!cameraOk) ...[
+                    const SizedBox(height: 16),
+                    Text(
+                      "The camera is the one thing the show can't do without.",
+                      style: SusText.body(14, weight: FontWeight.w600),
+                    ),
+                  ],
                 ],
               ),
             ),
@@ -149,7 +152,10 @@ class PermissionsScreen extends StatelessWidget {
           const SizedBox(height: 10),
           ChunkyButton.light(
             label: cameraOk ? 'Play without voice' : 'Back to lobby',
-            height: 48,
+            hint: cameraOk
+                ? 'No transcripts · you tap between question and answer'
+                : null,
+            height: cameraOk ? 56 : 48,
             fontSize: 15,
             onPressed: cameraOk ? game.playWithoutVoice : game.backToLobby,
           ),
@@ -253,7 +259,9 @@ class RedoScreen extends StatelessWidget {
               ],
             ),
           ),
-          const Spacer(),
+          // Right under the card that says why, not at the foot of the
+          // screen (SPEC.md decision 90).
+          const SizedBox(height: 16),
           Row(
             children: [
               Expanded(
@@ -268,12 +276,14 @@ class RedoScreen extends StatelessWidget {
                 flex: 2,
                 child: ChunkyButton(
                   label: 'Ask it again',
+                  hint: 'Same question, fresh reading',
                   fontSize: 19,
                   onPressed: game.askAgain,
                 ),
               ),
             ],
           ),
+          const Spacer(),
         ],
       ),
     );

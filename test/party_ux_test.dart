@@ -151,7 +151,14 @@ void main() {
 
       // Priya asks question 2: the room hears it here, a question early.
       expect(rig.game.nextAsker!.name, 'Priya');
-      expect(find.text('Up next: Priya asks').hitTestable(), findsOneWidget);
+      // On Next question itself (decision 90).
+      expect(find.text('Priya asks next').hitTestable(), findsOneWidget);
+      final semantics = tester.ensureSemantics();
+      expect(
+        tester.getSemantics(find.bySemanticsLabel('Next question')).hint,
+        'Priya asks next',
+      );
+      semantics.dispose();
       await rig.tap('Next question');
       await rig.wait(300);
       expect(find.text('Priya, ask your question!'), findsOneWidget);
@@ -164,7 +171,7 @@ void main() {
       await rig.toCallIt();
       await rig.toVerdict();
       expect(find.text('Next contestant'), findsOneWidget);
-      expect(find.textContaining('Up next'), findsNothing);
+      expect(find.textContaining('asks next'), findsNothing);
       expect(tester.takeException(), isNull);
       await rig.finish();
     });
@@ -251,7 +258,7 @@ void main() {
     expect(reveal(tester).color, SusColors.cream);
 
     await rig.vote(priya, Vote.sus);
-    expect(find.text("Everyone's in. Reveal!"), findsOneWidget);
+    expect(find.text("Everyone's in"), findsOneWidget);
     expect(reveal(tester).color, SusColors.teal);
 
     // Taking a pick back puts the name back.
@@ -268,7 +275,7 @@ void main() {
   });
 
   test('the line above Reveal stays one line with seven voters', () {
-    expect(stillToCall(const []), "Everyone's in. Reveal!");
+    expect(stillToCall(const []), "Everyone's in");
     expect(stillToCall(const ['Alex']), 'Still to call it: Alex');
     expect(
       stillToCall(const ['Alex', 'Priya']),
@@ -329,7 +336,7 @@ void main() {
     await rig.wait(1500);
     await rig.tap('Final answer');
     await rig.until(() => rig.game.phase == GamePhase.verdict);
-    expect(find.textContaining('Up next'), findsNothing);
+    expect(find.textContaining('asks next'), findsNothing);
     await rig.finish();
   });
 
