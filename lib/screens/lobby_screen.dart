@@ -31,14 +31,19 @@ class _LobbyScreenState extends State<LobbyScreen> {
     super.dispose();
   }
 
-  void _add(GameController game) {
+  /// Adds the typed name. [keepTyping] is the keyboard's Return: the
+  /// keyboard stays up for the next name. The + button and Start put it
+  /// away, so it doesn't sit over the screen once the names are in.
+  void _add(GameController game, {bool keepTyping = false}) {
+    // Also for VoiceOver's double-tap on +, which isn't a touch outside.
+    if (!keepTyping) _nameFocus.unfocus();
     if (game.players.length >= GameController.maxPlayers) {
       _snack('Eight contestants is the max.');
       return;
     }
     if (game.addPlayer(_nameController.text)) {
       _nameController.clear();
-      _nameFocus.requestFocus();
+      if (keepTyping) _nameFocus.requestFocus();
     }
   }
 
@@ -138,6 +143,9 @@ class _LobbyScreenState extends State<LobbyScreen> {
             const SizedBox(height: 6),
             Expanded(
               child: SingleChildScrollView(
+                // iPhone keyboards have no key to put them away.
+                keyboardDismissBehavior:
+                    ScrollViewKeyboardDismissBehavior.onDrag,
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
@@ -192,6 +200,7 @@ class _LobbyScreenState extends State<LobbyScreen> {
                       controller: _nameController,
                       focus: _nameFocus,
                       enabled: game.players.length < GameController.maxPlayers,
+                      onSubmitted: () => _add(game, keepTyping: true),
                       onAdd: () => _add(game),
                     ),
                     const SizedBox(height: 14),
@@ -310,12 +319,18 @@ class _AddRow extends StatelessWidget {
     required this.controller,
     required this.focus,
     required this.enabled,
+    required this.onSubmitted,
     required this.onAdd,
   });
 
   final TextEditingController controller;
   final FocusNode focus;
   final bool enabled;
+
+  /// The keyboard's Return.
+  final VoidCallback onSubmitted;
+
+  /// The + button.
   final VoidCallback onAdd;
 
   @override
@@ -331,7 +346,10 @@ class _AddRow extends StatelessWidget {
             textCapitalization: TextCapitalization.words,
             textInputAction: TextInputAction.done,
             maxLength: 20,
-            onSubmitted: (_) => onAdd(),
+            onSubmitted: (_) => onSubmitted(),
+            // On iPhone a touch elsewhere doesn't close the keyboard unless
+            // the field says so.
+            onTapOutside: (_) => focus.unfocus(),
             // Typed names use the same face and size as the contestant rows.
             style: SusText.display(21),
             decoration: InputDecoration(
