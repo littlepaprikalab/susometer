@@ -36,12 +36,12 @@ Built for the DEV [Presage SmartSpectra SDK Challenge](https://dev.to/challenges
    and the #tags.
 2. **Consent:** the phone goes to the hot-seat player, who reads what the camera measures and
    what happens to the data, then taps *I agree, measure me* or *Skip my turn*.
-3. **Calibrate:** about 20 s of sitting still, then 3 easy warm-up questions read by the host,
-   each asking for a sentence. Everyone gets the same three kinds, in order: something recent
-   ("Tell me what you had for breakfast"), a "Have you ever…?" with an easy, true answer, like the
-   real questions without the stakes, and a light either/or ("Cats or dogs? Tell me why"). A
-   skipped one is replaced by another of the same kind; skip that too and it moves on. Answer
-   each one out loud, then tap *Next*. This learns *your* normal pulse, blink rate,
+3. **Calibrate:** sit still while the camera finds your pulse (8 to 20 s), then 3 easy warm-up
+   questions read by the host, each asking for a sentence. Everyone gets the same three kinds, in
+   order: something recent ("Tell me what you had for breakfast"), a "Have you ever…?" with an
+   easy, true answer, like the real questions without the stakes, and a light either/or ("Cats or
+   dogs? Tell me why"). A skipped one is replaced by another of the same kind; skip that too and it
+   moves on. Answer each one out loud, then tap *Next*. This learns *your* normal pulse, blink rate,
    expressions and how fast you usually answer, while talking like you will in the real
    questions. Once it's locked in, tap *Start the questions* when everyone's ready. The buttons
    hang across the bottom of the card you're reading, each saying when to tap it.

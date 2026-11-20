@@ -376,6 +376,8 @@ class GameController extends ChangeNotifier {
   /// three warm-ups) and what each question costs from the ask to the
   /// verdict, in seconds. From `test/party_sim.dart`'s simulated rooms
   /// (about 65 s and 36 s), rounded up for the chatter a real room adds.
+  /// The setup is about 6 s shorter since the sit-still ends on the pulse,
+  /// but not on a camera that takes 20 s to find it (SPEC.md decision 92).
   static const turnSetupS = 75;
   static const questionS = 40;
 
@@ -634,7 +636,9 @@ class GameController extends ChangeNotifier {
       .clamp(1, config.calibMaxWarmups);
   Baseline? get calibBaseline => _calibBaseline;
 
-  /// Calibrate progress: 0–4 "sit still" blocks.
+  /// Calibrate progress: 0–4 "sit still" blocks, on the clock against the
+  /// longest sit-still. All four fill once it ends, which is usually sooner,
+  /// when the camera has the pulse (SPEC.md decision 92).
   int get stillBlocks {
     final start = quietStartMs;
     if (start == null) return 0;
@@ -643,7 +647,7 @@ class GameController extends ChangeNotifier {
         calibStage == CalibStage.done) {
       return 4;
     }
-    final step = config.calibQuietMs / 4;
+    final step = config.calibQuietMaxMs / 4;
     return ((nowMs - start) / step).floor().clamp(0, 4);
   }
 
@@ -841,7 +845,7 @@ class GameController extends ChangeNotifier {
       return;
     }
     if (calibStage == CalibStage.quiet) {
-      if (now - quietStartMs! >= config.calibQuietMs) {
+      if (_quietDone(now)) {
         calibStage = CalibStage.chat;
         chatStartMs = now;
         _askWarmup();
@@ -874,6 +878,19 @@ class GameController extends ChangeNotifier {
           : null;
     }
     notifyListeners();
+  }
+
+  /// The sit-still ends once the camera has the pulse: enough confident
+  /// pulse since it began, and a fresh one now. Not before the shortest
+  /// sit-still, and at the longest whether or not the pulse came (the chat
+  /// then keeps going until the baseline is valid). SPEC.md decision 92.
+  bool _quietDone(int now) {
+    final start = quietStartMs!;
+    final sat = now - start;
+    if (sat < config.calibQuietMinMs) return false;
+    if (sat >= config.calibQuietMaxMs) return true;
+    return log.pulseFreshAt(now) &&
+        log.confidentCoverageMs(start, now) >= config.calibQuietPulseMs;
   }
 
   void _onCalibTalk(bool talking, int t) {

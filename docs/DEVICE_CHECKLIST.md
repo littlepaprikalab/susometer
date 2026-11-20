@@ -52,6 +52,9 @@ Settings → **Signal check** → **Start both**. Allow microphone and speech re
 - [ ] Lobby → Start the show → How to play → Consent → calibration: each warm-up waits for *Next*
   (wait 20 s after answering one: nothing moves), then *Start the questions* shows within about
   30–60 s of taps. (If a mustard stamp stays on the camera, note what it says.)
+- [ ] **The sit-still ends on the pulse (decision 92):** for each player, time from "{name}, sit
+  still and look at the camera." to the first warm-up. It should be about 2 s after a steady BPM,
+  never under 8 s and never over 20 s. **Note the times**: this is how much the change saves.
 - [ ] **Nothing moves by itself (decision 76):** the host says "{other player}, ask your
   question!". The friend asks, pauses mid-question for 3 s, laughs, carries on: the screen stays
   on the question until *Done asking*, and the host never cuts in. After answering, stay quiet

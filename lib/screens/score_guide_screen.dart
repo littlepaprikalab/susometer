@@ -23,7 +23,7 @@ class ScoreGuideScreen extends StatelessWidget {
     // Through AppScope, not GameScope: the config never changes, so the page
     // needn't rebuild every time the game notifies.
     final c = AppScope.of(context).game.config;
-    final quietS = (c.calibQuietMs / 1000).round();
+    final quietS = (c.calibQuietMaxMs / 1000).round();
     // "3", or "2–3" while calibration may end before its last warm-up.
     final warmups = c.calibMinWarmups >= c.calibMaxWarmups
         ? '${c.calibMaxWarmups}'
@@ -72,8 +72,9 @@ class ScoreGuideScreen extends StatelessWidget {
               title: 'First, your normal',
               children: [
                 Text(
-                  'Before your questions you sit still for about $quietS '
-                  'seconds, then chat through $warmups easy warm-ups. That '
+                  'Before your questions you sit still until the camera has '
+                  'your pulse (up to $quietS seconds), then chat through '
+                  '$warmups easy warm-ups. That '
                   'sets your usual '
                   'pulse, how often you blink while talking, how much your '
                   'face moves and how quickly you start answering. You are '
