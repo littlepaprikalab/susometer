@@ -43,7 +43,8 @@ Built for the DEV [Presage SmartSpectra SDK Challenge](https://dev.to/challenges
    skipped one is replaced by another of the same kind; skip that too and it moves on. Answer
    each one out loud, then tap *Next*. This learns *your* normal pulse, blink rate,
    expressions and how fast you usually answer, while talking like you will in the real
-   questions. Once it's locked in, tap *Start the questions* when everyone's ready.
+   questions. Once it's locked in, tap *Start the questions* when everyone's ready. The buttons
+   hang across the bottom of the card you're reading, each saying when to tap it.
 4. **Ask:** the host says who asks ("Alex, ask your question!"); everyone else takes turns,
    starting with the next player. The question appears on screen as they speak, and the player
    taps *Done asking* when it's over. Nothing to ask? *Suggest one* puts a question from the
@@ -232,8 +233,8 @@ waits a few seconds for the camera to find the player again (about one question 
 simulated parties below), and the wait says who asks next. After 25 s it suggests facing the
 light, or Pause to skip. (SPEC decisions 79 and 80.)
 
-**Expression #tag.** While the camera measures, the player's strongest expression is stamped in
-its top-right corner as a #tag, in the SDK's own words (#surprise, #happy, #neutral…). SmartSpectra
+**Expression #tag.** While the camera measures, the player's strongest expression is stamped at
+its top right, just under the chips, as a #tag, in the SDK's own words (#surprise, #happy, #neutral…). SmartSpectra
 gives a score per expression rather than one label, so the tag is the top score, smoothed over
 about 0.6 s and changed only once a new one has clearly led for 0.7 s, so it doesn't flicker
 and a tie never shows an arbitrary expression. Red ink marks the four that move the score, teal

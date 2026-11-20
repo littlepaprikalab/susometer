@@ -3,6 +3,7 @@
 // the real screens as three players did find things a room would trip on.
 // Each test here pins one of that decision's changes.
 import 'dart:io';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
@@ -13,6 +14,7 @@ import 'package:susometer/game/models.dart';
 import 'package:susometer/presage/camera_preview.dart';
 import 'package:susometer/screens/question_screens.dart';
 import 'package:susometer/screens/result_screens.dart';
+import 'package:susometer/theme/seam_button.dart';
 import 'package:susometer/theme/game_widgets.dart';
 import 'package:susometer/theme/tokens.dart';
 import 'package:susometer/theme/widgets.dart';
@@ -149,7 +151,14 @@ void main() {
 
       // Priya asks question 2: the room hears it here, a question early.
       expect(rig.game.nextAsker!.name, 'Priya');
-      expect(find.text('Up next: Priya asks').hitTestable(), findsOneWidget);
+      // On Next question itself (decision 90).
+      expect(find.text('Priya asks next').hitTestable(), findsOneWidget);
+      final semantics = tester.ensureSemantics();
+      expect(
+        tester.getSemantics(find.bySemanticsLabel('Next question')).hint,
+        'Priya asks next',
+      );
+      semantics.dispose();
       await rig.tap('Next question');
       await rig.wait(300);
       expect(find.text('Priya, ask your question!'), findsOneWidget);
@@ -162,7 +171,7 @@ void main() {
       await rig.toCallIt();
       await rig.toVerdict();
       expect(find.text('Next contestant'), findsOneWidget);
-      expect(find.textContaining('Up next'), findsNothing);
+      expect(find.textContaining('asks next'), findsNothing);
       expect(tester.takeException(), isNull);
       await rig.finish();
     });
@@ -249,7 +258,7 @@ void main() {
     expect(reveal(tester).color, SusColors.cream);
 
     await rig.vote(priya, Vote.sus);
-    expect(find.text("Everyone's in. Reveal!"), findsOneWidget);
+    expect(find.text("Everyone's in"), findsOneWidget);
     expect(reveal(tester).color, SusColors.teal);
 
     // Taking a pick back puts the name back.
@@ -266,7 +275,7 @@ void main() {
   });
 
   test('the line above Reveal stays one line with seven voters', () {
-    expect(stillToCall(const []), "Everyone's in. Reveal!");
+    expect(stillToCall(const []), "Everyone's in");
     expect(stillToCall(const ['Alex']), 'Still to call it: Alex');
     expect(
       stillToCall(const ['Alex', 'Priya']),
@@ -289,7 +298,7 @@ void main() {
     await rig.startParty(['Sam', 'Alex', 'Priya']);
     await rig.tap('I agree, measure me');
     await rig.throughWarmups();
-    expect(find.text('Tap when ready. Alex asks first.'), findsOneWidget);
+    expect(find.text('Tap when ready · Alex asks first'), findsOneWidget);
     await rig.tap('Start the questions');
     await rig.wait(300);
     expect(find.text('Alex, ask your question!'), findsOneWidget);
@@ -315,10 +324,7 @@ void main() {
     await rig.tap("Got it, let's play");
     await rig.tap('I agree, measure me');
     await rig.throughWarmups();
-    expect(
-      find.text('Tap when ready. The host asks the questions.'),
-      findsOneWidget,
-    );
+    expect(find.text('Tap when ready · the host asks'), findsOneWidget);
     await rig.tap('Start the questions');
     await rig.wait(300);
     await rig.leaveApp(3000);
@@ -330,7 +336,7 @@ void main() {
     await rig.wait(1500);
     await rig.tap('Final answer');
     await rig.until(() => rig.game.phase == GamePhase.verdict);
-    expect(find.textContaining('Up next'), findsNothing);
+    expect(find.textContaining('asks next'), findsNothing);
     await rig.finish();
   });
 
@@ -491,20 +497,27 @@ void main() {
         final handle = tester.ensureSemantics();
         final button = tester.getRect(find.bySemanticsLabel(action));
         handle.dispose();
-        final done = tester.getRect(
-          find.widgetWithText(ChunkyButton, 'Done asking'),
-        );
+        final done = tester.getRect(find.byType(SeamButton));
         final pause = tester.getRect(find.bySemanticsLabel('Pause the game'));
         expect(button.height, greaterThanOrEqualTo(44), reason: action);
         expect(button.width, greaterThanOrEqualTo(44), reason: action);
+        // Done asking now hangs across the card's bottom edge (decision
+        // 90): the card's words lie between the two, about 150 pt, where
+        // the slips came from the two side by side.
         expect(
           done.top - button.bottom,
-          greaterThan(300),
+          greaterThan(130),
           reason: '$action at $button is too near Done asking at $done',
         );
-        expect(pause.top - button.bottom, greaterThan(300));
-        // Done asking has the bottom row to itself again, beside Pause.
-        expect(done.width, greaterThan(screen.width * 0.6));
+        // Pause hangs across the card's other corner, at the bottom left.
+        final apart = Offset(
+          math.max(
+            0,
+            math.max(pause.left - button.right, button.left - pause.right),
+          ),
+          math.max(0, pause.top - button.bottom),
+        ).distance;
+        expect(apart, greaterThan(150), reason: 'Pause at $pause');
         // The label keeps all its words, near enough full size to read.
         expect(find.text(label), findsOneWidget);
         expect(
@@ -943,13 +956,15 @@ void main() {
         expect(inside.contains(c), isTrue, reason: 'the button leaves $card');
       }
 
-      // Different question has the bottom row beside Pause, the camera
-      // between it and the card.
+      // Different question is on the card's top row (decision 90), the
+      // question between it and the drawn button, as Suggest one is on the
+      // asker's card (decision 84).
       final different = tester.getRect(
-        find.widgetWithText(ChunkyButton, 'Different question'),
+        find.bySemanticsLabel('Different question'),
       );
-      expect(different.width, greaterThan(screen.width * 0.6));
-      expect(different.top - card.bottom, greaterThan(250));
+      expect(card.contains(different.center), isTrue);
+      expect(different.bottom, lessThanOrEqualTo(text.top + 1));
+      expect(tester.getRect(face).top - different.bottom, greaterThan(100));
       await expectLater(tester, meetsGuideline(iOSTapTargetGuideline));
       await expectLater(tester, meetsGuideline(labeledTapTargetGuideline));
       handle.dispose();

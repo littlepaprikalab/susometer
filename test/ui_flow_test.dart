@@ -345,7 +345,7 @@ void main() {
     );
 
     // Each warm-up waits for Next, then the questions wait for Start.
-    expect(find.text('Answer out loud, then tap Next.'), findsOneWidget);
+    expect(find.text('Tap here when done speaking'), findsOneWidget);
     for (var i = 0; i < 3; i++) {
       final warmup = rig.game.currentWarmup!;
       await rig.until(
@@ -371,7 +371,7 @@ void main() {
     // Ask: the host names the asker; a pause or a laugh moves nothing.
     expect(rig.game.phase, GamePhase.ask);
     expect(find.text('Alex, ask your question!'), findsOneWidget);
-    expect(find.text('Sam: tap Done asking, then answer.'), findsOneWidget);
+    expect(find.text('Sam: tap here, then answer'), findsOneWidget);
     expect(find.text('Too loud? Tap when done asking'), findsNothing);
     rig.say('Have you ever');
     final asked = rig.speech.segment;
@@ -387,7 +387,7 @@ void main() {
     expect(rig.game.phase, GamePhase.ask);
     await rig.tap('Done asking');
     expect(find.text('Q: “Have you ever lied?”'), findsOneWidget);
-    expect(find.text("Tap when you're done"), findsOneWidget);
+    expect(find.text("Tap here when you're done"), findsOneWidget);
 
     // Answer: a long silence gets a nudge, not an ending.
     await rig.wait(21000);

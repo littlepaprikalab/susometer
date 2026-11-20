@@ -16,6 +16,8 @@ class ChunkyButton extends StatefulWidget {
     this.fontSize = 17,
     this.expand = true,
     this.showLabel = true,
+    this.hint,
+    this.shorterHints = const [],
   });
 
   /// Light variant: cream fill, ink text.
@@ -28,6 +30,8 @@ class ChunkyButton extends StatefulWidget {
     this.fontSize = 17,
     this.expand = true,
     this.showLabel = true,
+    this.hint,
+    this.shorterHints = const [],
   }) : color = SusColors.cream,
        textColor = SusColors.ink;
 
@@ -42,6 +46,14 @@ class ChunkyButton extends StatefulWidget {
 
   /// False for an icon-only button; [label] is then only for accessibility.
   final bool showLabel;
+
+  /// When to tap it, or what follows, in small type under the label
+  /// ("Priya asks next"): the line that would otherwise sit by the button
+  /// (SPEC.md decision 90). VoiceOver reads it as the button's hint.
+  final String? hint;
+
+  /// Shorter forms of [hint], used in turn when it won't fit (ButtonHint).
+  final List<String> shorterHints;
 
   @override
   State<ChunkyButton> createState() => _ChunkyButtonState();
@@ -80,10 +92,57 @@ class _ChunkyButtonState extends State<ChunkyButton> {
           ),
       ],
     );
+    final hint = widget.hint;
+    final Widget face = hint == null || !widget.showLabel
+        ? content
+        // The hint at its own height (shorter words before smaller ones),
+        // the label in the rest: a long hint never shrinks the label, and
+        // at the largest text the label gives a little, not the layout.
+        : Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Flexible(
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (widget.icon != null) ...[
+                        Icon(
+                          widget.icon,
+                          color: widget.textColor,
+                          size: widget.fontSize + 5,
+                        ),
+                        const SizedBox(width: 8),
+                      ],
+                      Text(
+                        widget.label,
+                        maxLines: 1,
+                        style: SusText.body(
+                          widget.fontSize,
+                          weight: FontWeight.w700,
+                          color: widget.textColor,
+                        ).copyWith(height: ButtonHint.lineHeight),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              ButtonHint(
+                [hint, ...widget.shorterHints],
+                style: SusText.body(
+                  ButtonHint.fontSize,
+                  weight: FontWeight.w600,
+                  color: widget.textColor,
+                ).copyWith(height: ButtonHint.lineHeight),
+              ),
+            ],
+          );
     return Semantics(
       button: true,
       enabled: enabled,
       label: widget.label,
+      hint: hint,
       excludeSemantics: true,
       onTap: widget.onPressed,
       child: GestureDetector(
@@ -133,7 +192,7 @@ class _ChunkyButtonState extends State<ChunkyButton> {
                       ),
                     ),
                     alignment: Alignment.center,
-                    child: content,
+                    child: face,
                   ),
                 ),
               ],
@@ -261,6 +320,93 @@ class RoundIconButton extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+/// A button's hint line (SPEC.md decision 90): the first of [hints] that
+/// fits the width at [minScale] of its size or more, else the last, shrunk
+/// to fit. So a long name gives way to a shorter line rather than to type
+/// too small to read. VoiceOver reads the button's full hint, not this.
+class ButtonHint extends StatefulWidget {
+  const ButtonHint(this.hints, {super.key, required this.style});
+
+  /// Longest first.
+  final List<String> hints;
+  final TextStyle style;
+
+  static const fontSize = 12.5;
+  static const minScale = 0.8;
+
+  /// Line height for a button's two lines, label and hint. Set, not left to
+  /// the theme's body text (1.43), which would leave them no room at the
+  /// largest text and shrink the label.
+  static const lineHeight = 1.1;
+
+  /// How many hints have been measured: once per set of words, not once a
+  /// tick (a test checks this).
+  @visibleForTesting
+  static int debugMeasured = 0;
+
+  @override
+  State<ButtonHint> createState() => _ButtonHintState();
+}
+
+class _ButtonHintState extends State<ButtonHint> {
+  /// Each hint's width at full size, for the inputs in [_measuredFor]. The
+  /// question screens rebuild on every tick; the words rarely change, so
+  /// they're measured once, not ten times a second.
+  List<double> _widths = const [];
+  Object? _measuredFor;
+
+  List<double> _widthsFor(TextScaler scaler, TextDirection direction) {
+    final key = (
+      widget.hints.join('\u0000'),
+      widget.style,
+      scaler.scale(1),
+      direction,
+    );
+    if (key == _measuredFor) return _widths;
+    _measuredFor = key;
+    ButtonHint.debugMeasured += widget.hints.length;
+    return _widths = [
+      for (final h in widget.hints)
+        () {
+          final painter = TextPainter(
+            text: TextSpan(text: h, style: widget.style),
+            textDirection: direction,
+            textScaler: scaler,
+            maxLines: 1,
+          )..layout();
+          final width = painter.width;
+          painter.dispose();
+          return width;
+        }(),
+    ];
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final hints = widget.hints;
+    final scaler = MediaQuery.textScalerOf(context);
+    final direction = Directionality.of(context);
+    return LayoutBuilder(
+      builder: (context, box) {
+        var pick = hints.last;
+        if (box.maxWidth.isFinite && hints.length > 1) {
+          final widths = _widthsFor(scaler, direction);
+          for (var i = 0; i < hints.length; i++) {
+            if (widths[i] * ButtonHint.minScale <= box.maxWidth) {
+              pick = hints[i];
+              break;
+            }
+          }
+        }
+        return FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Text(pick, maxLines: 1, softWrap: false, style: widget.style),
+        );
+      },
     );
   }
 }

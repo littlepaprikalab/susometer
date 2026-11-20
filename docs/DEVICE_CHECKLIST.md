@@ -76,8 +76,14 @@ Settings → **Signal check** → **Start both**. Allow microphone and speech re
   question, "Heard: …" follows along, and the verdict's question is what they said, without the
   "I don't know". **Could the asker read it from where they sat, or did the hot seat read it
   out?**
-- [ ] *Suggest one* is on the asker's card, top right, well away from *Done asking* (decision
-  84). **Did the hot seat find it without being told? Can a thumb reach it one-handed?**
+- [ ] *Suggest one* is on the asker's card, top right, the card's height away from *Done asking*
+  (decisions 84 and 90). **Did the hot seat find it without being told? Can a thumb reach it
+  one-handed?**
+- [ ] Every button on Calibrate and the question screens hangs across the seam between the card
+  and the camera, with its hint on it, and pops in when it appears (decision 90). **Did players
+  find them without being told? Does a thumb reach Pause and the right-hand button holding the
+  phone? Does the pop-in catch the eye, or annoy? Does the camera preview stutter while one pops
+  in?**
 - [ ] Ask a real question, then tap *Suggest one* by mistake and *Done asking* straight after,
   without anyone speaking: the answer screen and the verdict still show the question that was
   asked (decision 83).
@@ -103,9 +109,9 @@ Settings → **Signal check** → **Start both**. Allow microphone and speech re
   consent screen.
 - [ ] Verdict: the pulse chart's shaded stretch lines up with when you were talking.
 - [ ] The camera card has a visible dark border around the video, with rounded corners.
-- [ ] **Expression #tag:** a stamp like *#neutral* lands in the camera's top-right corner about a
-  second after measuring starts. Pull a big surprised face and hold it: it changes to a red
-  *#surprise* within about a second, and back when you relax. **Does it flicker between two tags
+- [ ] **Expression #tag:** a stamp like *#neutral* lands at the camera's top right, just under the
+  chips, about a second after measuring starts. Pull a big surprised face and hold it: it changes
+  to a red *#surprise* within about a second, and back when you relax. **Does it flicker between two tags
   while you sit still?** Smile: a teal *#happy*. Cover the camera: it's gone within about a second.
   It never covers the middle of your face, and it stays readable against a bright wall behind you.
   **With the Proof Panel on, does the `expr` line change several times a second?** (The tag
@@ -165,8 +171,8 @@ Settings → **Signal check** → **Start both**. Allow microphone and speech re
 - [ ] **Questions (decision 74):** with one player, no question mentions "someone here" or "this
   room"; add a second player and, over a few Spicy turns, some do (always at the end of a turn). Each
   turn's last question should feel like the hottest. **Does the meter read higher on it** than on
-  the first? Note which questions get skipped with *Different question*, and which warm-ups get
-  *Doesn't apply*.
+  the first? Note which questions get skipped with *Different question*, and any warm-up a
+  player found hard to answer (there's no skipping one since decision 90).
 
 ## 5. Edge cases
 

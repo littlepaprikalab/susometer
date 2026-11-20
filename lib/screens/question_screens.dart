@@ -9,6 +9,7 @@ import '../presage/camera_preview.dart';
 import '../theme/expression_stamp.dart';
 import '../theme/fit_text.dart';
 import '../theme/game_widgets.dart';
+import '../theme/seam_button.dart';
 import '../theme/sparkline.dart';
 import '../theme/tokens.dart';
 import '../theme/widgets.dart';
@@ -45,21 +46,20 @@ class _Header extends StatelessWidget {
 /// suggests tapping anyway or skipping.
 const noAnswerNudgeMs = 20000;
 
-/// Fixed heights that keep the camera card the same size and in the same
-/// place from "Ask your question!" through "Locking in the reading…".
+/// The card's fixed height, which keeps the camera the same size and in the
+/// same place from "Ask your question!" through "Locking in the reading…".
 ///
-/// The card has the room the host's line used to take above it (SPEC.md
-/// decision 85): 160 pt, the 14 pt gap and the 48 pt bubble row.
-const _cardHeight = 222.0;
-const _actionsHeight = 92.0;
+/// The room the host's line used to take above it (SPEC.md decision 85):
+/// 160 pt, the 14 pt gap and the 48 pt bubble row; and the room it keeps
+/// clear at its bottom for the buttons on the seam (decision 90).
+const _cardHeight = 222.0 + SeamButton.cardRoom;
 
 /// Distance from the bottom of the safe area to just above the camera's
 /// live Pulse/Blinks cards, so overlays (the Proof Panel) never cover them:
-/// screen padding + bottom row + gap + card inset + card + 8 pt.
+/// screen padding + card inset + card + 8 pt. There's no row under the
+/// camera: its buttons are on the seam (decision 90).
 const hotSeatOverlayBottom =
     ScreenFrame.defaultBottomPadding +
-    _actionsHeight +
-    12 +
     LiveStatCard.inset +
     LiveStatCard.height +
     8;
@@ -88,26 +88,73 @@ class HotSeatScreen extends StatelessWidget {
         children: [
           _Header(game: game, solo: solo),
           const SizedBox(height: 14),
-          SizedBox(
-            height: _cardHeight,
-            child: waiting
-                ? _PulseWaitCard(game: game)
-                : answering
-                ? _AnswerCard(game: game)
-                : solo
-                ? _SoloQuestionCard(game: game)
-                : _AskerCard(game: game),
-          ),
-          const SizedBox(height: 14),
-          Expanded(child: _MeasuringCamera(game: game)),
-          const SizedBox(height: 12),
-          SizedBox(
-            height: _actionsHeight,
-            child: _Actions(game: game, solo: solo),
+          Expanded(
+            child: SeamLayout(
+              gap: 14,
+              top: SizedBox(
+                height: _cardHeight,
+                child: waiting
+                    ? _PulseWaitCard(game: game)
+                    : answering
+                    ? _AnswerCard(game: game)
+                    : solo
+                    ? _SoloQuestionCard(game: game)
+                    : _AskerCard(game: game),
+              ),
+              camera: _MeasuringCamera(game: game),
+              // Every button is on the seam, where the players are looking
+              // (SPEC.md decision 90): Pause at the left, in the same place
+              // in every phase, and what moves the question on at the right.
+              leading: PauseButton(onPressed: game.pause),
+              button: _seamAction(game, solo),
+            ),
           ),
         ],
       ),
     );
+  }
+}
+
+/// What's at the right of the seam: the button that moves the question on,
+/// or what it's waiting for. Solo's question card is its own button
+/// (decision 85), so there's nothing there while it's up.
+Widget? _seamAction(GameController game, bool solo) {
+  if (game.waitingForPulse) {
+    return const _SeamStatus(
+      title: 'Finding the pulse…',
+      detail: 'Sit still and look at the camera',
+    );
+  }
+  switch (game.shownPhase) {
+    case GamePhase.settle:
+      return _SettleStatus(game: game);
+    case GamePhase.answer:
+      // Nothing ends by itself (SPEC.md decision 76), so a long silence
+      // gets a nudge instead.
+      final d = game.detector;
+      final waited = d?.hesitationFromMs == null
+          ? 0
+          : game.nowMs - d!.hesitationFromMs!;
+      final stuck = d?.tA0 == null && waited >= noAnswerNudgeMs;
+      return SeamButton(
+        label: 'Final answer',
+        hint: stuck
+            ? 'No answer? Tap anyway, or Pause to skip'
+            : "Tap here when you're done",
+        shorterHints: stuck
+            ? const ['No answer? Tap anyway']
+            : const ["Tap when you're done"],
+        onPressed: game.finalAnswer,
+      );
+    default:
+      return solo
+          ? null
+          : SeamButton(
+              label: 'Done asking',
+              hint: '${game.currentPlayer.name}: tap here, then answer',
+              shorterHints: const ['Tap here, then answer'],
+              onPressed: game.doneAsking,
+            );
   }
 }
 
@@ -140,24 +187,28 @@ class _MeasuringCamera extends StatelessWidget {
                 top: 12,
                 left: 12,
                 right: 12,
+                child: Align(
+                  alignment: Alignment.topLeft,
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: DotChip(
+                      label: issue == null ? 'Measuring' : 'Reading paused',
+                      dot: SusColors.tomato,
+                    ),
+                  ),
+                ),
+              ),
+              // The expression or problem stamp just under the chip, as on
+              // Calibrate: the corner above is where the seam's stamp
+              // reaches in (SPEC.md decision 90).
+              Positioned(
+                top: cameraGuideClear(context).top,
+                left: 12,
+                right: 12,
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Expanded(
-                      flex: 100 - stampFlex,
-                      child: Align(
-                        alignment: Alignment.topLeft,
-                        child: FittedBox(
-                          fit: BoxFit.scaleDown,
-                          child: DotChip(
-                            label: issue == null
-                                ? 'Measuring'
-                                : 'Reading paused',
-                            dot: SusColors.tomato,
-                          ),
-                        ),
-                      ),
-                    ),
+                    Spacer(flex: 100 - stampFlex),
                     const SizedBox(width: 8),
                     Expanded(
                       flex: stampFlex,
@@ -170,6 +221,23 @@ class _MeasuringCamera extends StatelessWidget {
                   ],
                 ),
               ),
+              // A notice (voice off) above the live cards: there's no row
+              // under the camera to say it any more (SPEC.md decision 90).
+              if (game.notice != null && issue == null)
+                Positioned(
+                  left: LiveStatCard.inset,
+                  right: LiveStatCard.inset,
+                  bottom: LiveStatCard.inset + LiveStatCard.height + 6,
+                  child: Center(
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: DotChip(
+                        label: game.notice!,
+                        dot: SusColors.mustard,
+                      ),
+                    ),
+                  ),
+                ),
               // While the reading is paused, the cards' row says how to fix
               // it instead.
               Positioned(
@@ -236,95 +304,6 @@ class _LiveStats extends StatelessWidget {
   }
 }
 
-/// The bottom row. Pause stays in the same spot in every phase.
-class _Actions extends StatelessWidget {
-  const _Actions({required this.game, required this.solo});
-
-  final GameController game;
-  final bool solo;
-
-  @override
-  Widget build(BuildContext context) {
-    final pause = PauseButton(onPressed: game.pause);
-    Widget beside(Widget child) => Row(
-      crossAxisAlignment: CrossAxisAlignment.end,
-      children: [
-        pause,
-        const SizedBox(width: 10),
-        Expanded(child: child),
-      ],
-    );
-
-    if (game.waitingForPulse) return beside(_PulseWaitStatus(game: game));
-    switch (game.shownPhase) {
-      case GamePhase.settle:
-        return beside(_SettleCard(game: game));
-      case GamePhase.answer:
-        // Nothing ends by itself (SPEC.md decision 76), so a long silence
-        // gets a nudge instead.
-        final d = game.detector;
-        final waited = d?.hesitationFromMs == null
-            ? 0
-            : game.nowMs - d!.hesitationFromMs!;
-        final stuck = d?.tA0 == null && waited >= noAnswerNudgeMs;
-        return beside(
-          _FinalAnswerButton(
-            onPressed: game.finalAnswer,
-            hint: stuck
-                ? 'No answer? Tap anyway, or Pause to skip'
-                : "Tap when you're done",
-          ),
-        );
-      default:
-        final notice = game.notice;
-        final hint =
-            notice ??
-            (solo
-                ? 'Tap the question, then answer out loud.'
-                : '${game.currentPlayer.name}: tap Done asking, then answer.');
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Expanded(
-              child: Align(
-                alignment: Alignment.bottomCenter,
-                child: FitText(
-                  hint,
-                  textAlign: TextAlign.center,
-                  sizes: notice == null
-                      ? const [15, 13, 12, 11]
-                      : const [13, 12, 11],
-                  overflow: FitOverflow.keepStart,
-                  style: (size) => SusText.body(size, weight: FontWeight.w700),
-                ),
-              ),
-            ),
-            const SizedBox(height: 8),
-            beside(
-              solo
-                  // Alone here: the way on to the answer is the question
-                  // card itself, where the player is reading (SPEC.md
-                  // decision 85).
-                  ? ChunkyButton.light(
-                      label: 'Different question',
-                      icon: Icons.shuffle_rounded,
-                      height: 48,
-                      fontSize: 16,
-                      onPressed: game.differentQuestion,
-                    )
-                  : ChunkyButton(
-                      label: 'Done asking',
-                      height: 48,
-                      fontSize: 16,
-                      onPressed: game.doneAsking,
-                    ),
-            ),
-          ],
-        );
-    }
-  }
-}
-
 class _TranscriptCard extends StatelessWidget {
   const _TranscriptCard({required this.children, this.tallHeader = false});
 
@@ -337,7 +316,13 @@ class _TranscriptCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: EdgeInsets.fromLTRB(16, tallHeader ? 0 : 12, 16, 12),
+      padding: EdgeInsets.fromLTRB(
+        16,
+        tallHeader ? 0 : 12,
+        16,
+        // Clear for the buttons hung across the bottom edge (decision 90).
+        12 + SeamButton.cardRoom,
+      ),
       decoration: BoxDecoration(
         color: SusColors.cream,
         borderRadius: BorderRadius.circular(20),
@@ -609,8 +594,11 @@ class _SoloQuestionCardState extends State<_SoloQuestionCard> {
     final deck = game.deck == DeckKind.mild ? 'MILD' : 'SPICY';
     final card = Container(
       // Room under and beside the button for its tilt: its ends ride about
-      // 6 pt above and below level.
-      padding: const EdgeInsets.fromLTRB(10, 12, 10, 12),
+      // 6 pt above and below level. Under that, room for Pause, which hangs
+      // across the card's bottom edge (SPEC.md decision 90).
+      // The top row is a tap target tall (Different question) and brings its
+      // own room above.
+      padding: const EdgeInsets.fromLTRB(10, 0, 10, 12 + SeamButton.cardRoom),
       decoration: BoxDecoration(
         color: SusColors.tomato,
         borderRadius: BorderRadius.circular(22),
@@ -630,40 +618,53 @@ class _SoloQuestionCardState extends State<_SoloQuestionCard> {
                 children: [
                   Row(
                     children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 10,
-                          vertical: 4,
-                        ),
-                        decoration: BoxDecoration(
-                          color: SusColors.cream,
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Text(
-                          'FROM THE $deck DECK',
-                          style: SusText.label(12).copyWith(letterSpacing: 0.7),
+                      Flexible(
+                        child: ExcludeSemantics(
+                          child: FittedBox(
+                            fit: BoxFit.scaleDown,
+                            alignment: Alignment.centerLeft,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 10,
+                                vertical: 4,
+                              ),
+                              decoration: BoxDecoration(
+                                color: SusColors.cream,
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Text(
+                                'FROM THE $deck DECK',
+                                style: SusText.label(
+                                  12,
+                                ).copyWith(letterSpacing: 0.7),
+                              ),
+                            ),
+                          ),
                         ),
                       ),
-                      const Spacer(),
-                      ListenableBuilder(
-                        listenable: game.live,
-                        builder: (context, _) => LevelBars(
-                          level: game.live.micLevel,
-                          color: SusColors.cream,
-                        ),
+                      const SizedBox(width: 8),
+                      // On the card it changes, its height away from the
+                      // drawn button, as Suggest one is on the asker's card
+                      // (decisions 84 and 90).
+                      _CardPill(
+                        label: 'Different question',
+                        icon: Icons.shuffle_rounded,
+                        onTap: game.differentQuestion,
                       ),
                     ],
                   ),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 2),
                   Expanded(
-                    child: FitText(
-                      game.questionText,
-                      // A size up on the asker card's: the question is
-                      // all this card shows, and it has the room.
-                      sizes: const [32, 28, 24, 20, 17],
-                      overflow: FitOverflow.keepStart,
-                      style: (size) =>
-                          SusText.display(size, color: SusColors.cream),
+                    child: ExcludeSemantics(
+                      child: FitText(
+                        game.questionText,
+                        // A size up on the asker card's: the question is
+                        // all this card shows, and it has the room.
+                        sizes: const [32, 28, 24, 20, 17],
+                        overflow: FitOverflow.keepStart,
+                        style: (size) =>
+                            SusText.display(size, color: SusColors.cream),
+                      ),
                     ),
                   ),
                 ],
@@ -673,21 +674,27 @@ class _SoloQuestionCardState extends State<_SoloQuestionCard> {
           const SizedBox(height: 8),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 2),
-            child: Transform.rotate(
-              angle: readyFaceTilt * math.pi / 180,
-              child: _ReadyFace(down: _down),
+            child: ExcludeSemantics(
+              child: Transform.rotate(
+                angle: readyFaceTilt * math.pi / 180,
+                child: _ReadyFace(down: _down),
+              ),
             ),
           ),
         ],
       ),
     );
+    // VoiceOver: the card is one button, read as the question; Different
+    // question is its own button inside it.
     return Semantics(
+      container: true,
       button: true,
       label: game.questionText,
       hint: "Don't answer yet. Tap here first, then answer.",
-      excludeSemantics: true,
       onTap: game.readyToAnswer,
       child: GestureDetector(
+        // The Semantics above is the card's button; this only takes touches.
+        excludeFromSemantics: true,
         behavior: HitTestBehavior.opaque,
         onTapDown: (_) => setState(() => _down = true),
         onTapCancel: () => setState(() => _down = false),
@@ -888,73 +895,6 @@ class _AnswerCard extends StatelessWidget {
   }
 }
 
-class _FinalAnswerButton extends StatelessWidget {
-  const _FinalAnswerButton({required this.onPressed, required this.hint});
-
-  final VoidCallback onPressed;
-  final String hint;
-
-  @override
-  Widget build(BuildContext context) {
-    return Semantics(
-      button: true,
-      label: 'Final answer',
-      hint: hint,
-      excludeSemantics: true,
-      onTap: onPressed,
-      child: GestureDetector(
-        onTap: onPressed,
-        child: Container(
-          height: _actionsHeight - 6,
-          margin: const EdgeInsets.only(bottom: 6),
-          padding: const EdgeInsets.symmetric(horizontal: 10),
-          decoration: BoxDecoration(
-            color: SusColors.teal,
-            borderRadius: BorderRadius.circular(22),
-            border: Border.all(
-              color: SusColors.ink,
-              width: SusShape.borderWidth,
-            ),
-            boxShadow: const [
-              BoxShadow(color: SusColors.ink, offset: Offset(0, 6)),
-            ],
-          ),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Flexible(
-                flex: 2,
-                child: FittedBox(
-                  fit: BoxFit.scaleDown,
-                  child: Text(
-                    'Final answer',
-                    style: SusText.display(30, color: SusColors.cream),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 2),
-              Flexible(
-                child: FittedBox(
-                  fit: BoxFit.scaleDown,
-                  child: Text(
-                    hint,
-                    maxLines: 1,
-                    style: SusText.body(
-                      13,
-                      weight: FontWeight.w600,
-                      color: SusColors.cream,
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
 /// The question waits until the camera has a fresh pulse (SPEC.md
 /// decision 79), in the card's slot: why nothing's being asked yet.
 class _PulseWaitCard extends StatelessWidget {
@@ -1006,51 +946,73 @@ class _PulseWaitCard extends StatelessWidget {
   }
 }
 
-/// The bottom row while the question waits: nothing to tap but Pause.
-class _PulseWaitStatus extends StatelessWidget {
-  const _PulseWaitStatus({required this.game});
+/// What the seam's right end says while there's nothing to tap: the wait
+/// for the pulse, or the reading locking in. Not a button: a card, without
+/// the shadow a button presses onto.
+class _SeamStatus extends StatelessWidget {
+  const _SeamStatus({required this.title, required this.detail, this.progress});
 
-  final GameController game;
+  final String title;
+  final String detail;
+
+  /// 0–1, drawn as a bar under the words; none if null.
+  final double? progress;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      height: _actionsHeight - 6,
-      margin: const EdgeInsets.only(bottom: 6),
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-      decoration: BoxDecoration(
-        color: SusColors.cream,
-        borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: SusColors.ink, width: SusShape.borderWidth),
-      ),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Flexible(
-            flex: 2,
-            child: FittedBox(
-              fit: BoxFit.scaleDown,
-              child: Text('Finding the pulse…', style: SusText.display(19)),
+    final progress = this.progress;
+    return Semantics(
+      liveRegion: true,
+      label: '$title $detail',
+      excludeSemantics: true,
+      child: Container(
+        height: SeamButton.height,
+        padding: const EdgeInsets.fromLTRB(14, 5, 14, 6),
+        decoration: BoxDecoration(
+          color: SusColors.cream,
+          borderRadius: BorderRadius.circular(SusShape.buttonRadius),
+          border: Border.all(color: SusColors.ink, width: SusShape.borderWidth),
+        ),
+        child: Center(
+          widthFactor: 1,
+          child: FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(title, maxLines: 1, style: SusText.display(15)),
+                Text(
+                  detail,
+                  maxLines: 1,
+                  style: SusText.body(11.5, weight: FontWeight.w600),
+                ),
+                if (progress != null) ...[
+                  const SizedBox(height: 3),
+                  SizedBox(
+                    width: 170,
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(4),
+                      child: LinearProgressIndicator(
+                        value: progress,
+                        minHeight: 5,
+                        color: SusColors.teal,
+                        backgroundColor: SusColors.unlit,
+                      ),
+                    ),
+                  ),
+                ],
+              ],
             ),
           ),
-          const SizedBox(height: 2),
-          Flexible(
-            child: FittedBox(
-              fit: BoxFit.scaleDown,
-              child: Text(
-                'Sit still and look at the camera',
-                style: SusText.body(13, weight: FontWeight.w600),
-              ),
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }
 }
 
-class _SettleCard extends StatelessWidget {
-  const _SettleCard({required this.game});
+/// "Locking in the reading…" while the score waits for its last seconds.
+class _SettleStatus extends StatelessWidget {
+  const _SettleStatus({required this.game});
 
   final GameController game;
 
@@ -1059,53 +1021,63 @@ class _SettleCard extends StatelessWidget {
     final until = game.settleUntilMs ?? game.nowMs;
     final start = game.detector?.tA1 ?? game.nowMs;
     final total = (until - start).clamp(1, 1 << 30);
-    final progress = ((game.nowMs - start) / total).clamp(0.0, 1.0);
     final left = ((until - game.nowMs) / 1000).ceil().clamp(0, 99);
-    return Container(
-      height: _actionsHeight - 6,
-      margin: const EdgeInsets.only(bottom: 6),
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-      decoration: BoxDecoration(
-        color: SusColors.cream,
-        borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: SusColors.ink, width: SusShape.borderWidth),
-      ),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Flexible(
-            flex: 2,
-            child: FittedBox(
-              fit: BoxFit.scaleDown,
-              child: Text(
-                'Locking in the reading…',
-                style: SusText.display(19),
+    return _SeamStatus(
+      title: 'Locking in the reading…',
+      detail: left > 0
+          ? 'Stay in frame for $left more second${left == 1 ? '' : 's'}'
+          : 'Done',
+      progress: ((game.nowMs - start) / total).clamp(0.0, 1.0),
+    );
+  }
+}
+
+/// A small cream button on a card's top row (Different question on the
+/// solo card): drawn small, with the row's height to take the tap.
+class _CardPill extends StatelessWidget {
+  const _CardPill({required this.label, required this.icon, this.onTap});
+
+  final String label;
+  final IconData icon;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      container: true,
+      button: true,
+      label: label,
+      excludeSemantics: true,
+      onTap: onTap,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: onTap,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minHeight: 44, minWidth: 44),
+          child: Center(
+            widthFactor: 1,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+              decoration: BoxDecoration(
+                color: SusColors.cream,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: SusColors.ink, width: 2.5),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(icon, size: 16, color: SusColors.ink),
+                  const SizedBox(width: 4),
+                  Text(
+                    label,
+                    maxLines: 1,
+                    style: SusText.body(13, weight: FontWeight.w800),
+                  ),
+                ],
               ),
             ),
           ),
-          const SizedBox(height: 2),
-          Flexible(
-            child: FittedBox(
-              fit: BoxFit.scaleDown,
-              child: Text(
-                left > 0
-                    ? 'Stay in frame for $left more second${left == 1 ? '' : 's'}'
-                    : 'Done',
-                style: SusText.body(13, weight: FontWeight.w600),
-              ),
-            ),
-          ),
-          const SizedBox(height: 7),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(6),
-            child: LinearProgressIndicator(
-              value: progress,
-              minHeight: 8,
-              color: SusColors.teal,
-              backgroundColor: SusColors.unlit,
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }

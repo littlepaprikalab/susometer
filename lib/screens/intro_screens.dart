@@ -5,8 +5,8 @@ import '../game/game_controller.dart';
 import '../game/scoring.dart';
 import '../presage/camera_preview.dart';
 import '../theme/expression_stamp.dart';
-import '../theme/fit_text.dart';
 import '../theme/game_widgets.dart';
+import '../theme/seam_button.dart';
 import '../theme/tokens.dart';
 import '../theme/widgets.dart';
 
@@ -331,9 +331,7 @@ class CalibrateScreen extends StatelessWidget {
         '${elapsed ~/ 60}:${(elapsed % 60).toString().padLeft(2, '0')}';
     final stage = game.calibStage;
     final warmup = game.currentWarmup;
-    final chat = stage == CalibStage.chat || stage == CalibStage.done;
     final ready = stage == CalibStage.ready || stage == CalibStage.done;
-    final warmupNumber = game.warmupNumber;
     final bubble = switch (stage) {
       CalibStage.starting => 'Warming up the camera…',
       CalibStage.quiet => 'Sit still and look at the camera.',
@@ -377,67 +375,42 @@ class CalibrateScreen extends StatelessWidget {
             chat: game.chatBlocks,
             chatDone: game.warmupsDone,
           ),
+          // No status line under the progress: its labels and the host's
+          // line say where things are (SPEC.md decision 90).
           const SizedBox(height: 12),
-          _OneLine(
-            ready
-                ? 'Warm-ups done · your normal is locked in'
-                : chat
-                ? 'Warm-up $warmupNumber of ${game.config.calibMaxWarmups} · from the easy deck'
-                : 'Step 1 · Sit still for about 20 seconds',
-            style: SusText.label,
-          ),
-          const SizedBox(height: 6),
-          HostBubble(
-            text: bubble,
-            lines: bubbleLines,
-            minFontSize: bubbleMinFontSize,
-          ),
-          const SizedBox(height: 12),
-          const Expanded(child: _CalibCamera()),
-          const SizedBox(height: 12),
-          // Nothing here moves on by itself (SPEC.md decision 76): each
-          // warm-up waits for Next, and the questions for Start.
-          if (ready)
-            ChunkyButton(
-              label: game.currentTurn.results.isEmpty
-                  ? 'Start the questions'
-                  : 'Back to the questions',
-              height: 52,
-              fontSize: 17,
-              onPressed: game.startQuestions,
-            )
-          else
-            Row(
-              children: [
-                Expanded(
-                  child: ChunkyButton.light(
-                    label: "Doesn't apply",
-                    height: 52,
-                    fontSize: 16,
-                    onPressed: warmup == null ? null : game.skipWarmup,
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: ChunkyButton(
-                    label: 'Next',
-                    icon: Icons.skip_next_rounded,
-                    height: 52,
-                    fontSize: 17,
-                    onPressed: warmup == null ? null : game.nextWarmup,
-                  ),
-                ),
-              ],
+          Expanded(
+            child: SeamLayout(
+              gap: 12,
+              top: HostBubble(
+                text: bubble,
+                lines: bubbleLines,
+                minFontSize: bubbleMinFontSize,
+                bottomRoom: SeamButton.cardRoom,
+              ),
+              camera: const _CalibCamera(),
+              // Nothing here moves on by itself (SPEC.md decision 76): each
+              // warm-up waits for Next, and the questions for Start. Both
+              // hang across the seam, under the host's line (decision 90);
+              // Next lands once there's a warm-up to move on from.
+              button: ready
+                  ? SeamButton(
+                      label: game.currentTurn.results.isEmpty
+                          ? 'Start the questions'
+                          : 'Back to the questions',
+                      hint: readyHint(game),
+                      shorterHints: readyHints(game).skip(1).toList(),
+                      onPressed: game.startQuestions,
+                    )
+                  : warmup == null
+                  ? null
+                  : SeamButton(
+                      label: 'Next',
+                      icon: Icons.skip_next_rounded,
+                      hint: 'Tap here when done speaking',
+                      shorterHints: const ['Tap when done speaking'],
+                      onPressed: game.nextWarmup,
+                    ),
             ),
-          const SizedBox(height: 6),
-          _OneLine(
-            ready
-                ? readyHint(game)
-                : chat
-                ? 'Answer out loud, then tap Next.'
-                : 'Easy warm-up questions come next.',
-            textAlign: TextAlign.center,
-            style: (size) => SusText.body(size, weight: FontWeight.w600),
           ),
         ],
       ),
@@ -445,38 +418,22 @@ class CalibrateScreen extends StatelessWidget {
   }
 }
 
-/// Under Start the questions: who asks first, so they have one ready (the
+/// On Start the questions: who asks first, so they have one ready (the
 /// host only names them as the question is due). Solo has no asker.
-String readyHint(GameController game) {
+String readyHint(GameController game) => readyHints(game).first;
+
+/// [readyHint], then shorter forms for when a long name won't fit.
+List<String> readyHints(GameController game) {
   final asker = game.currentAsker;
-  if (asker == null) return 'Tap when ready. The host asks the questions.';
-  final first = game.currentTurn.results.isEmpty ? 'first' : 'next';
-  return 'Tap when ready. ${asker.name} asks $first.';
-}
-
-/// A line of Calibrate copy in a slot one line tall, whatever it says: it
-/// shrinks to fit rather than wrap, so the camera below never moves when
-/// the step changes (the sit-still is measured).
-class _OneLine extends StatelessWidget {
-  const _OneLine(this.text, {required this.style, this.textAlign});
-
-  final String text;
-  final TextStyle Function(double size) style;
-  final TextAlign? textAlign;
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      height: MediaQuery.textScalerOf(context).scale(13) * 1.5,
-      child: FitText(
-        text,
-        sizes: const [13, 12, 11],
-        overflow: FitOverflow.keepStart,
-        textAlign: textAlign,
-        style: style,
-      ),
-    );
+  if (asker == null) {
+    return const ['Tap when ready · the host asks', 'Tap when ready'];
   }
+  final first = game.currentTurn.results.isEmpty ? 'first' : 'next';
+  return [
+    'Tap when ready · ${asker.name} asks $first',
+    '${asker.name} asks $first',
+    'Tap when ready',
+  ];
 }
 
 class _CalibProgress extends StatelessWidget {

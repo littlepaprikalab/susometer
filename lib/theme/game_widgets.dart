@@ -42,6 +42,7 @@ class HostBubble extends StatelessWidget {
     this.singleLine = false,
     this.lines,
     this.minFontSize = 16,
+    this.bottomRoom = 0,
   });
 
   final String text;
@@ -56,6 +57,10 @@ class HostBubble extends StatelessWidget {
 
   /// With [lines]: the smallest size the text shrinks to, 2 pt at a time.
   final double minFontSize;
+
+  /// Extra room under the text, kept clear for a stamp hung across the
+  /// bubble's bottom edge (SPEC.md decision 90).
+  final double bottomRoom;
 
   double _lineHeight(BuildContext context) {
     final ambient = DefaultTextStyle.of(context);
@@ -98,7 +103,7 @@ class HostBubble extends StatelessWidget {
           const SizedBox(width: 10),
           Flexible(
             child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              padding: EdgeInsets.fromLTRB(14, 10, 14, 10 + bottomRoom),
               decoration: BoxDecoration(
                 color: SusColors.cream,
                 border: Border.all(

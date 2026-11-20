@@ -24,7 +24,6 @@ class Persona {
     this.tap = (700, 1800),
     this.readConsent = (3000, 9000),
     this.warmupAnswer = (2000, 5000),
-    this.warmupSkip = 0.05,
     this.askThink = (800, 4000),
     this.askSpeak = (1800, 4000),
     this.answerPause = (500, 1800),
@@ -49,9 +48,6 @@ class Persona {
   final (int, int) tap;
   final (int, int) readConsent;
   final (int, int) warmupAnswer;
-
-  /// Chance a warm-up gets "Doesn't apply".
-  final double warmupSkip;
 
   /// As the asker: thinking of a question, then saying it.
   final (int, int) askThink;
@@ -130,7 +126,7 @@ class Persona {
     screenshot: 0.1,
     changesMind: 0.25,
   );
-  static const nervous = Persona('nervous', stressed: 0.55, warmupSkip: 0.2);
+  static const nervous = Persona('nervous', stressed: 0.55);
 
   /// Not dealt by [party]: only rooms that ask for one have one.
   static const blank = Persona('blank', stuck: 0.8, askThink: (3000, 9000));
@@ -466,16 +462,12 @@ class PartySim {
         _wait(100);
         continue;
       }
-      // Hear it out, then answer or pass.
+      // Hear it out, then answer: there's no skipping a warm-up on screen
+      // (SPEC.md decision 90).
       _until(
         () => warmup.askedAtMs > warmup.startedAtMs || !hostVoice,
         'the host to read a warm-up',
       );
-      if (_chance(me.warmupSkip)) {
-        _wait(_between(me.tap));
-        _tap("Doesn't apply", game.skipWarmup);
-        continue;
-      }
       _wait(_between(me.answerPause));
       w.talk(true);
       _wait(_between(me.warmupAnswer));
