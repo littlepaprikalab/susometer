@@ -115,6 +115,13 @@ Settings → **Signal check** → **Start both**. Allow microphone and speech re
   screen), and still fills its box while a "Too dark" stamp comes and goes.
 - [ ] Sit so your face fills the oval: no "Move closer" or "Move back" stamp. **If there's a
   small iPhone (SE/mini) around, try it there too, and with Larger Text on.**
+- [ ] **Live waveform** (Calibrate, sitting still): the line runs from the number to the card's
+  right edge, with no blank space after it, and scrolls smoothly. It shows the last 8 s, so
+  **count the beats in it: beats × 7.5 should be close to the BPM on the card** (about 8 or 9 at
+  65). Cover the camera for a second: **note whether a gap scrolls across** (the SDK stopped
+  sending the waveform) or the line carries on. Leave the app and come back: the line starts
+  again from the left. **Note if it starts with a short piece and then a gap** (the last
+  session's samples sent again, SPEC.md decision 89).
 - [ ] **Heartbeats** (Proof Panel on, sit still during calibration):
   - The `wave` line says about **30/s**. **Note the number and the conf %.** (`--` or 0 means
     the bridge isn't sending waveform timestamps.)

@@ -80,7 +80,8 @@ The spec wins where the two disagree (see SPEC.md, "Decisions made during build"
   normal dashed). Replay rows use the same chart.
 - **Calibrate:** the live pulse card (number and waveform) sits on the bottom of the camera, like
   the Ask/Answer cards, instead of under it, and "{name} is talking" is inside it. This gives the
-  face more room on small phones.
+  face more room on small phones. The waveform shows the last 8 s by time and fills the card
+  beside the number: about 9 beats at a resting pulse, where the mock showed 4.
 - **E3 in the camera:** there's no banner. The problem is stamped on the camera in the expression
   #tag's corner (mustard ink: "Hold still", "Too dark"), and its fix ("Rest your elbows or prop
   the phone up.") takes the live cards' place while the reading is paused, so nothing on screen

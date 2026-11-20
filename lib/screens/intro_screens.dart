@@ -659,7 +659,11 @@ class _CalibCamera extends StatelessWidget {
                         value: s?.pulse == null
                             ? '--'
                             : '${s!.pulse!.round()} BPM',
-                        trend: Waveform(samples: game.live.trace),
+                        trend: Waveform(
+                          points: game.live.wave.points,
+                          windowMs: game.live.wave.windowMs,
+                          maxGapMs: game.config.traceMaxGapMs,
+                        ),
                         // The SDK's talking signal, inside the card so nothing
                         // sits in the face oval's space. No name: the title
                         // already says who's warming up.
