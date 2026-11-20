@@ -1812,15 +1812,15 @@ void main() {
         game.addPlayer('Sam');
         expect(game.estimatedMinutes, isNull, reason: 'a party needs two');
         game.addPlayer('Alex');
-        // 2 × (75 s + 5 × 40 s) = 550 s.
+        // 2 × (75 s + 1 × 40 s) = 230 s, with the default of one question.
+        expect(game.estimatedMinutes, 4);
+        game.setQuestionsPerTurn(5);
         expect(game.estimatedMinutes, 9);
-        game.setQuestionsPerTurn(7);
-        expect(game.estimatedMinutes, 12);
         for (final n in ['Priya', 'Jordan', 'Kai', 'Mo', 'Lee', 'Ana']) {
           game.addPlayer(n);
         }
-        // 8 × (75 s + 7 × 40 s): most of an hour.
-        expect(game.estimatedMinutes, 47);
+        // 8 × (75 s + 5 × 40 s): over half an hour.
+        expect(game.estimatedMinutes, 37);
         game.setQuestionsPerTurn(3);
         expect(game.estimatedMinutes, 26);
         w.dispose();
