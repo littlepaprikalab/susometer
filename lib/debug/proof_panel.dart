@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import '../game/game_controller.dart';
 import '../game/models.dart';
 import '../screens/question_screens.dart';
-import '../theme/expression_stamp.dart';
+import '../theme/seam_button.dart';
 import '../theme/tokens.dart';
 
 /// Proof Panel (SPEC.md §10): a translucent overlay with the raw SmartSpectra
@@ -130,7 +130,7 @@ class ProofPanel extends StatelessWidget {
           // phone or at large text it shrinks to fit there rather than
           // cover the stamp or the card above it.
           return ValueListenableBuilder<double?>(
-            valueListenable: seamStampFloor,
+            valueListenable: seamButtonFloor,
             builder: (context, floor, _) => Padding(
               padding: EdgeInsets.only(top: floor == null ? 0 : floor + 4),
               child: SafeArea(

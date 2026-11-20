@@ -7,6 +7,7 @@ import '../presage/camera_preview.dart';
 import '../theme/expression_stamp.dart';
 import '../theme/fit_text.dart';
 import '../theme/game_widgets.dart';
+import '../theme/seam_button.dart';
 import '../theme/tokens.dart';
 import '../theme/widgets.dart';
 
@@ -319,10 +320,6 @@ class CalibrateScreen extends StatelessWidget {
   /// deck).
   static const bubbleMinFontSize = 14.0;
 
-  /// Doesn't apply's row, shadow included. Next and Start the questions
-  /// are up on the seam (SPEC.md decision 90).
-  static const bottomRowHeight = 53.0;
-
   @override
   Widget build(BuildContext context) {
     final game = GameScope.of(context);
@@ -392,57 +389,48 @@ class CalibrateScreen extends StatelessWidget {
           ),
           const SizedBox(height: 6),
           Expanded(
-            child: SeamStampLayout(
+            child: SeamLayout(
               gap: 12,
               top: HostBubble(
                 text: bubble,
                 lines: bubbleLines,
                 minFontSize: bubbleMinFontSize,
-                bottomRoom: StampButton.cardRoom,
+                bottomRoom: SeamButton.cardRoom,
               ),
               camera: const _CalibCamera(),
               // Nothing here moves on by itself (SPEC.md decision 76): each
               // warm-up waits for Next, and the questions for Start. Both
               // hang across the seam, under the host's line (decision 90);
               // Next lands once there's a warm-up to move on from.
-              stamp: ready
-                  ? StampButton(
+              // Doesn't apply sits beside Next, as it did at the bottom.
+              leading: ready || warmup == null
+                  ? null
+                  : SizedBox(
+                      width: 128,
+                      child: ChunkyButton.light(
+                        label: "Doesn't apply",
+                        height: 46,
+                        fontSize: 15,
+                        onPressed: game.skipWarmup,
+                      ),
+                    ),
+              button: ready
+                  ? SeamButton(
                       label: game.currentTurn.results.isEmpty
                           ? 'Start the questions'
                           : 'Back to the questions',
+                      hint: readyHint(game),
                       onPressed: game.startQuestions,
                     )
                   : warmup == null
                   ? null
-                  : StampButton(
+                  : SeamButton(
                       label: 'Next',
                       icon: Icons.skip_next_rounded,
+                      hint: 'Tap here when done speaking',
                       onPressed: game.nextWarmup,
                     ),
             ),
-          ),
-          const SizedBox(height: 12),
-          // The same height in every step, so the camera never moves.
-          SizedBox(
-            height: bottomRowHeight,
-            child: ready
-                ? null
-                : ChunkyButton.light(
-                    label: "Doesn't apply",
-                    height: bottomRowHeight - SusShape.shadowOffset.dy,
-                    fontSize: 16,
-                    onPressed: warmup == null ? null : game.skipWarmup,
-                  ),
-          ),
-          const SizedBox(height: 6),
-          _OneLine(
-            ready
-                ? readyHint(game)
-                : chat
-                ? 'Answer out loud, then tap Next.'
-                : 'Easy warm-up questions come next.',
-            textAlign: TextAlign.center,
-            style: (size) => SusText.body(size, weight: FontWeight.w600),
           ),
         ],
       ),
@@ -450,24 +438,23 @@ class CalibrateScreen extends StatelessWidget {
   }
 }
 
-/// Under Start the questions: who asks first, so they have one ready (the
+/// On Start the questions: who asks first, so they have one ready (the
 /// host only names them as the question is due). Solo has no asker.
 String readyHint(GameController game) {
   final asker = game.currentAsker;
-  if (asker == null) return 'Tap when ready. The host asks the questions.';
+  if (asker == null) return 'Tap when ready · the host asks';
   final first = game.currentTurn.results.isEmpty ? 'first' : 'next';
-  return 'Tap when ready. ${asker.name} asks $first.';
+  return 'Tap when ready · ${asker.name} asks $first';
 }
 
 /// A line of Calibrate copy in a slot one line tall, whatever it says: it
 /// shrinks to fit rather than wrap, so the camera below never moves when
 /// the step changes (the sit-still is measured).
 class _OneLine extends StatelessWidget {
-  const _OneLine(this.text, {required this.style, this.textAlign});
+  const _OneLine(this.text, {required this.style});
 
   final String text;
   final TextStyle Function(double size) style;
-  final TextAlign? textAlign;
 
   @override
   Widget build(BuildContext context) {
@@ -477,7 +464,6 @@ class _OneLine extends StatelessWidget {
         text,
         sizes: const [13, 12, 11],
         overflow: FitOverflow.keepStart,
-        textAlign: textAlign,
         style: style,
       ),
     );
