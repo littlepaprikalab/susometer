@@ -563,15 +563,24 @@ class HotSeatPill extends StatelessWidget {
   }
 }
 
-/// Pulse waveform drawn from the SDK's arterial pressure trace.
+/// Pulse waveform drawn from the SDK's arterial pressure trace, by time:
+/// the card's width is always [windowMs], newest sample at the right edge
+/// (SPEC.md decision 88). Until the first [windowMs] has arrived, the line
+/// draws itself from the left. Samples more than [maxGapMs] apart aren't
+/// joined, so missing waveform shows as a gap instead of a made-up beat.
 class Waveform extends StatelessWidget {
   const Waveform({
     super.key,
-    required this.samples,
+    required this.points,
+    required this.windowMs,
+    required this.maxGapMs,
     this.color = SusColors.tomato,
   });
 
-  final List<double> samples;
+  /// (time ms, value), oldest first. Any clock: only differences are used.
+  final List<(double, double)> points;
+  final int windowMs;
+  final int maxGapMs;
   final Color color;
 
   @override
@@ -581,22 +590,70 @@ class Waveform extends StatelessWidget {
       excludeSemantics: true,
       child: CustomPaint(
         size: Size.infinite,
-        painter: WaveformLinePainter(List.of(samples), color),
+        painter: WaveformLinePainter(
+          List.of(points),
+          color,
+          windowMs: windowMs,
+          maxGapMs: maxGapMs,
+        ),
       ),
     );
   }
 }
 
 class WaveformLinePainter extends CustomPainter {
-  WaveformLinePainter(this.samples, this.color, {this.strokeWidth = 3.5});
+  WaveformLinePainter(
+    this.points,
+    this.color, {
+    required this.windowMs,
+    required this.maxGapMs,
+    this.strokeWidth = 3.5,
+  });
 
-  final List<double> samples;
+  final List<(double, double)> points;
   final Color color;
+  final int windowMs;
+  final int maxGapMs;
   final double strokeWidth;
+
+  /// The line in [size], in pieces split at gaps. A piece can start left of
+  /// the edge (the sample just before the window); [paint] clips it.
+  List<List<Offset>> segments(Size size) {
+    if (points.length < 2 || windowMs <= 0) return const [];
+    final end = points.last.$1;
+    final start = math.max(points.first.$1, end - windowMs);
+    var lo = points.first.$2;
+    var hi = lo;
+    for (final (_, v) in points) {
+      lo = math.min(lo, v);
+      hi = math.max(hi, v);
+    }
+    final range = math.max(hi - lo, 1e-6);
+    final pad = strokeWidth;
+    final out = <List<Offset>>[];
+    double? prev;
+    for (final (t, v) in points) {
+      final o = Offset(
+        (t - start) / windowMs * size.width,
+        pad + (size.height - 2 * pad) * (1 - (v - lo) / range),
+      );
+      if (prev == null || t - prev > maxGapMs) {
+        out.add([o]);
+      } else {
+        out.last.add(o);
+      }
+      prev = t;
+    }
+    return [
+      for (final s in out)
+        if (s.length > 1) s,
+    ];
+  }
 
   @override
   void paint(Canvas canvas, Size size) {
-    if (samples.length < 2) {
+    final lines = segments(size);
+    if (lines.isEmpty) {
       canvas.drawLine(
         Offset(0, size.height / 2),
         Offset(size.width, size.height / 2),
@@ -606,24 +663,15 @@ class WaveformLinePainter extends CustomPainter {
       );
       return;
     }
-    var lo = samples.first;
-    var hi = samples.first;
-    for (final v in samples) {
-      lo = math.min(lo, v);
-      hi = math.max(hi, v);
-    }
-    final range = math.max(hi - lo, 1e-6);
-    final pad = strokeWidth;
     final path = Path();
-    for (var i = 0; i < samples.length; i++) {
-      final x = size.width * i / (samples.length - 1);
-      final y = pad + (size.height - 2 * pad) * (1 - (samples[i] - lo) / range);
-      if (i == 0) {
-        path.moveTo(x, y);
-      } else {
-        path.lineTo(x, y);
+    for (final line in lines) {
+      path.moveTo(line.first.dx, line.first.dy);
+      for (final o in line.skip(1)) {
+        path.lineTo(o.dx, o.dy);
       }
     }
+    canvas.save();
+    canvas.clipRect(Offset.zero & size);
     canvas.drawPath(
       path,
       Paint()
@@ -633,10 +681,18 @@ class WaveformLinePainter extends CustomPainter {
         ..strokeJoin = StrokeJoin.round
         ..strokeCap = StrokeCap.round,
     );
+    canvas.restore();
   }
 
   @override
-  bool shouldRepaint(covariant WaveformLinePainter oldDelegate) => true;
+  bool shouldRepaint(covariant WaveformLinePainter old) =>
+      old.color != color ||
+      old.windowMs != windowMs ||
+      old.maxGapMs != maxGapMs ||
+      old.strokeWidth != strokeWidth ||
+      old.points.length != points.length ||
+      (points.isNotEmpty &&
+          (old.points.first != points.first || old.points.last != points.last));
 }
 
 /// Live reading card along the bottom of the camera (Calibrate, Ask,
@@ -656,6 +712,13 @@ class LiveStatCard extends StatelessWidget {
 
   /// Inset from the camera's edges.
   static const inset = 10.0;
+
+  /// With a chart, the most of the card's inside the label and number may
+  /// take before they shrink.
+  static const textMaxShare = 0.4;
+
+  /// With a chart, the most [trailing] may take before it shrinks.
+  static const trailingMaxShare = 0.3;
 
   final String label;
   final String value;
@@ -702,37 +765,54 @@ class LiveStatCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: SusColors.ink, width: 2.5),
       ),
-      child: Row(
-        children: [
-          if (trend == null)
-            Expanded(child: text)
-          else ...[
-            // The number and the chart split the space; a long number
-            // shrinks rather than squeezing the chart out.
-            Flexible(child: text),
-            const SizedBox(width: 8),
-            Expanded(child: SizedBox(height: 30, child: trend)),
+      child: LayoutBuilder(
+        builder: (context, box) => Row(
+          children: [
+            if (trend == null)
+              Expanded(child: text)
+            else ...[
+              // The words keep their own width and the chart takes all the
+              // rest (SPEC.md decision 88). Past [textMaxShare] of the card
+              // the words shrink instead, so a long number or large text
+              // can't squeeze the chart out.
+              ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxWidth: box.maxWidth * textMaxShare,
+                ),
+                child: text,
+              ),
+              const SizedBox(width: 8),
+              Expanded(child: SizedBox(height: 30, child: trend)),
+            ],
+            if (d != null && d.round() != 0) ...[
+              Icon(
+                d > 0
+                    ? Icons.arrow_drop_up_rounded
+                    : Icons.arrow_drop_down_rounded,
+                color: d > 0 ? SusColors.tomato : SusColors.teal,
+                size: 22,
+              ),
+              Text(
+                '${d.abs().round()}',
+                style: SusText.body(14, weight: FontWeight.w700),
+              ),
+            ],
+            if (trailing != null) ...[
+              const SizedBox(width: 6),
+              if (trend == null)
+                Flexible(
+                  child: FittedBox(fit: BoxFit.scaleDown, child: trailing),
+                )
+              else
+                ConstrainedBox(
+                  constraints: BoxConstraints(
+                    maxWidth: box.maxWidth * trailingMaxShare,
+                  ),
+                  child: FittedBox(fit: BoxFit.scaleDown, child: trailing),
+                ),
+            ],
           ],
-          if (d != null && d.round() != 0) ...[
-            Icon(
-              d > 0
-                  ? Icons.arrow_drop_up_rounded
-                  : Icons.arrow_drop_down_rounded,
-              color: d > 0 ? SusColors.tomato : SusColors.teal,
-              size: 22,
-            ),
-            Text(
-              '${d.abs().round()}',
-              style: SusText.body(14, weight: FontWeight.w700),
-            ),
-          ],
-          if (trailing != null) ...[
-            const SizedBox(width: 6),
-            Flexible(
-              child: FittedBox(fit: BoxFit.scaleDown, child: trailing),
-            ),
-          ],
-        ],
+        ),
       ),
     );
   }

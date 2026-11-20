@@ -15,6 +15,7 @@ import 'awards.dart';
 import 'beats.dart';
 import 'decks.dart';
 import 'expression_tag.dart';
+import 'live_wave.dart';
 import 'models.dart';
 import 'scoring.dart';
 import 'scoring_config.dart';
@@ -93,7 +94,9 @@ class LiveState extends ChangeNotifier {
   double micLevel = 0;
   String askerText = '';
   String answerText = '';
-  final List<double> trace = [];
+
+  /// The last few seconds of the pulse waveform, for Calibrate's live card.
+  final LiveWave wave = LiveWave();
 
   /// The camera problem stamped on the camera (E3, SPEC.md decision 69),
   /// or null. Set by [updateIssue].
@@ -654,7 +657,7 @@ class GameController extends ChangeNotifier {
     if (_calibrationStarting) return;
     _calibrationStarting = true;
     log.clear();
-    live.trace.clear();
+    live.wave.clear();
     live.resetBeats();
     _calibTalk.reset();
     warmups.clear();
@@ -1719,7 +1722,7 @@ class GameController extends ChangeNotifier {
     live
       ..resetQuestion()
       ..resetBeats()
-      ..trace.clear()
+      ..wave.clear()
       ..sample = null;
     _clearPause();
     sdkError = null;
@@ -2002,12 +2005,7 @@ class GameController extends ChangeNotifier {
   void _onSample(PresageSample s) {
     _lastSampleMs = nowMs;
     live.sample = s;
-    if (s.trace.isNotEmpty) {
-      live.trace.addAll(s.trace);
-      if (live.trace.length > 240) {
-        live.trace.removeRange(0, live.trace.length - 240);
-      }
-    }
+    live.wave.add(s.traceSamples);
     if (!_sdkShouldRun) {
       live.resetCamera();
       live.notify();
