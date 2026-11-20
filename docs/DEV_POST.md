@@ -47,10 +47,10 @@ status (face position, lighting, motion).
 
 **How the game reacts in real time:**
 
-- **Calibration** learns each player's normal: about 20 s sitting still, then 3 easy warm-ups
-  the host reads aloud, each answered and then tapped through with *Next*. It's locked in once it
-  has 12 s of confident pulse with the face present 80% of the time, and the questions start when
-  the room taps *Start the questions*.
+- **Calibration** learns each player's normal: a sit-still while the camera finds the pulse (8 to
+  20 s), then 3 easy warm-ups the host reads aloud, each answered and then tapped through with
+  *Next*. It's locked in once it has 12 s of confident pulse with the face present 80% of the time,
+  and the questions start when the room taps *Start the questions*.
 - **Questions:** each window scores four signals against that baseline: pulse rise (45%), blink
   rate change or a blink "freeze" (25%), the peak stress expression (15%), and hesitation before
   answering (15%). Each counts only what's bigger than the player's own normal wobble (blinks

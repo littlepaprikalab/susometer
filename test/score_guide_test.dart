@@ -149,7 +149,7 @@ void main() {
         susFrom: 70,
         minCleanFraction: 0.75,
         hesitationGraceS: 1.5,
-        calibQuietMs: 15000,
+        calibQuietMaxMs: 15000,
         calibMinWarmups: 2,
         calibMaxWarmups: 4,
         exprCategories: ['fear', 'surprise'],
@@ -175,7 +175,7 @@ void main() {
       find.textContaining('The first extra 1.5 seconds are free'),
       findsOneWidget,
     );
-    expect(find.textContaining('about 15 seconds'), findsOneWidget);
+    expect(find.textContaining('up to 15 seconds'), findsOneWidget);
     expect(find.textContaining('chat through 2–4 easy warm-ups'), findsOne);
     expect(find.textContaining('Fear or surprise going past'), findsOneWidget);
     expect(stamps(tester, stress: true), ['fear', 'surprise']);

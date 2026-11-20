@@ -1258,6 +1258,81 @@ void main() {
     });
   });
 
+  group('the sit-still ends once the camera has the pulse (decision 92)', () {
+    // How long the sit-still took, from the SDK's `running` to the first
+    // warm-up.
+    int sitStill(World w) {
+      w.startGame(['Sam', 'Alex']);
+      w.game.agreeToMeasure();
+      w.until(() => w.game.calibStage == CalibStage.chat, what: 'the chat');
+      return w.game.chatStartMs! - w.game.quietStartMs!;
+    }
+
+    test('a pulse 12 s in: about 2 s later, not at 20 s', () {
+      fakeAsync((async) {
+        final w = World(async); // confident from 12 s, like the real SDK
+        w.startGame(['Sam', 'Alex']);
+        w.game.agreeToMeasure();
+        w.until(() => w.game.calibStage == CalibStage.quiet, what: 'quiet');
+        w.elapse(11000);
+        expect(w.game.calibStage, CalibStage.quiet);
+        expect(w.game.stillBlocks, 2, reason: 'on the clock, against 20 s');
+        w.until(() => w.game.calibStage == CalibStage.chat, what: 'the chat');
+        final took = w.game.chatStartMs! - w.game.quietStartMs!;
+        expect(took, inInclusiveRange(12000, 16000));
+        expect(w.game.stillBlocks, 4, reason: 'all four fill when it ends');
+        expect(w.game.currentWarmup, isNotNull);
+        w.dispose();
+      });
+    });
+
+    test('a pulse from the first frame: never under 8 s', () {
+      fakeAsync((async) {
+        final w = World(async)..pulseWarmupMs = 0;
+        expect(sitStill(w), inInclusiveRange(8000, 8200));
+        w.dispose();
+      });
+    });
+
+    test('no pulse: 20 s, and the chat carries on until it is valid', () {
+      fakeAsync((async) {
+        final w = World(async)..pulseWarmupMs = 40000;
+        expect(sitStill(w), inInclusiveRange(20000, 20200));
+        w.until(
+          () => w.game.phase == GamePhase.ask,
+          what: 'calibration to finish',
+        );
+        expect(
+          w.game.scoring.baselineValid(w.game.currentTurn.baseline),
+          isTrue,
+        );
+        w.dispose();
+      });
+    });
+
+    test('a pulse that came and went waits for it to come back', () {
+      fakeAsync((async) {
+        final w = World(async)..pulseWarmupMs = 0;
+        w.startGame(['Sam', 'Alex']);
+        w.game.agreeToMeasure();
+        w.until(() => w.game.calibStage == CalibStage.quiet, what: 'quiet');
+        // 4 s of confident pulse, then a glance away.
+        w.elapse(2500);
+        w.pulseConf = 0.1;
+        w.elapse(7500);
+        expect(
+          w.game.calibStage,
+          CalibStage.quiet,
+          reason: 'enough pulse, but none fresh',
+        );
+        w.pulseConf = 0.9;
+        w.elapse(1500);
+        expect(w.game.calibStage, CalibStage.chat);
+        w.dispose();
+      });
+    });
+  });
+
   test('calibration asks all three warm-up slots, even after 15 s of chat', () {
     fakeAsync((async) {
       final w = World(async);

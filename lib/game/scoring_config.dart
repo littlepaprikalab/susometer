@@ -31,7 +31,9 @@ class ScoringConfig {
     this.minCleanFraction = 0.6,
     this.legitBelow = 35,
     this.susFrom = 60,
-    this.calibQuietMs = 20000,
+    this.calibQuietMinMs = 8000,
+    this.calibQuietMaxMs = 20000,
+    this.calibQuietPulseMs = 4000,
     this.calibMinWarmups = 3,
     this.calibMinChatMs = 15000,
     this.calibMaxWarmups = 3,
@@ -161,7 +163,19 @@ class ScoringConfig {
   final int susFrom;
 
   // --- Calibration (SPEC.md §5.2) ---
-  final int calibQuietMs;
+  /// The sit-still ends once the camera has the player's pulse: at least
+  /// [calibQuietPulseMs] of confident pulse, still fresh. Never before
+  /// [calibQuietMinMs], never after [calibQuietMaxMs] (SPEC.md decision 92).
+  /// Its job is the camera's: the SDK's pulse is a 12 s average that takes
+  /// about that long to come, and the first warm-up needs it for its beats.
+  final int calibQuietMinMs;
+  final int calibQuietMaxMs;
+
+  /// Confident pulse the sit-still waits for, counted as
+  /// [SignalLog.confidentCoverageMs] does: the first reading counts
+  /// [pulseMaxGapMs], each one after it the time since the last. So 4 s is
+  /// about 2 s after the pulse comes, and never one stray reading.
+  final int calibQuietPulseMs;
 
   /// Warm-up slots to cover before calibration can end: recall, compare
   /// and light (SPEC.md §11, decision 74). A slot is covered by Next on its
