@@ -98,32 +98,37 @@ class ProofPanel extends StatelessWidget {
               color: SusColors.ink.withValues(alpha: 0.82),
               borderRadius: BorderRadius.circular(12),
             ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Text(
-                  'PROOF PANEL · raw SmartSpectra',
-                  style: TextStyle(
-                    fontFamily: 'Menlo',
-                    fontFamilyFallback: ['Courier'],
-                    fontSize: 11,
-                    fontWeight: FontWeight.w700,
-                    color: SusColors.mustard,
-                  ),
-                ),
-                for (final l in lines)
-                  Text(
-                    l,
-                    style: const TextStyle(
+            // The panel sits above the screens' Scaffolds, where bare text
+            // gets Flutter's yellow double underline.
+            child: DefaultTextStyle(
+              style: const TextStyle(decoration: TextDecoration.none),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text(
+                    'PROOF PANEL · raw SmartSpectra',
+                    style: TextStyle(
                       fontFamily: 'Menlo',
                       fontFamilyFallback: ['Courier'],
-                      fontSize: 11.5,
-                      color: SusColors.cream,
-                      height: 1.3,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      color: SusColors.mustard,
                     ),
                   ),
-              ],
+                  for (final l in lines)
+                    Text(
+                      l,
+                      style: const TextStyle(
+                        fontFamily: 'Menlo',
+                        fontFamilyFallback: ['Courier'],
+                        fontSize: 11.5,
+                        color: SusColors.cream,
+                        height: 1.3,
+                      ),
+                    ),
+                ],
+              ),
             ),
           );
           // Sits over the camera, between the live transcript above and the
