@@ -14,10 +14,16 @@ class CameraPreview extends StatelessWidget {
   /// Mirror horizontally, selfie-style, for the front camera.
   final bool mirror;
 
+  /// Off iOS only: what stands in for the camera image. The demo film
+  /// (`test/demo_film_test.dart`) draws a face here. Null: a plain ink panel.
+  @visibleForTesting
+  static WidgetBuilder? debugStandIn;
+
   @override
   Widget build(BuildContext context) {
     if (defaultTargetPlatform != TargetPlatform.iOS) {
-      return const ColoredBox(color: SusColors.ink);
+      return debugStandIn?.call(context) ??
+          const ColoredBox(color: SusColors.ink);
     }
     return UiKitView(
       viewType: 'sus/camera_preview',

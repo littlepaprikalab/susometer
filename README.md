@@ -381,6 +381,9 @@ The people's timings are assumptions, not measurements. SPEC decision 80 has the
 - **Swift type check on Linux/macOS without Xcode:** `tool/swift_typecheck/run.sh` checks the
   native bridge against stand-in modules (the SmartSpectra one mirrors the 3.4.0 interface).
   Needs a Swift 6.2 toolchain. It's a quick sanity check, not a substitute for an Xcode build.
+- **Demo animatic:** `tool/demo_video/make.sh` renders a solo and a party game as a film, played
+  through the real screens by stand-in people with made-up signals, with numbered slots for real
+  clips. See [`docs/DEMO.md`](docs/DEMO.md#the-animatic-a-rehearsal-cut-made-without-a-phone).
 - **Sounds and icon** are generated: `python3 tool/gen_sfx.py`, `python3 tool/gen_icon.py`
   (needs Pillow).
 - **Claude Code cloud sessions** install Flutter through `.claude/hooks/session-start.sh`.
