@@ -71,6 +71,25 @@ The phone side stays the simulated app. For the submission, replace it too: scre
 beats on an iPhone (the table above) and cut that in, or record the whole thing for real and use
 the animatic only as the plan.
 
+**A real game first.** An iPhone screen recording of a real game can open the film:
+
+```bash
+tool/demo_video/make.sh --real my_game.mp4
+```
+
+`tool/demo_video/real.py` puts it in the same phone frame, uncut, with a panel beside it saying
+what each step is, after the title and a "Part 1 · Played for real" card. The animatic follows as
+part 2 (party) and part 3 (solo), and the closing card moves to the end. The steps in `real.py`
+describe the owner's recording of 2026-11-21 (a two-player party, Sam and Masa, one question
+each); another recording needs its own, as JSON:
+
+```bash
+tool/demo_video/make.sh --real my_game.mp4 --steps my_steps.json
+```
+
+Each step is `{"start": 0, "end": 7.5, "step": "Set up", "note": "..."}`, in the recording's own
+seconds. The recording's sound (the iPhone's host voice and the game's sounds) is kept.
+
 **Changing the script.** The two games are scripted in `test/demo_film_test.dart`: who says what,
 which button is tapped, how each stand-in reacts (`Take.calm`, `Take.uneasy`, `Take.rattled`), and
 where the film skips ahead. `FILM_DRY=1 flutter test test/demo_film_test.dart` plays it through in

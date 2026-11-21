@@ -12,6 +12,10 @@ picture for shot party-04 (see shots.md for what each shot shows, when and for
 how long). It's scaled to fill the 16:9 slot and cut to the shot's length; a
 shorter clip holds its last frame. Its sound is mixed in unless --mute-clips.
 
+With --real RECORDING (a real iPhone screen recording, see real.py), the film
+opens with it as part 1, then the party game, then solo. The animatic must
+have been rendered for that order (make.sh --real does both).
+
 Needs ffmpeg and numpy.
 """
 
@@ -135,19 +139,49 @@ def finish_part(out, name, clips, mute_clips):
     return events, used
 
 
+def real_length(out):
+    out_ = subprocess.run(
+        ["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0",
+         str(out / "real.mp4")],
+        capture_output=True, text=True, check=True,
+    )
+    return float(out_.stdout.strip())
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("out", type=Path, help="where the film was rendered")
     ap.add_argument("--clips", type=Path, help="real clips, named <shot id>.mp4")
     ap.add_argument("--mute-clips", action="store_true", help="leave the clips' sound out")
+    ap.add_argument("--real", type=Path,
+                    help="a real screen recording to open the film with (see real.py)")
+    ap.add_argument("--steps", type=Path, help="real.py --steps, for --real")
     args = ap.parse_args()
     out = args.out
     parts = [p for p in PARTS if (out / f"{p}.events.json").exists()]
     if not parts:
         sys.exit(f"Nothing rendered in {out}: run tool/demo_video/make.sh first.")
+    with_real = any(
+        json.loads((out / f"{p}.events.json").read_text()).get("withReal") for p in parts
+    )
+    if with_real:
+        real_mp4 = out / "real.mp4"
+        if args.real:
+            sys.path.insert(0, str(Path(__file__).parent))
+            import real
+            steps = real.DEFAULT_STEPS
+            if args.steps:
+                steps = [(x["start"], x["end"], x["step"], x.get("note", ""))
+                         for x in json.loads(args.steps.read_text())]
+            real.build(args.real, out, steps)
+        elif not real_mp4.exists():
+            sys.exit("The animatic was rendered to follow a real recording: pass --real.")
+        parts = [p for p in ["party", "solo"] if p in parts]
+    elif args.real:
+        sys.exit("Render the animatic for a real recording first: make.sh --real.")
 
     rows = []
-    offset = 0.0
+    offset = real_length(out) if with_real else 0.0
     replaced = []
     for name in parts:
         events, used = finish_part(out, name, args.clips, args.mute_clips)
@@ -164,10 +198,19 @@ def main():
         offset += events["duration"]
 
     listing = out / "parts.txt"
-    listing.write_text("".join(f"file '{p}.mp4'\n" for p in parts))
+    files = (["real"] if with_real else []) + parts
+    listing.write_text("".join(f"file '{p}.mp4'\n" for p in files))
     whole = out / "sus-o-meter-demo.mp4"
-    run("-f", "concat", "-safe", "0", "-i", listing, "-c", "copy",
-        "-movflags", "+faststart", whole)
+    if with_real:
+        # The real part was encoded apart from the others: encode the join
+        # again rather than splice streams that may not match.
+        run("-f", "concat", "-safe", "0", "-i", listing,
+            "-c:v", "libx264", "-preset", "medium", "-crf", "18", "-pix_fmt", "yuv420p",
+            "-c:a", "aac", "-b:a", "160k", "-ac", "2", "-ar", str(RATE),
+            "-movflags", "+faststart", whole)
+    else:
+        run("-f", "concat", "-safe", "0", "-i", listing, "-c", "copy",
+            "-movflags", "+faststart", whole)
 
     (out / "shots.json").write_text(json.dumps(rows, indent=1))
     lines = [
@@ -192,7 +235,7 @@ def main():
     (out / "shots.md").write_text("\n".join(lines) + "\n")
 
     print(f"{whole}  ({stamp(offset)})")
-    for name in parts:
+    for name in files:
         print(f"{out / (name + '.mp4')}")
     print(f"{out / 'shots.md'}  ({len(rows)} shots, {len(replaced)} with real clips)")
 

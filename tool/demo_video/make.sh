@@ -6,9 +6,16 @@
 #   tool/demo_video/make.sh                    # build/demo_video/sus-o-meter-demo.mp4
 #   tool/demo_video/make.sh --clips my_clips   # real clips over the stand-ins
 #   tool/demo_video/make.sh --clips my_clips --mix-only   # picture already rendered
+#   tool/demo_video/make.sh --real game.mp4    # a real screen recording as part 1
 #
 # Clips are named after the shot they replace (my_clips/party-04.mp4); the shot
-# list is build/demo_video/shots.md. Needs flutter, ffmpeg, python3 with numpy.
+# list is build/demo_video/shots.md. Needs flutter, ffmpeg, python3 with numpy
+# (and Pillow for --real).
+#
+# --real puts a real iPhone screen recording first (real.py lays it in the
+# film's phone frame, with a panel saying what each step is), then the party
+# animatic, then solo. Its steps are described in real.py; a different
+# recording needs --steps steps.json.
 #
 # The host's voice is piper (https://github.com/OHF-Voice/piper1-gpl) with a
 # British voice, installed into the output folder on the first run. Without
@@ -26,6 +33,8 @@ while [ $# -gt 0 ]; do
     --mix-only) RENDER=0; shift ;;
     --clips) MIX_ARGS+=(--clips "$2"); shift 2 ;;
     --mute-clips) MIX_ARGS+=(--mute-clips); shift ;;
+    --real) MIX_ARGS+=(--real "$(cd "$(dirname "$2")" && pwd)/$(basename "$2")"); export FILM_WITH_REAL=1; shift 2 ;;
+    --steps) MIX_ARGS+=(--steps "$2"); shift 2 ;;
     *) echo "Unknown option: $1" >&2; exit 2 ;;
   esac
 done

@@ -300,6 +300,8 @@ class Film {
       File('$outDir/$name.events.json').writeAsStringSync(
         const JsonEncoder.withIndent(' ').convert({
           'name': name,
+          // Rendered to follow a real recording (demo_film_test.dart).
+          'withReal': Platform.environment['FILM_WITH_REAL'] == '1',
           'fps': fps,
           'frames': frames,
           'duration': videoMs / 1000,

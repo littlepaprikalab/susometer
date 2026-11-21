@@ -207,6 +207,17 @@ extension on Film {
 /// Only when asked for (see the top of this file).
 final _skip = Film.outDir == null && Platform.environment['FILM_DRY'] == null;
 
+/// A real recording opens the film (make.sh --real): the order is real,
+/// party, solo, so the opening title is the real part's, the party is part
+/// 2, the solo part 3, and the closing card ends the solo game. Without one:
+/// solo (part 1), then party (part 2).
+final _withReal = Platform.environment['FILM_WITH_REAL'] == '1';
+
+const _closingCard = TitleCard('Sus-o-meter', [
+  'It reads stress, not truth.',
+  'Built with the Presage SmartSpectra SDK.',
+]);
+
 void main() {
   testWidgets('demo film: a solo game', skip: _skip, (tester) async {
     final film = Film(tester, 'solo');
@@ -222,17 +233,19 @@ void main() {
       ..setDecks(_decks)
       ..hasSeenHowToPlay = true;
 
+    if (!_withReal) {
+      await film.showCard(
+        const TitleCard('Sus-o-meter', [
+          'The party game that reads your pulse.',
+          'Not your mind.',
+        ]),
+        2600,
+      );
+    }
     await film.showCard(
-      const TitleCard('Sus-o-meter', [
-        'The party game that reads your pulse.',
-        'Not your mind.',
-      ]),
-      2600,
-    );
-    await film.showCard(
-      const TitleCard('Solo', [
+      TitleCard('Solo', const [
         'One player. The host asks the questions.',
-      ], kicker: 'PART 1'),
+      ], kicker: _withReal ? 'PART 3' : 'PART 1'),
       1800,
     );
 
@@ -407,6 +420,7 @@ void main() {
     await film.run(4800);
 
     expect(game.phase, GamePhase.leaderboard);
+    if (_withReal) await film.showCard(_closingCard, 3000);
     await film.finish();
   });
 
@@ -659,13 +673,7 @@ void main() {
     await film.run(3200);
     expect(game.phase, GamePhase.replay);
 
-    await film.showCard(
-      const TitleCard('Sus-o-meter', [
-        'It reads stress, not truth.',
-        'Built with the Presage SmartSpectra SDK.',
-      ]),
-      3000,
-    );
+    if (!_withReal) await film.showCard(_closingCard, 3000);
     await film.finish();
   });
 }
