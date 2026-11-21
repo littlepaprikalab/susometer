@@ -156,6 +156,8 @@ def main():
     ap.add_argument("--real", type=Path,
                     help="a real screen recording to open the film with (see real.py)")
     ap.add_argument("--steps", type=Path, help="real.py --steps, for --real")
+    ap.add_argument("--voice", type=Path, help="real.py --voice, for --real")
+    ap.add_argument("--voice-at", type=float, help="real.py --voice-at, for --real")
     args = ap.parse_args()
     out = args.out
     parts = [p for p in PARTS if (out / f"{p}.events.json").exists()]
@@ -173,7 +175,8 @@ def main():
             if args.steps:
                 steps = [(x["start"], x["end"], x["step"], x.get("note", ""))
                          for x in json.loads(args.steps.read_text())]
-            real.build(args.real, out, steps)
+            voice_at = real.DEFAULT_VOICE_AT if args.voice_at is None else args.voice_at
+            real.build(args.real, out, steps, voice=args.voice, voice_at=voice_at)
         elif not real_mp4.exists():
             sys.exit("The animatic was rendered to follow a real recording: pass --real.")
         parts = [p for p in ["party", "solo"] if p in parts]

@@ -2,6 +2,7 @@
 """Lays a real iPhone screen recording into the demo film's frame.
 
     python3 tool/demo_video/real.py RECORDING.mp4 OUT_DIR [--steps STEPS.json]
+        [--voice VOICE.m4a --voice-at SECONDS]
 
 Writes OUT_DIR/real.mp4: the film's opening title, a "Part 1 · Played for
 real" card, then the recording in the same phone frame as the animatic, with
@@ -15,14 +16,28 @@ Center comes down to stop the recording, say). Without it, the steps of the owne
 used (a two-player party, Sam and Masa, one question each); a different
 recording needs its own.
 
-Needs ffmpeg and Pillow.
+--voice adds a separate recording of the players' voices (a screen recording
+doesn't capture the mic while the app is using it), starting --voice-at
+seconds into the screen recording's picture. It's cleaned up (rumble, hiss,
+level) and mixed with the screen recording's own sound.
+
+The screen recording's sound is shifted to match its picture: iOS drops a
+little of it whenever the app switches its audio session (the mic on, the
+mic off), so after each switch it runs early. SCREEN_AUDIO_LEADS says by how
+much, from when; measured for the owner's recording by when a warm-up card
+or Call it! appears against when the host starts speaking. Another recording
+can pass its own with --audio-leads, or none.
+
+Needs ffmpeg, numpy and Pillow.
 """
 
 import argparse
 import json
 import subprocess
+import wave
 from pathlib import Path
 
+import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -76,6 +91,71 @@ DEFAULT_STEPS = [
     (174, 178.8, "And the winners are…",
      "Best poker face: Sam. Most sus: Masa. Nothing is saved; a new game wipes it."),
 ]
+
+
+# The owner's recording: (from this second of its sound, it runs this many
+# seconds ahead of the picture). The cuts fall in silence.
+SCREEN_AUDIO_LEADS = [(0, 0.19), (84, 0.49), (172, 0.62)]
+
+# The owner's voice memo starts this far into the recording's picture: 28.97 s
+# into its sound by cross-correlation (the memo hears the phone's host), plus
+# that sound's 0.19 s lead there, plus 0.05 s so the host the memo heard lands
+# on the host in the screen recording.
+DEFAULT_VOICE_AT = 29.25
+
+RATE = 48000
+
+# Rumble and hiss out, the quiet room gated, the voice brought up to sit with
+# the host.
+VOICE_FILTER = (
+    "highpass=f=90,lowpass=f=9000,afftdn=nf=-50:nr=15,volume=18dB,"
+    "agate=threshold=0.045:ratio=6:range=0.05:attack=8:release=250,"
+    "acompressor=threshold=-24dB:ratio=3:attack=5:release=150:makeup=4dB,"
+    "alimiter=limit=0.9"
+)
+
+
+def decode(path, channels, af=None):
+    """A sound file as float samples at RATE, shape (n, channels)."""
+    cmd = ["ffmpeg", "-loglevel", "error", "-i", str(path), "-vn"]
+    if af:
+        cmd += ["-af", af]
+    cmd += ["-f", "f32le", "-ac", str(channels), "-ar", str(RATE), "-"]
+    raw = subprocess.run(cmd, capture_output=True, check=True).stdout
+    return np.frombuffer(raw, dtype=np.float32).reshape(-1, channels)
+
+
+def soundtrack(recording, length, path, leads, voice=None, voice_at=0.0):
+    """The recording's sound put back in step with its picture, plus the voice."""
+    screen = decode(recording, 2)
+    n = int(length * RATE)
+    track = np.zeros((n, 2), dtype=np.float32)
+    bounds = [a for a, _ in leads] + [len(screen) / RATE]
+    for (start, lead), end in zip(leads or [(0, 0.0)], bounds[1:] or [len(screen) / RATE]):
+        seg = screen[int(start * RATE):int(end * RATE)] * 10 ** (-2 / 20)
+        at = int((start + lead) * RATE)
+        stop = min(n, at + len(seg))
+        if stop > at:
+            track[at:stop] += seg[: stop - at]
+    if voice is not None:
+        v = decode(voice, 1, VOICE_FILTER)[:, 0]
+        at = int(voice_at * RATE)
+        skip = max(0, -at)
+        at = max(0, at)
+        v = v[skip:]
+        stop = min(n, at + len(v))
+        if stop > at:
+            track[at:stop] += v[: stop - at, None]
+    fade = int(0.4 * RATE)
+    track[-fade:] *= np.linspace(1, 0, fade, dtype=np.float32)[:, None]
+    peak = float(np.abs(track).max()) or 1.0
+    if peak > 0.95:
+        track *= 0.95 / peak
+    with wave.open(str(path), "wb") as f:
+        f.setnchannels(2)
+        f.setsampwidth(2)
+        f.setframerate(RATE)
+        f.writeframes((track * 32767).astype("<i2").tobytes())
 
 
 def font(name, size):
@@ -212,10 +292,12 @@ def step_panel(path, step, note):
     img.save(path)
 
 
-def build(recording, out, steps):
+def build(recording, out, steps, leads=SCREEN_AUDIO_LEADS, voice=None, voice_at=DEFAULT_VOICE_AT):
     work = out / "real"
     work.mkdir(parents=True, exist_ok=True)
     length = min(duration(recording), max(end for _, end, _, _ in steps))
+    sound = work / "sound.wav"
+    soundtrack(recording, length, sound, leads, voice, voice_at)
 
     title_card(work / "card-title.png", "Sus-o-meter",
                ["The party game that reads your pulse.", "Not your mind."])
@@ -243,16 +325,15 @@ def build(recording, out, steps):
         "-i", recording,
         "-f", "concat", "-safe", "0", "-i", work / "steps.txt",
         "-loop", "1", "-i", work / "frame.png",
+        "-i", sound,
         "-filter_complex",
         f"color=c=0x{INK[0]:02x}{INK[1]:02x}{INK[2]:02x}:s={W}x{H}:r={FPS}:d={length:.3f}[bg];"
         f"[0:v]fps={FPS},scale={sw}:-2,crop={sw}:{sh}:0:(ih-{sh})/2,setsar=1[rec];"
         f"[bg][rec]overlay={x + BEZEL_W}:{y + BEZEL_W}:shortest=1[a];"
         f"[2:v]format=rgba[frame];[a][frame]overlay=0:0:shortest=1[b];"
         f"[1:v]fps={FPS},format=rgba[steps];"
-        f"[b][steps]overlay=0:0:eof_action=repeat,format=yuv420p[v];"
-        f"[0:a]aresample=48000,volume=-2dB,alimiter=limit=0.9,"
-        f"afade=t=out:st={length - 0.4:.3f}:d=0.4[a0]",
-        "-map", "[v]", "-map", "[a0]", "-t", f"{length:.3f}",
+        f"[b][steps]overlay=0:0:eof_action=repeat,format=yuv420p[v]",
+        "-map", "[v]", "-map", "3:a", "-t", f"{length:.3f}",
         "-c:v", "libx264", "-preset", "medium", "-crf", "18", "-pix_fmt", "yuv420p",
         "-c:a", "aac", "-b:a", "160k", "-ac", "2", "-ar", "48000",
         body,
@@ -282,12 +363,20 @@ def main():
     ap.add_argument("recording", type=Path)
     ap.add_argument("out", type=Path)
     ap.add_argument("--steps", type=Path, help="JSON list of {start, end, step, note}")
+    ap.add_argument("--voice", type=Path, help="a recording of the players' voices")
+    ap.add_argument("--voice-at", type=float, default=DEFAULT_VOICE_AT,
+                    help="where the voice recording starts in the picture, in seconds")
+    ap.add_argument("--audio-leads", type=Path,
+                    help="JSON [[from_s, lead_s], ...] for the screen recording's sound; [] for none")
     args = ap.parse_args()
     steps = DEFAULT_STEPS
     if args.steps:
         steps = [(s["start"], s["end"], s["step"], s.get("note", ""))
                  for s in json.loads(args.steps.read_text())]
-    final = build(args.recording, args.out, steps)
+    leads = SCREEN_AUDIO_LEADS
+    if args.audio_leads:
+        leads = [tuple(x) for x in json.loads(args.audio_leads.read_text())]
+    final = build(args.recording, args.out, steps, leads, args.voice, args.voice_at)
     print(f"{final}  ({duration(final):.1f} s)")
 
 

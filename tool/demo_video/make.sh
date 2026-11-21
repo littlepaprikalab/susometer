@@ -7,6 +7,7 @@
 #   tool/demo_video/make.sh --clips my_clips   # real clips over the stand-ins
 #   tool/demo_video/make.sh --clips my_clips --mix-only   # picture already rendered
 #   tool/demo_video/make.sh --real game.mp4    # a real screen recording as part 1
+#   tool/demo_video/make.sh --real game.mp4 --voice voices.m4a   # with the players' voices
 #
 # Clips are named after the shot they replace (my_clips/party-04.mp4); the shot
 # list is build/demo_video/shots.md. Needs flutter, ffmpeg, python3 with numpy
@@ -35,6 +36,8 @@ while [ $# -gt 0 ]; do
     --mute-clips) MIX_ARGS+=(--mute-clips); shift ;;
     --real) MIX_ARGS+=(--real "$(cd "$(dirname "$2")" && pwd)/$(basename "$2")"); export FILM_WITH_REAL=1; shift 2 ;;
     --steps) MIX_ARGS+=(--steps "$2"); shift 2 ;;
+    --voice) MIX_ARGS+=(--voice "$(cd "$(dirname "$2")" && pwd)/$(basename "$2")"); shift 2 ;;
+    --voice-at) MIX_ARGS+=(--voice-at "$2"); shift 2 ;;
     *) echo "Unknown option: $1" >&2; exit 2 ;;
   esac
 done
