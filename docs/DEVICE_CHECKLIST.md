@@ -159,6 +159,11 @@ Settings → **Signal check** → **Start both**. Allow microphone and speech re
   mid-sentence, and when you answer right away your first words are in the transcript (the mic
   reopens).
 - [ ] Double-tap the question card fast: the answer must **not** end.
+- [ ] **A short answer (decision 93):** with the Proof Panel on, give a two-word answer and tap
+  *Final answer*. If `tA0` shows `(words)`, the camera missed the talk: note how far `tA0` is from
+  when you actually started (a video helps). The Verdict's pause should be close to your real
+  pause, and the chart shades the answer. With no answer at all, the chart has a thin rule at
+  *Final answer* and the legend says so.
 - [ ] Hold the phone the way you would to play, by its top edge too: the card isn't tapped by
   accident, and the button on it is easy to spot at arm's length (decision 85).
 - [ ] No host bubble on the question screens, party or solo: the camera is in the same place

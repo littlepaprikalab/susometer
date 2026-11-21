@@ -8,6 +8,7 @@ import 'package:susometer/game/game_controller.dart';
 import 'package:susometer/game/scoring.dart';
 import 'package:susometer/game/models.dart';
 import 'package:susometer/presage/presage_models.dart';
+import 'package:susometer/screens/result_screens.dart';
 import 'package:susometer/voice/speech_service.dart';
 import 'package:susometer/voice/turn_detector.dart';
 
@@ -1114,6 +1115,46 @@ void main() {
       w.game.differentQuestion();
       expect(w.game.questionText, q);
       w.dispose();
+    });
+  });
+
+  test('solo: an answer heard but missed by the camera starts at the words, '
+      'not at Final answer, and the Verdict chart shades it', () {
+    fakeAsync((async) {
+      // The owner's two-word answer: recognition heard "Chair omelette",
+      // the camera's talking flag never fired, and the pause ran to the tap.
+      for (final heard in [true, false]) {
+        final w = World(async);
+        w.game.setMode(GameMode.solo);
+        w.startGame(['Sam']);
+        w.calibrate();
+        w.elapse(100);
+        expect(w.game.phase, GamePhase.answer);
+        final d = w.game.detector!;
+        w.game.readyToAnswer();
+        w.elapse(3000);
+        final saidAt = w.now;
+        if (heard) w.say('Chair omelette');
+        w.elapse(4000);
+        w.game.finalAnswer();
+        w.until(() => w.game.phase != GamePhase.settle, what: 'settle');
+        final r = w.game.currentResult!;
+        final t = r.timing!;
+        if (heard) {
+          expect(t.tA0, saidAt - 1000);
+          expect(d.answerStartFromWords, isTrue);
+          expect(
+            r.features!.hesitationS,
+            closeTo((saidAt - 1000 - t.hesitationFromMs) / 1000, 0.01),
+          );
+          expect(w.game.live.hesitationS, r.features!.hesitationS);
+          expect(answerMarkFor(r), AnswerMark.shaded);
+        } else {
+          expect(t.tA0, isNull);
+          expect(answerMarkFor(r), AnswerMark.finalAnswer);
+        }
+        w.dispose();
+      }
     });
   });
 

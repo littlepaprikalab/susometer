@@ -13,6 +13,10 @@ import 'tokens.dart';
 /// right over at least [minSpanMs], so the line draws itself across the first
 /// seconds, then compresses. Gaps longer than [maxGapMs] (no confident
 /// reading) break the line instead of joining across them.
+///
+/// The Verdict and Replay mark the answer: shaded from when the player
+/// started talking to its end ([highlight]), or, when no start was ever
+/// heard, a thin rule at the Final answer ([marker]).
 class PulseSparkline extends StatelessWidget {
   const PulseSparkline({
     super.key,
@@ -24,6 +28,7 @@ class PulseSparkline extends StatelessWidget {
     this.minSpanMs = 15000,
     this.maxGapMs = 4000,
     this.highlight,
+    this.marker,
     this.endDot = true,
   });
 
@@ -38,6 +43,10 @@ class PulseSparkline extends StatelessWidget {
 
   /// A stretch to shade behind the line, e.g. the answer (start ms, end ms).
   final (int, int)? highlight;
+
+  /// A moment to mark with a thin rule behind the line, e.g. the Final
+  /// answer tap when no answer start was heard (ms).
+  final int? marker;
 
   /// Mark the latest reading with a dot (for a live line).
   final bool endDot;
@@ -57,6 +66,7 @@ class PulseSparkline extends StatelessWidget {
           minSpanMs: minSpanMs,
           maxGapMs: maxGapMs,
           highlight: highlight,
+          marker: marker,
           endDot: endDot,
         ),
       ),
@@ -74,6 +84,7 @@ class SparklinePainter extends CustomPainter {
     required this.minSpanMs,
     required this.maxGapMs,
     this.highlight,
+    this.marker,
     this.endDot = true,
   });
 
@@ -85,9 +96,14 @@ class SparklinePainter extends CustomPainter {
   final int minSpanMs;
   final int maxGapMs;
   final (int, int)? highlight;
+  final int? marker;
   final bool endDot;
 
   static const _stroke = 2.5;
+
+  /// The [marker] rule's width: thinner than the pulse line, so it reads as
+  /// a reference, not data.
+  static const markerWidth = 2.0;
 
   /// The vertical scale: (center BPM, half range BPM).
   (double, double) scale() {
@@ -123,6 +139,17 @@ class SparklinePainter extends CustomPainter {
           const Radius.circular(4),
         ),
         Paint()..color = SusColors.mustard.withValues(alpha: 0.4),
+      );
+    }
+    final mark = marker;
+    if (mark != null) {
+      final mx = x(mark);
+      canvas.drawLine(
+        Offset(mx, 0),
+        Offset(mx, size.height),
+        Paint()
+          ..color = SusColors.brown
+          ..strokeWidth = markerWidth,
       );
     }
     if (baseline != null) {
@@ -182,6 +209,7 @@ class SparklinePainter extends CustomPainter {
       old.nowMs != nowMs ||
       old.baseline != baseline ||
       old.highlight != highlight ||
+      old.marker != marker ||
       old.points.length != points.length ||
       (points.isNotEmpty && old.points.last != points.last);
 }

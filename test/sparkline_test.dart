@@ -100,6 +100,26 @@ void main() {
       );
     });
 
+    test('no answer start heard: a rule at the Final answer, no band', () {
+      final canvas = _Canvas();
+      SparklinePainter(
+        points: const [(0, 70), (1000, 72), (2000, 71)],
+        baseline: 70,
+        fromMs: 0,
+        nowMs: 15000,
+        minHalfRange: 12,
+        minSpanMs: 0,
+        maxGapMs: 4000,
+        marker: 9000,
+        endDot: false,
+      ).paint(canvas, const Size(150, 30));
+      expect(canvas.rrects, isEmpty);
+      final rule = canvas.lines.where((l) => l.$1.dx == l.$2.dx).single;
+      expect(rule.$1.dx, closeTo(90, 0.01), reason: '9 of 15 s');
+      expect(rule.$1.dy, 0);
+      expect(rule.$2.dy, 30, reason: 'full height');
+    });
+
     test('no readings yet: only the normal line, no crash', () {
       final canvas = _Canvas();
       painter(const [], baseline: 70).paint(canvas, const Size(100, 30));

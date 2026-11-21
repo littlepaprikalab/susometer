@@ -87,7 +87,9 @@ class ProofPanel extends StatelessWidget {
               'question waits for a fresh pulse '
                   '${((game.nowMs - game.pulseWaitSinceMs) / 1000).toStringAsFixed(0)}s',
             if (d != null)
-              'tQ0 ${rel(d.tQ0)} tQ1 ${rel(d.tQ1)} tA0 ${rel(d.tA0)} tA1 ${rel(d.tA1)}'
+              'tQ0 ${rel(d.tQ0)} tQ1 ${rel(d.tQ1)} '
+                  'tA0 ${rel(d.tA0)}${d.answerStartFromWords ? '(words)' : ''} '
+                  'tA1 ${rel(d.tA1)}'
                   '${d.questionEndReason == null ? '' : ' (${d.questionEndReason!.name})'}',
           ];
           final panel = Container(
