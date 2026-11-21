@@ -10,6 +10,7 @@ class TurnConfig {
     this.speechLevelThreshold = 0.45,
     this.answerTailMs = 4000,
     this.lateWordsMs = 1000,
+    this.wordsLagMs = 1000,
     this.tapAllowanceMs = 1500,
     this.maxAnswerMs = 60000,
     this.maxQuestionMs = 60000,
@@ -32,6 +33,12 @@ class TurnConfig {
   /// Words heard this soon after the player stops talking are taken as
   /// theirs, arriving late from recognition, not as the asker's.
   final int lateWordsMs;
+
+  /// Solo: how long recognition takes to deliver the first words of an
+  /// answer. When the camera's talking flag never fires, the answer starts
+  /// this long before its first words arrive (never before the question
+  /// ended), so the pause isn't stretched to the Final answer tap.
+  final int wordsLagMs;
 
   /// A tap before answering (Done asking, solo's Ready to answer) takes a
   /// moment, and the warm-ups the pause is compared with have none, so up
@@ -173,6 +180,14 @@ class TurnDetector {
   int? tQ1;
   int? tA0;
   int? tA1;
+
+  /// [tA0] came from recognized words, not the camera's talking flag (solo
+  /// only). A talk start the camera dates before those words arrived still
+  /// replaces it.
+  bool answerStartFromWords = false;
+
+  /// When the words behind a word-based [tA0] arrived.
+  int? _wordsArrivedMs;
   int? hesitationFromMs;
   QuestionEndReason? questionEndReason;
   int? lastAskerSpeechMs;
@@ -199,8 +214,10 @@ class TurnDetector {
     return end == null || tMs - end >= config.lateWordsMs;
   }
 
-  /// Recognized speech (new partial text) at [tMs].
-  List<TurnEvent> onSpeech(int tMs) {
+  /// Recognized speech (new partial text) at [tMs]. [canStartAnswer] is
+  /// false for words said before the question ended that arrive after it
+  /// (recognition is late): in solo they can't start the answer.
+  List<TurnEvent> onSpeech(int tMs, {bool canStartAnswer = true}) {
     if (answerEnded) return const [];
     if (!questionEnded) {
       if (_askerCouldSpeak(tMs)) {
@@ -211,6 +228,8 @@ class TurnDetector {
           return [EarlyAnswerWithdrawn(tMs)];
         }
       }
+    } else if (!party && canStartAnswer && tA0 == null) {
+      return _startFromWords(tMs);
     } else if (_talk.talking || _talk.rawTalking || _answerStillOpen(tMs)) {
       // Once the player has started answering, new words keep the answer
       // open even if SmartSpectra's talking flag drops out for a moment,
@@ -219,6 +238,23 @@ class TurnDetector {
       lastPlayerActivityMs = math.max(lastPlayerActivityMs ?? 0, tMs);
     }
     return const [];
+  }
+
+  /// Solo: words heard after the question ended, with no talk start from
+  /// the camera, are the answer starting. Only the player is answering, and
+  /// the host is never in the transcript (half-duplex), so nobody else's
+  /// words can land here. They count at once, even while the talking flag
+  /// is up but not yet confirmed: a flag that drops within
+  /// [TurnConfig.talkStartDebounceMs] never confirms, and would leave the
+  /// answer with no start. If it does confirm, its start replaces this one
+  /// (see [_onTalkStart]).
+  List<TurnEvent> _startFromWords(int tMs) {
+    final start = math.max(tQ1!, tMs - config.wordsLagMs);
+    tA0 = start;
+    answerStartFromWords = true;
+    _wordsArrivedMs = tMs;
+    lastPlayerActivityMs = math.max(lastPlayerActivityMs ?? tMs, tMs);
+    return [AnswerStarted(start)];
   }
 
   /// The player has started answering and was last active within
@@ -323,8 +359,15 @@ class TurnDetector {
       return const [];
     }
     lastPlayerActivityMs = math.max(lastPlayerActivityMs ?? 0, t);
-    if (tA0 == null) {
+    final start = tA0;
+    // Words only estimate when the answer began. A talk start the camera
+    // dates before they arrived is when that speech began, the better
+    // reading; one dated after them is a later talk.
+    final words = _wordsArrivedMs;
+    if (start == null ||
+        (answerStartFromWords && words != null && t < words && t != start)) {
       tA0 = t;
+      answerStartFromWords = false;
       return [AnswerStarted(t)];
     }
     return const [];

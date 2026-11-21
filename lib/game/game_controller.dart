@@ -2182,7 +2182,14 @@ class GameController extends ChangeNotifier {
       _answerTranscript.add(e);
       live.answerText = _answerTranscript.text;
     }
-    if (!paused) _apply(detector?.onSpeech(e.tMs) ?? const []);
+    // Solo: the segment open while the question was up closes when it ends,
+    // and its last words arrive after that. They were said before it
+    // ended, so only the answer's own segment can start the answer
+    // (SPEC.md decision 93).
+    final ownSegment = answerFrom != null && e.segment >= answerFrom;
+    if (!paused) {
+      _apply(detector?.onSpeech(e.tMs, canStartAnswer: ownSegment) ?? const []);
+    }
     // After the detector: the asker carrying on hands an early answer's
     // words back to the question.
     live.askerText = _questionSoFar;

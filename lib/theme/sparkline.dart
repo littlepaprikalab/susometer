@@ -13,6 +13,15 @@ import 'tokens.dart';
 /// right over at least [minSpanMs], so the line draws itself across the first
 /// seconds, then compresses. Gaps longer than [maxGapMs] (no confident
 /// reading) break the line instead of joining across them.
+///
+/// The Verdict and Replay mark the answer: shaded from when the player
+/// started talking to its end ([highlight]), or, when no start was ever
+/// heard, a thin rule at the Final answer ([marker]).
+///
+/// With [deltaScale] (the Verdict), the right edge labels the scale in BPM
+/// above and below the normal (+10 / −10, faint rules across), so a flat
+/// line reads as steady rather than as no data. One scale, in the unit the
+/// score uses: the BPM themselves are in the card's peak and legend.
 class PulseSparkline extends StatelessWidget {
   const PulseSparkline({
     super.key,
@@ -24,7 +33,9 @@ class PulseSparkline extends StatelessWidget {
     this.minSpanMs = 15000,
     this.maxGapMs = 4000,
     this.highlight,
+    this.marker,
     this.endDot = true,
+    this.deltaScale = false,
   });
 
   /// (time ms, BPM), oldest first.
@@ -39,8 +50,16 @@ class PulseSparkline extends StatelessWidget {
   /// A stretch to shade behind the line, e.g. the answer (start ms, end ms).
   final (int, int)? highlight;
 
+  /// A moment to mark with a thin rule behind the line, e.g. the Final
+  /// answer tap when no answer start was heard (ms).
+  final int? marker;
+
   /// Mark the latest reading with a dot (for a live line).
   final bool endDot;
+
+  /// Label the scale at the right edge, in BPM from the normal. Needs a
+  /// [baseline].
+  final bool deltaScale;
 
   @override
   Widget build(BuildContext context) {
@@ -57,7 +76,20 @@ class PulseSparkline extends StatelessWidget {
           minSpanMs: minSpanMs,
           maxGapMs: maxGapMs,
           highlight: highlight,
+          marker: marker,
           endDot: endDot,
+          deltaLabels: deltaScale
+              ? SusText.body(
+                  11,
+                  weight: FontWeight.w600,
+                  color: SusColors.brown,
+                )
+              : null,
+          // Only the scale has text: the live card needn't follow the
+          // text size.
+          textScaler: deltaScale
+              ? MediaQuery.textScalerOf(context)
+              : TextScaler.noScaling,
         ),
       ),
     );
@@ -74,7 +106,10 @@ class SparklinePainter extends CustomPainter {
     required this.minSpanMs,
     required this.maxGapMs,
     this.highlight,
+    this.marker,
     this.endDot = true,
+    this.deltaLabels,
+    this.textScaler = TextScaler.noScaling,
   });
 
   final List<(int, double)> points;
@@ -85,9 +120,54 @@ class SparklinePainter extends CustomPainter {
   final int minSpanMs;
   final int maxGapMs;
   final (int, int)? highlight;
+  final int? marker;
   final bool endDot;
 
+  /// The style of the delta scale's labels; null draws no scale.
+  final TextStyle? deltaLabels;
+  final TextScaler textScaler;
+
   static const _stroke = 2.5;
+
+  /// Space between the plot and the delta scale's labels.
+  static const labelGap = 6.0;
+
+  /// The BPM from the normal that the delta scale labels, either side: the
+  /// largest round step well inside [half], so its label never sits on the
+  /// chart's edge (10 at the usual ±12).
+  static int deltaTick(double half) {
+    const steps = [5, 10, 15, 20, 25, 30, 40, 50, 60, 80, 100];
+    var tick = steps.first;
+    for (final s in steps) {
+      if (s <= half * 0.85) tick = s;
+    }
+    return tick;
+  }
+
+  /// The delta scale's labels, top first, laid out: null when there's no
+  /// scale to draw. The caller disposes them.
+  List<(int, TextPainter)>? _deltaLabels(double half) {
+    final style = deltaLabels;
+    if (style == null || baseline == null) return null;
+    final tick = deltaTick(half);
+    if (tick > half) return null;
+    return [
+      for (final d in [tick, -tick])
+        (
+          d,
+          TextPainter(
+            text: TextSpan(text: d > 0 ? '+$d' : '\u2212${-d}', style: style),
+            textDirection: TextDirection.ltr,
+            textScaler: textScaler,
+            maxLines: 1,
+          )..layout(),
+        ),
+    ];
+  }
+
+  /// The [marker] rule's width: thinner than the pulse line, so it reads as
+  /// a reference, not data.
+  static const markerWidth = 2.0;
 
   /// The vertical scale: (center BPM, half range BPM).
   (double, double) scale() {
@@ -107,10 +187,31 @@ class SparklinePainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     final (center, half) = scale();
     const pad = _stroke + 1;
+    final labels = _deltaLabels(half);
+    final gutter = labels == null
+        ? 0.0
+        : labels.map((l) => l.$2.width).reduce(math.max) + labelGap;
+    // The plot stops short of the labels, so the line never runs under them.
+    final plotW = math.max(size.width - gutter, 0.0);
     final span = math.max(math.max(nowMs - fromMs, minSpanMs), 1).toDouble();
-    double x(int t) => ((t - fromMs) / span).clamp(0.0, 1.0) * size.width;
+    double x(int t) => ((t - fromMs) / span).clamp(0.0, 1.0) * plotW;
     double y(double v) =>
         size.height / 2 - (v - center) / half * (size.height / 2 - pad);
+
+    if (labels != null) {
+      final rule = Paint()
+        ..color = SusColors.unlit
+        ..strokeWidth = 1;
+      for (final (d, label) in labels) {
+        final ly = y(center + d);
+        canvas.drawLine(Offset(0, ly), Offset(plotW, ly), rule);
+        final top = (ly - label.height / 2)
+            .clamp(0.0, math.max(size.height - label.height, 0.0))
+            .toDouble();
+        label.paint(canvas, Offset(size.width - label.width, top));
+        label.dispose();
+      }
+    }
 
     final band = highlight;
     if (band != null && band.$2 > band.$1) {
@@ -125,15 +226,26 @@ class SparklinePainter extends CustomPainter {
         Paint()..color = SusColors.mustard.withValues(alpha: 0.4),
       );
     }
+    final mark = marker;
+    if (mark != null) {
+      final mx = x(mark);
+      canvas.drawLine(
+        Offset(mx, 0),
+        Offset(mx, size.height),
+        Paint()
+          ..color = SusColors.brown
+          ..strokeWidth = markerWidth,
+      );
+    }
     if (baseline != null) {
       final dash = Paint()
         ..color = SusColors.brown
         ..strokeWidth = 1.5;
       final by = y(center);
-      for (var dx = 0.0; dx < size.width; dx += 7) {
+      for (var dx = 0.0; dx < plotW; dx += 7) {
         canvas.drawLine(
           Offset(dx, by),
-          Offset(math.min(dx + 4, size.width), by),
+          Offset(math.min(dx + 4, plotW), by),
           dash,
         );
       }
@@ -182,6 +294,9 @@ class SparklinePainter extends CustomPainter {
       old.nowMs != nowMs ||
       old.baseline != baseline ||
       old.highlight != highlight ||
+      old.marker != marker ||
+      old.deltaLabels != deltaLabels ||
+      old.textScaler != textScaler ||
       old.points.length != points.length ||
       (points.isNotEmpty && old.points.last != points.last);
 }

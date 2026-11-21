@@ -499,6 +499,142 @@ void main() {
     });
   });
 
+  group('solo: words start the answer when the camera misses it', () {
+    test('heard with no talking flag: the answer starts 1 s before the '
+        'first words arrived, not at the Final answer tap', () {
+      final s = Script(solo());
+      s.hostDone(4000);
+      s.speech(6500);
+      s.speech(7300);
+      s.finalAnswer(9000);
+      s.run(9500);
+      final t = s.detector.timing();
+      expect(t.tA0, 5500);
+      expect(s.detector.answerStartFromWords, isTrue);
+      expect(s.first<AnswerStarted>()!.tMs, 5500);
+      expect(t.tA0! - t.hesitationFromMs, 1500, reason: 'the pause');
+      expect(t.tA1, 9000);
+    });
+
+    test('never before the question ended', () {
+      final s = Script(solo());
+      s.hostDone(4000);
+      s.speech(4400);
+      s.run(5000);
+      expect(s.detector.tA0, 4000);
+    });
+
+    test('a talk start the camera dates earlier replaces the words', () {
+      final s = Script(solo());
+      s.hostDone(4000);
+      s.speech(6500);
+      // The camera's edge for 5 s arrives late, in a batch after the words.
+      s.at(6600, (d) => d.onPlayerTalkEdge(true, 5000));
+      s.run(7000);
+      expect(s.detector.tA0, 5000);
+      expect(s.detector.answerStartFromWords, isFalse);
+      expect(s.events.whereType<AnswerStarted>().map((e) => e.tMs), [
+        5500,
+        5000,
+      ]);
+    });
+
+    test('a talk start dated after the words arrived is a later talk: the '
+        'words stand', () {
+      final s = Script(solo());
+      s.hostDone(4000);
+      s.speech(6500);
+      s.talk(6600, true);
+      s.run(7500);
+      expect(s.detector.tA0, 5500);
+      expect(s.detector.answerStartFromWords, isTrue);
+      expect(s.events.whereType<AnswerStarted>().length, 1);
+    });
+
+    test('a talk start dated between the estimate and the words is the '
+        'better reading', () {
+      final s = Script(solo());
+      s.hostDone(4000);
+      s.speech(6500); // estimate 5500
+      s.at(6600, (d) => d.onPlayerTalkEdge(true, 6000));
+      s.run(7000);
+      expect(s.detector.tA0, 6000);
+      expect(s.detector.answerStartFromWords, isFalse);
+    });
+
+    test('a talking flag already up: its start wins once it confirms', () {
+      final s = Script(solo());
+      s.hostDone(4000);
+      s.talk(5000, true);
+      s.speech(5100); // before the 200 ms debounce confirms the talk
+      s.run(6000);
+      expect(s.detector.tA0, 5000);
+      expect(s.detector.answerStartFromWords, isFalse);
+    });
+
+    test('a talking flag that drops before it confirms: the words stand '
+        '(PR #32 review)', () {
+      final s = Script(solo());
+      s.hostDone(4000);
+      s.talk(5000, true);
+      s.speech(5100);
+      s.talk(5150, false); // under the 200 ms debounce: never confirmed
+      s.finalAnswer(12000);
+      s.run(12500);
+      final t = s.detector.timing();
+      expect(t.tA0, 4100, reason: '1 s before the words, not the tap');
+      expect(s.detector.answerStartFromWords, isTrue);
+    });
+
+    test('the camera seeing it first: words change nothing', () {
+      final s = Script(solo());
+      s.hostDone(4000);
+      s.talk(5200, true);
+      s.talk(6500, false);
+      s.speech(7000);
+      s.run(8000);
+      expect(s.detector.tA0, 5200);
+      expect(s.detector.answerStartFromWords, isFalse);
+    });
+
+    test('words said before the question ended, arriving late, never '
+        'start it', () {
+      final s = Script(solo());
+      s.hostDone(4000);
+      s.at(4600, (d) => d.onSpeech(4600, canStartAnswer: false));
+      s.run(5000);
+      expect(s.detector.tA0, isNull);
+      expect(s.events.whereType<AnswerStarted>(), isEmpty);
+      s.speech(7000);
+      s.run(7500);
+      expect(s.detector.tA0, 6000, reason: "the answer's own words");
+    });
+
+    test('words after the minute: still scored as no answer', () {
+      final s = Script(solo());
+      s.hostDone(4000);
+      s.speech(90000);
+      s.finalAnswer(95000);
+      s.run(95000);
+      final t = s.detector.timing();
+      expect(t.tA1, 64000);
+      expect(t.tA0, isNull);
+    });
+
+    test('party: words alone never start the answer (they may be the '
+        "room's)", () {
+      final s = Script(party());
+      s.speech(1000);
+      s.doneAsking(2000);
+      s.speech(4000);
+      s.finalAnswer(9000);
+      s.run(9500);
+      expect(s.detector.tA0, isNull);
+      expect(s.detector.answerStartFromWords, isFalse);
+      expect(s.detector.tA1, 9000);
+    });
+  });
+
   group('TalkTracker', () {
     test(
       'confirms starts after 200 ms and ends after 500 ms, at edge times',

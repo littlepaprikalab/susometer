@@ -1006,7 +1006,18 @@ class _ReplayScreenState extends State<ReplayScreen> {
                 onPressed: game.backToLeaderboard,
               ),
               const SizedBox(width: 12),
-              Text('The replay', style: SusText.display(32)),
+              // Shrinks rather than overflows on a small phone at large text.
+              Expanded(
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    'The replay',
+                    maxLines: 1,
+                    style: SusText.display(32),
+                  ),
+                ),
+              ),
             ],
           ),
           const SizedBox(height: 14),
@@ -1300,12 +1311,38 @@ class _TraceNumbers extends StatelessWidget {
   }
 }
 
-/// A question's pulse over the scored window, with the answer shaded and the
+/// How a result's chart marks the answer.
+enum AnswerMark {
+  /// Shaded from when the player started talking to the answer's end.
+  shaded,
+
+  /// No start was heard: a rule at the Final answer, where the pause was
+  /// measured to.
+  finalAnswer,
+
+  /// No timing to mark.
+  none,
+}
+
+AnswerMark answerMarkFor(QuestionResult result) {
+  final timing = result.timing;
+  if (timing == null) return AnswerMark.none;
+  final start = timing.tA0;
+  return start != null && timing.tA1 > start
+      ? AnswerMark.shaded
+      : AnswerMark.finalAnswer;
+}
+
+/// A question's pulse over the scored window, with the answer marked and the
 /// player's normal dashed (Verdict and Replay).
 class PulseTrace extends StatelessWidget {
-  const PulseTrace({super.key, required this.result});
+  const PulseTrace({super.key, required this.result, this.deltaScale = false});
 
   final QuestionResult result;
+
+  /// Label the scale in BPM from the normal (the Verdict; a Replay row is
+  /// too short for it).
+  final bool deltaScale;
 
   @override
   Widget build(BuildContext context) {
@@ -1313,6 +1350,7 @@ class PulseTrace extends StatelessWidget {
     final trace = result.pulseTrace;
     final from = timing?.tQ0 ?? trace.first.$1;
     final to = result.traceEndMs ?? trace.last.$1;
+    final mark = answerMarkFor(result);
     return PulseSparkline(
       points: trace,
       baseline: result.basePulse,
@@ -1320,7 +1358,9 @@ class PulseTrace extends StatelessWidget {
       nowMs: to,
       minSpanMs: 0,
       endDot: false,
-      highlight: timing == null ? null : (timing.tA0 ?? timing.tA1, timing.tA1),
+      highlight: mark == AnswerMark.shaded ? (timing!.tA0!, timing.tA1) : null,
+      marker: mark == AnswerMark.finalAnswer ? timing!.tA1 : null,
+      deltaScale: deltaScale,
     );
   }
 }
@@ -1365,24 +1405,45 @@ class _PulseCard extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 8),
-            SizedBox(height: 56, child: PulseTrace(result: result)),
+            SizedBox(
+              height: 56,
+              child: PulseTrace(result: result, deltaScale: true),
+            ),
             const SizedBox(height: 6),
             Row(
               children: [
-                Container(
-                  width: 16,
-                  height: 10,
-                  decoration: BoxDecoration(
-                    color: SusColors.mustard.withValues(alpha: 0.4),
-                    borderRadius: BorderRadius.circular(3),
-                  ),
-                ),
-                const SizedBox(width: 5),
-                Text(
-                  'Answering',
-                  style: SusText.body(12, weight: FontWeight.w600),
-                ),
-                const SizedBox(width: 14),
+                ...switch (answerMarkFor(result)) {
+                  AnswerMark.shaded => [
+                    Container(
+                      width: 16,
+                      height: 10,
+                      decoration: BoxDecoration(
+                        color: SusColors.mustard.withValues(alpha: 0.4),
+                        borderRadius: BorderRadius.circular(3),
+                      ),
+                    ),
+                    const SizedBox(width: 5),
+                    Text(
+                      'Answering',
+                      style: SusText.body(12, weight: FontWeight.w600),
+                    ),
+                    const SizedBox(width: 14),
+                  ],
+                  AnswerMark.finalAnswer => [
+                    Container(
+                      width: SparklinePainter.markerWidth,
+                      height: 12,
+                      color: SusColors.brown,
+                    ),
+                    const SizedBox(width: 5),
+                    Text(
+                      'Final answer',
+                      style: SusText.body(12, weight: FontWeight.w600),
+                    ),
+                    const SizedBox(width: 14),
+                  ],
+                  AnswerMark.none => const <Widget>[],
+                },
                 const SizedBox(width: 16, child: _DashSwatch()),
                 const SizedBox(width: 5),
                 Flexible(
