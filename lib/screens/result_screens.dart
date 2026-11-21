@@ -1325,9 +1325,13 @@ AnswerMark answerMarkFor(QuestionResult result) {
 /// A question's pulse over the scored window, with the answer marked and the
 /// player's normal dashed (Verdict and Replay).
 class PulseTrace extends StatelessWidget {
-  const PulseTrace({super.key, required this.result});
+  const PulseTrace({super.key, required this.result, this.deltaScale = false});
 
   final QuestionResult result;
+
+  /// Label the scale in BPM from the normal (the Verdict; a Replay row is
+  /// too short for it).
+  final bool deltaScale;
 
   @override
   Widget build(BuildContext context) {
@@ -1345,6 +1349,7 @@ class PulseTrace extends StatelessWidget {
       endDot: false,
       highlight: mark == AnswerMark.shaded ? (timing!.tA0!, timing.tA1) : null,
       marker: mark == AnswerMark.finalAnswer ? timing!.tA1 : null,
+      deltaScale: deltaScale,
     );
   }
 }
@@ -1389,7 +1394,10 @@ class _PulseCard extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 8),
-            SizedBox(height: 56, child: PulseTrace(result: result)),
+            SizedBox(
+              height: 56,
+              child: PulseTrace(result: result, deltaScale: true),
+            ),
             const SizedBox(height: 6),
             Row(
               children: [

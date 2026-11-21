@@ -1,3 +1,6 @@
+import 'dart:math' as math;
+import 'dart:ui' as ui;
+
 import 'package:fake_async/fake_async.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -29,6 +32,7 @@ class _Canvas implements Canvas {
   final circles = <Offset>[];
   final lines = <(Offset, Offset)>[];
   final rrects = <RRect>[];
+  final paragraphs = <(Offset, double)>[];
 
   @override
   void drawPath(Path path, Paint paint) => paths.add(path);
@@ -38,6 +42,9 @@ class _Canvas implements Canvas {
   void drawLine(Offset p1, Offset p2, Paint paint) => lines.add((p1, p2));
   @override
   void drawRRect(RRect rrect, Paint paint) => rrects.add(rrect);
+  @override
+  void drawParagraph(ui.Paragraph paragraph, Offset offset) =>
+      paragraphs.add((offset, paragraph.maxIntrinsicWidth));
   @override
   dynamic noSuchMethod(Invocation invocation) => null;
 }
@@ -118,6 +125,80 @@ void main() {
       expect(rule.$1.dx, closeTo(90, 0.01), reason: '9 of 15 s');
       expect(rule.$1.dy, 0);
       expect(rule.$2.dy, 30, reason: 'full height');
+    });
+
+    group('delta scale (the Verdict)', () {
+      SparklinePainter scaled(double? baseline) => SparklinePainter(
+        points: const [(0, 70), (5000, 75), (10000, 72)],
+        baseline: baseline,
+        fromMs: 0,
+        nowMs: 10000,
+        minHalfRange: 12,
+        minSpanMs: 0,
+        maxGapMs: 4000,
+        endDot: false,
+        deltaLabels: const TextStyle(fontSize: 11),
+      );
+
+      test('round steps well inside the range', () {
+        expect(SparklinePainter.deltaTick(12), 10, reason: 'the usual ±12');
+        expect(SparklinePainter.deltaTick(14), 10);
+        expect(SparklinePainter.deltaTick(25.3), 20, reason: '+22 BPM');
+        expect(SparklinePainter.deltaTick(40), 30);
+        expect(SparklinePainter.deltaTick(100), 80);
+      });
+
+      test('+10 and −10 at the right edge, with faint rules; the line stops '
+          'short of them', () {
+        final canvas = _Canvas();
+        const size = Size(200, 56);
+        scaled(70).paint(canvas, size);
+        expect(canvas.paragraphs, hasLength(2));
+        final (top, topW) = canvas.paragraphs[0];
+        final (bottom, bottomW) = canvas.paragraphs[1];
+        expect(top.dx + topW, closeTo(size.width, 0.5), reason: 'right edge');
+        expect(bottom.dx + bottomW, closeTo(size.width, 0.5));
+        expect(top.dy, lessThan(bottom.dy), reason: '+10 above −10');
+        final labelsLeft = size.width - math.max(topW, bottomW);
+        final plotRight = labelsLeft - SparklinePainter.labelGap;
+        final rules = canvas.lines
+            .where((l) => l.$1.dy == l.$2.dy && l.$1.dx == 0)
+            .where((l) => l.$2.dx > 50)
+            .toList();
+        expect(rules, hasLength(2), reason: 'one rule at +10, one at −10');
+        for (final r in rules) {
+          expect(r.$2.dx, closeTo(plotRight, 0.5));
+        }
+        // ±10 sits 10/12 of the way from the normal to the edge.
+        const inner = 56 / 2 - 3.5;
+        expect(rules[0].$1.dy, closeTo(28 - inner * 10 / 12, 0.01));
+        expect(rules[1].$1.dy, closeTo(28 + inner * 10 / 12, 0.01));
+        final line = canvas.paths.single.getBounds();
+        expect(line.right, closeTo(plotRight, 0.5), reason: 'now = plot end');
+        final dashes = canvas.lines.where(
+          (l) => l.$1.dy == l.$2.dy && l.$2.dx - l.$1.dx <= 4,
+        );
+        expect(
+          dashes.map((l) => l.$2.dx).reduce(math.max),
+          lessThanOrEqualTo(plotRight),
+        );
+      });
+
+      test('no normal, no scale: a delta needs something to be from', () {
+        final canvas = _Canvas();
+        scaled(null).paint(canvas, const Size(200, 56));
+        expect(canvas.paragraphs, isEmpty);
+        expect(canvas.paths.single.getBounds().right, closeTo(200, 0.5));
+      });
+
+      test('off by default (Replay rows, the live card)', () {
+        final canvas = _Canvas();
+        painter([
+          (0, 70),
+          (10000, 72),
+        ], baseline: 70).paint(canvas, const Size(200, 24));
+        expect(canvas.paragraphs, isEmpty);
+      });
     });
 
     test('no readings yet: only the normal line, no crash', () {
