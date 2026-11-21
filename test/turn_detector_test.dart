@@ -539,7 +539,8 @@ void main() {
       ]);
     });
 
-    test('a talk start dated later keeps the earlier words', () {
+    test('a talk start dated after the words arrived is a later talk: the '
+        'words stand', () {
       final s = Script(solo());
       s.hostDone(4000);
       s.speech(6500);
@@ -550,7 +551,18 @@ void main() {
       expect(s.events.whereType<AnswerStarted>().length, 1);
     });
 
-    test('a talking flag already up: the words wait for its start', () {
+    test('a talk start dated between the estimate and the words is the '
+        'better reading', () {
+      final s = Script(solo());
+      s.hostDone(4000);
+      s.speech(6500); // estimate 5500
+      s.at(6600, (d) => d.onPlayerTalkEdge(true, 6000));
+      s.run(7000);
+      expect(s.detector.tA0, 6000);
+      expect(s.detector.answerStartFromWords, isFalse);
+    });
+
+    test('a talking flag already up: its start wins once it confirms', () {
       final s = Script(solo());
       s.hostDone(4000);
       s.talk(5000, true);
@@ -558,6 +570,20 @@ void main() {
       s.run(6000);
       expect(s.detector.tA0, 5000);
       expect(s.detector.answerStartFromWords, isFalse);
+    });
+
+    test('a talking flag that drops before it confirms: the words stand '
+        '(PR #32 review)', () {
+      final s = Script(solo());
+      s.hostDone(4000);
+      s.talk(5000, true);
+      s.speech(5100);
+      s.talk(5150, false); // under the 200 ms debounce: never confirmed
+      s.finalAnswer(12000);
+      s.run(12500);
+      final t = s.detector.timing();
+      expect(t.tA0, 4100, reason: '1 s before the words, not the tap');
+      expect(s.detector.answerStartFromWords, isTrue);
     });
 
     test('the camera seeing it first: words change nothing', () {
@@ -569,6 +595,19 @@ void main() {
       s.run(8000);
       expect(s.detector.tA0, 5200);
       expect(s.detector.answerStartFromWords, isFalse);
+    });
+
+    test('words said before the question ended, arriving late, never '
+        'start it', () {
+      final s = Script(solo());
+      s.hostDone(4000);
+      s.at(4600, (d) => d.onSpeech(4600, canStartAnswer: false));
+      s.run(5000);
+      expect(s.detector.tA0, isNull);
+      expect(s.events.whereType<AnswerStarted>(), isEmpty);
+      s.speech(7000);
+      s.run(7500);
+      expect(s.detector.tA0, 6000, reason: "the answer's own words");
     });
 
     test('words after the minute: still scored as no answer', () {

@@ -1006,7 +1006,18 @@ class _ReplayScreenState extends State<ReplayScreen> {
                 onPressed: game.backToLeaderboard,
               ),
               const SizedBox(width: 12),
-              Text('The replay', style: SusText.display(32)),
+              // Shrinks rather than overflows on a small phone at large text.
+              Expanded(
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    'The replay',
+                    maxLines: 1,
+                    style: SusText.display(32),
+                  ),
+                ),
+              ),
             ],
           ),
           const SizedBox(height: 14),

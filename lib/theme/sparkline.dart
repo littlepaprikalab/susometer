@@ -85,7 +85,11 @@ class PulseSparkline extends StatelessWidget {
                   color: SusColors.brown,
                 )
               : null,
-          textScaler: MediaQuery.textScalerOf(context),
+          // Only the scale has text: the live card needn't follow the
+          // text size.
+          textScaler: deltaScale
+              ? MediaQuery.textScalerOf(context)
+              : TextScaler.noScaling,
         ),
       ),
     );

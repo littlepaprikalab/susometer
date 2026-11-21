@@ -164,6 +164,9 @@ Settings → **Signal check** → **Start both**. Allow microphone and speech re
   when you actually started (a video helps). The Verdict's pause should be close to your real
   pause, and the chart shades the answer. With no answer at all, the chart has a thin rule at
   *Final answer* and the legend says so.
+- [ ] **Host voice off, the question read aloud (decision 95):** Pause → turn the host voice off.
+  Read the question card out loud, wait about 3 s, then answer. The Verdict's pause should be
+  about 3 s, not 0.
 - [ ] Hold the phone the way you would to play, by its top edge too: the card isn't tapped by
   accident, and the button on it is easy to spot at arm's length (decision 85).
 - [ ] No host bubble on the question screens, party or solo: the camera is in the same place

@@ -1158,6 +1158,47 @@ void main() {
     });
   });
 
+  test('solo, host voice off: the question read aloud, its words arriving '
+      'late, is not the answer starting', () {
+    fakeAsync((async) {
+      final w = World(async);
+      w.game.setMode(GameMode.solo);
+      w.settings.hostVoice = false;
+      w.startGame(['Sam']);
+      w.calibrate();
+      w.elapse(100);
+      expect(w.game.phase, GamePhase.ask);
+      // Sam reads the card out loud while it's up; recognition files it
+      // under the segment open during the question.
+      final asked = w.speech.segment;
+      w.say('Did you make your bed');
+      w.until(() => w.game.phase == GamePhase.answer, what: 'read time');
+      final d = w.game.detector!;
+      final tQ1 = d.tQ1!;
+      // That segment closes at the question's end, and its final text
+      // lands after it, as recognition's always does.
+      w.elapse(400);
+      w.speech.controller.add(
+        SpeechText(
+          text: 'Did you make your bed this morning',
+          segment: asked,
+          isFinal: true,
+          tMs: w.now,
+        ),
+      );
+      w.elapse(100);
+      expect(d.tA0, isNull, reason: 'words from before the question ended');
+      // The real answer, 3 s later, in the answer's own segment.
+      w.elapse(2500);
+      final answeredAt = w.now;
+      w.say('Yes');
+      w.elapse(100);
+      expect(d.tA0, answeredAt - 1000);
+      expect(d.tA0! - tQ1, greaterThan(1000));
+      w.dispose();
+    });
+  });
+
   test('solo Ready to answer while the host reads ends the question', () {
     fakeAsync((async) {
       final w = World(async);
