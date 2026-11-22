@@ -9,7 +9,7 @@ tags: devchallenge, presagechallenge, flutter, ios
 <!-- Before publishing:
   1. Check that the Demo section's list matches what the video shows.
   2. Add the agent session embed, or delete that section.
-  3. Add a cover image (a Sus! verdict screenshot works well).
+  3. Upload the cover image, docs/cover.png (2000 × 840, dev.to's 100:42 shape).
   Deadline: Nov 22, 2026, 11:59 PM PST. -->
 
 ## What I Built
