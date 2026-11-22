@@ -29,3 +29,110 @@ Screen Capture → *Full-Screen Previews* first.
 **Voice-over lines (optional):** "Sus-o-meter reads your pulse, blinks and face with Presage
 SmartSpectra; the video never leaves the phone." · "It compares you with your own baseline, so a naturally fast
 heart doesn't make you guilty." · "Shaky readings never get a score." · "It reads stress, not truth."
+
+## The animatic (a rehearsal cut, made without a phone)
+
+`tool/demo_video/make.sh` renders the whole demo as a film without a camera or a phone: a solo
+game and a two-player party game (about three minutes), played through the **real screens** by drawn
+stand-in people, with the host's voice and the game's own sounds.
+
+```bash
+tool/demo_video/make.sh
+```
+
+It writes `build/demo_video/sus-o-meter-demo.mp4` (plus `solo.mp4` and `party.mp4`) and the shot
+list, `build/demo_video/shots.md`. Needs Flutter, ffmpeg and Python 3 with numpy; about six
+minutes. The host's voice is [piper](https://github.com/OHF-Voice/piper1-gpl) with a British
+voice (trained on public-domain LibriVox recordings), fetched on the first run; without it the
+host is captions only.
+
+**What it is and isn't.** The phone in the film shows the app's real screens, driven tap by tap
+the way the UI tests drive them, and every score comes out of the real scoring code. But the
+signals are made up (a scripted heart, blinks, expressions and voices; `test/film/film.dart`), so
+it can't be the submission's proof that SmartSpectra works. Use it to rehearse the cut, as a
+storyboard for the shoot, and as the frame real footage goes into. The film says so on screen.
+
+**Putting real people in.** The right-hand side of the film (the "room") is cut into numbered
+shots: `solo-01` … `party-14`. `shots.md` lists each one: when it is, how long it lasts, what
+happens and what's said. Film any of them (landscape, 16:9, about that long), name each clip
+after its shot, and render again:
+
+```bash
+tool/demo_video/make.sh --clips my_clips
+```
+
+`my_clips/party-09.mp4` then plays in place of the stand-ins for shot `party-09`: scaled to fill
+the slot, cut to the shot's length (a shorter clip holds its last frame), its sound mixed in
+(`--mute-clips` leaves it out). Shots without a clip keep their stand-ins, so the film can be
+filled in a few clips at a time. With the picture already rendered, `--mix-only` redoes just the
+clips and the sound in a few seconds.
+
+The phone side stays the simulated app. For the submission, replace it too: screen-record the same
+beats on an iPhone (the table above) and cut that in, or record the whole thing for real and use
+the animatic only as the plan.
+
+**A real game first.** An iPhone screen recording of a real game can open the film:
+
+```bash
+tool/demo_video/make.sh --real my_game.mp4
+```
+
+`tool/demo_video/real.py` puts it in the same phone frame, uncut, with a panel beside it saying
+what each step is, after the title and a "Part 1 · Played for real" card. The solo animatic
+follows as part 2 (the real game takes the party animatic's place), and the closing card moves to
+the end. The steps in `real.py`
+describe the owner's recording of 2026-11-21 (a two-player party, Sam and Masa, one question
+each); another recording needs its own, as JSON:
+
+```bash
+tool/demo_video/make.sh --real my_game.mp4 --steps my_steps.json
+```
+
+Each step is `{"start": 0, "end": 7.5, "step": "Set up", "note": "..."}`, in the recording's own
+seconds; the recording is cut where the last step ends. The recording's sound (the iPhone's host
+voice and the game's sounds) is kept.
+
+**The players' voices.** An iPhone screen recording doesn't capture the microphone while the app
+is using it, so the questions and answers are missing from it. Record them at the same time on
+another device (a voice memo on a second phone works) and add them:
+
+```bash
+tool/demo_video/make.sh --real my_game.mp4 --voice my_voices.m4a --voice-at 29.25
+```
+
+`--voice-at` is where the voice recording starts in the screen recording's picture, in seconds.
+The default, 29.25, is the owner's recording of 2026-11-21. For another pair, cross-correlate the
+voice recording against the screen recording's sound (the voice memo hears the phone's host, so
+the match is sharp), then add how far that sound runs ahead of the picture at that point.
+
+That last part matters because iOS drops a little of a screen recording's sound each time the app
+switches its audio session, so the sound runs early after each switch: in the owner's recording
+by 0.19 s, then 0.49 s from Masa's turn, then 0.62 s at the winners. `real.py` moves it back
+(`SCREEN_AUDIO_LEADS`, measured from when each warm-up card or Call it! appears against when the
+host starts speaking) so the host and the buzzer land on their screens. Another recording passes
+its own with `real.py --audio-leads`, or `[]`.
+
+The voice recording also hears the phone's speaker, so the host and the game's sounds would play
+twice. It's muted whenever the screen recording makes a sound (from 0.08 s before to 0.3 s
+after), so those come only from the screen recording and the voice recording adds only the
+players.
+
+**Text the app got wrong.** In the owner's recording Masa answered before Sam tapped *Done
+asking*, so the app took "No, never" for the question: it showed as "Heard: No, never" on the
+asking card, "Q: “No, never”" on the answer screen and the verdict, and as the biggest spike's
+question on the winners screen. `real.py` paints over those four spots, frame-exact, with what the
+app shows when it hears no question ("Read it out, or ask your own.", "Q: (asked out loud)",
+"Q: “Question 1”"), in the app's own font, size and colours measured from the recording
+(`PATCHES`). The scoring isn't touched: "Took 0.0s to start answering" stays, since that is what
+the app measured. Another recording passes `real.py --no-patches`.
+
+**Settings.** The solo game opens on the Settings screen: the Presage API key (shown only as its
+last four characters, kept in the Keychain), *Test connection* signing in, SDK telemetry off by
+default, and the Proof panel switched on, so the raw SmartSpectra values show on the measuring
+screens after it. These are the real screens; the key is a placeholder and the fake SDK answers
+the sign-in.
+
+**Changing the script.** The two games are scripted in `test/demo_film_test.dart`: who says what,
+which button is tapped, how each stand-in reacts (`Take.calm`, `Take.uneasy`, `Take.rattled`), and
+where the film skips ahead. `FILM_DRY=1 flutter test test/demo_film_test.dart` plays it through in
+half a minute without rendering and prints each question's score.
