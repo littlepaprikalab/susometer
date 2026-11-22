@@ -68,7 +68,7 @@ To run it (full steps in the README):
 There's no account or login. The only credential is your own Presage key.
 
 Stack: Flutter for the UI, and a thin Swift bridge around the **SmartSpectra Swift SDK 3.4.0**.
-`flutter test` runs 474 tests without a phone.
+`flutter test` runs 542 tests without a phone.
 
 **For judges:** long-press the lobby logo to turn on the **Proof Panel**, which overlays the raw
 SmartSpectra stream on every measuring screen.
@@ -93,10 +93,9 @@ All live, from the SmartSpectra Swift SDK:
 
 **1. Calibration learns your normal.** You sit still until the camera has your pulse (8 to 20
 seconds), then answer three easy warm-ups out loud as the host reads them ("Cats or dogs? Tell me
-why"). That sets your resting pulse,
-how often you blink while chatting, how strong your expressions get, and how fast you usually
-start answering. It locks in only after 12 s of confident pulse with your face in frame 80% of
-the time.
+why"). That sets your resting pulse, how often you blink while chatting, how strong your
+expressions get, and how fast you usually start answering. It locks in only after 12 s of
+confident pulse with your face in frame 80% of the time.
 
 **2. Every question is scored against that normal.** Each of the four parts counts only what's
 beyond your own normal wobble:
@@ -118,7 +117,8 @@ settles against a dashed line at their normal, the blink count ticks, and the #t
 within about a second of a big surprised face.
 
 **4. The verdict shows its working.** Pulse, blink and pause tiles against the player's normal,
-and a chart of the pulse through the question with the answer shaded. The **?** in the lobby
+and a chart of the pulse through the question, scaled in BPM from their normal, with the answer
+shaded. The **?** in the lobby
 explains the whole score in plain words.
 
 ### Finding heartbeats in the waveform
@@ -139,7 +139,7 @@ used and why.
   validation problem.
 - If less than 60% of a question is clean, the show says **No clean read** with the real reason
   ("The camera lost Sam's face for about 5 seconds") and offers *Ask it again*.
-- After the camera restarts, a question waits ("Finding Sam's pulse…") instead of starting blind.
+- After the camera restarts, a question waits ("Finding the pulse…") instead of starting blind.
 - If the camera preview freezes, a watchdog restarts it within about 5 seconds.
 
 ### Turn-taking with the talking flag
@@ -158,8 +158,8 @@ counted from the asker's last word, so a slow tap doesn't make anyone look hesit
   an `EventChannel`, with the waveform's own SDK timestamps so beats line up with everything else.
 - **Camera preview.** `sdk.imageOutput` is shown in a native `UIView`, embedded in Flutter as a
   platform view. The SDK hands every camera frame to the main thread, the same thread Flutter runs
-  Dart on, so the measuring screens redraw at most 10 times a second to keep the preview from
-  falling behind.
+  Dart on, so the measuring screens redraw about 10 times a second instead of on every display
+  frame, to keep the preview from falling behind.
 - **Voice.** Speech recognition is `SFSpeechRecognizer` with `requiresOnDeviceRecognition = true`.
   The host is `AVSpeechSynthesizer`, and the mic is muted while the host talks so the transcript
   never contains the host.
@@ -181,7 +181,7 @@ What makes it playful:
   meter, a drumroll and a 3-2-1 countdown before every verdict, a buzzer for Sus!, and a host who
   calls on people by name. Every sound effect was synthesized for the game.
 - **The biometrics are the punchline.** The #tag stamp lands on your face mid-answer
-  (#surprise!), and the pulse chart shows exactly when your heart jumped.
+  (#surprise!), and the verdict's pulse chart shows where your heart rate climbed.
 - **Everyone plays at once.** One person is measured, but the whole room asks, votes and argues.
 
 What makes it unexpected is the restraint. It never claims to catch a liar. It compares you only
@@ -211,8 +211,9 @@ they're measured, so nobody is measured without knowing it.
 
 - **Presage sign-in:** the SDK sends your API key to Presage to start a session.
 - **LLM Insights (from the SDK, can't be turned off):** SmartSpectra 3.4.0 automatically sends
-  "vitals check-ins" once the pulse is stable and every 60 seconds after: buffered **pulse rate
-  and HRV values** (never video or face images), a fixed prompt and a session ID go to Presage,
+  "vitals check-ins" once the pulse is stable (about 15 seconds in), again once HRV is, and every
+  60 seconds after that: buffered **pulse rate and HRV values** (never video or face images), a
+  fixed prompt and a session ID go to Presage,
   which asks an LLM for a summary. The SDK has no setting to stop this. The app never asks for an
   insight and never shows one. The consent screen tells each player: "Your pulse numbers (not
   video) go to Presage for an AI check-in."
@@ -228,7 +229,8 @@ they're measured, so nobody is measured without knowing it.
 - Results (scores, pulse charts, transcripts) stay in memory for the Leaderboard and Replay until
   **Play again**, **Wipe everything**, Settings → **Wipe all game data now**, or the app closes.
 - The **Presage API key** is stored in the iOS Keychain on this device only. **Remove** in
-  Settings deletes it, and so does deleting the app.
+  Settings deletes it. iOS can keep Keychain items after an app is deleted, so on its first
+  launch after a fresh install the app wipes any key left over.
 - The only other thing written to the phone is one flag that tells the app it's a fresh install.
 
 **What it isn't.** Not a lie detector, not a medical device. No diagnosis, no health advice, no
