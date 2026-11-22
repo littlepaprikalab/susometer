@@ -7,10 +7,9 @@ tags: devchallenge, presagechallenge, flutter, ios
 *This is a submission for the [Presage SmartSpectra SDK Challenge](https://dev.to/challenges/presage-2026-11-04)*
 
 <!-- Before publishing:
-  1. Make the GitHub repo public (it's private: judges must be able to open it).
-  2. Check that the Demo section's list matches what the video shows.
-  3. Add the agent session embed, or delete that section.
-  4. Add a cover image (a Sus! verdict screenshot works well).
+  1. Check that the Demo section's list matches what the video shows.
+  2. Add the agent session embed, or delete that section.
+  3. Add a cover image (a Sus! verdict screenshot works well).
   Deadline: Nov 22, 2026, 11:59 PM PST. -->
 
 ## What I Built
@@ -193,7 +192,9 @@ screen says "Only Sam can say yes. Everyone else, hands off." It lists what the 
 (pulse, blinks, facial expressions, when you start talking) and what happens to it. The player
 taps **I agree, measure me** or **Skip my turn**. iOS also asks for camera permission. The camera
 only runs during that player's turn, and they watch their own face in the live preview while
-they're measured, so nobody is measured without knowing it.
+they're measured, so nobody is measured without knowing it. The only other way to turn the camera
+on is Settings → *Signal check*, a diagnostic that starts only when you tap *Start both*, with the
+preview on screen.
 
 **What stays on the phone:**
 
