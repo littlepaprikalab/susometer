@@ -8,7 +8,7 @@ tags: devchallenge, presagechallenge, flutter, ios
 
 <!-- Before publishing:
   1. Make the GitHub repo public (it's private: judges must be able to open it).
-  2. Replace [DEMO VIDEO] with the video embed.
+  2. Check that the Demo section's list matches what the video shows.
   3. Add the agent session embed, or delete that section.
   4. Add a cover image (a Sus! verdict screenshot works well).
   Deadline: Nov 22, 2026, 11:59 PM PST. -->
@@ -37,9 +37,7 @@ guide, because a racing heart means nervous, not guilty.
 
 ## Demo
 
-[DEMO VIDEO]
-
-<!-- dev.to embed syntax: {% embed https://youtu.be/YOUR_VIDEO_ID %} -->
+{% embed https://youtu.be/z5P7-8B8kL4 %}
 
 The video shows the live SmartSpectra signals in a real game:
 
