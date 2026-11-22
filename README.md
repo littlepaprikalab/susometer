@@ -382,7 +382,8 @@ The people's timings are assumptions, not measurements. SPEC decision 80 has the
   native bridge against stand-in modules (the SmartSpectra one mirrors the 3.4.0 interface).
   Needs a Swift 6.2 toolchain. It's a quick sanity check, not a substitute for an Xcode build.
 - **Sounds and icon** are generated: `python3 tool/gen_sfx.py`, `python3 tool/gen_icon.py`
-  (needs Pillow).
+  (needs Pillow). The DEV post cover, `docs/cover.png`, is `node tool/cover/render.js` (Playwright
+  renders `tool/cover/cover.html` at 2000×840).
 - **Claude Code cloud sessions** install Flutter through `.claude/hooks/session-start.sh`.
 - Build decisions are logged at the end of [`docs/SPEC.md`](docs/SPEC.md).
 - On-device test script: [`docs/DEVICE_CHECKLIST.md`](docs/DEVICE_CHECKLIST.md).

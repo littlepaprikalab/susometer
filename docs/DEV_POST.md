@@ -6,8 +6,8 @@ tags: devchallenge, presagechallenge, flutter, ios
 
 *This is a submission for the [Presage SmartSpectra SDK Challenge](https://dev.to/challenges/presage-2026-11-04)*
 
-<!-- Draft. Before publishing: add the demo video link, make the GitHub repo public, add a cover
-image, and replace anything in [BRACKETS]. Submissions close Nov 22, 11:59 PM PST. -->
+<!-- Draft. Before publishing: add the demo video link, make the GitHub repo public, upload the cover
+image (`docs/cover.png`), and replace anything in [BRACKETS]. Submissions close Nov 22, 11:59 PM PST. -->
 
 ## What I Built
 

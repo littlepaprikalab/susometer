@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Sus-o-meter cover</title>
+<!-- DEV post cover, 1000x420 (render.js shoots it at 2x). Keep the important parts between
+     x 84 and 916: DEV's social preview crops the cover to 2:1, trimming about 80px each side. -->
+<style>
+@font-face { font-family: "Bowlby One SC"; src: url("../../assets/fonts/BowlbyOneSC-Regular.ttf"); }
+@font-face { font-family: "Work Sans"; font-weight: 500; src: url("../../assets/fonts/WorkSans-Medium.ttf"); }
+@font-face { font-family: "Work Sans"; font-weight: 600; src: url("../../assets/fonts/WorkSans-SemiBold.ttf"); }
+@font-face { font-family: "Work Sans"; font-weight: 700; src: url("../../assets/fonts/WorkSans-Bold.ttf"); }
+
+:root {
+  --mustard: #F2B33D; --ink: #2A160C; --cream: #FFF4DF; --tomato: #D9412B;
+  --teal: #1F6F78; --brown: #8A4B1C; --bulb: #FFE9A8; --unlit: #E8D9BC;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body { width: 1000px; height: 420px; overflow: hidden; background: var(--mustard); color: var(--ink);
+       font-family: "Work Sans", sans-serif; }
+
+.stage { position: relative; width: 1000px; height: 420px; overflow: hidden;
+  background: repeating-conic-gradient(from 0deg at 745px 180px,
+              #F2B33D 0deg 7.5deg, #F6C258 7.5deg 15deg); }
+/* Fade the rays out toward the text so the left side stays calm. */
+.stage::before { content: ""; position: absolute; inset: 0;
+  background: linear-gradient(90deg, #F2B33D 0%, #F2B33D 34%, rgba(242,179,61,0) 62%); }
+
+/* ---------- left: title block ---------- */
+.left { position: absolute; left: 96px; top: 62px; width: 490px; }
+.pill { display: inline-block; background: var(--ink); color: var(--mustard); border-radius: 20px;
+  padding: 7px 15px 6px; font-weight: 700; font-size: 13px; letter-spacing: 0.09em; }
+.title { margin: 14px 0 0; font-family: "Bowlby One SC", sans-serif; font-weight: 400;
+  font-size: 62px; line-height: 0.95; color: var(--cream); letter-spacing: 0.005em;
+  -webkit-text-stroke: 6px var(--ink); paint-order: stroke fill;
+  text-shadow: 0 6px 0 var(--ink); white-space: nowrap; }
+.tag { margin: 20px 0 0; font-weight: 700; font-size: 25px; line-height: 1.2; }
+.tag em { font-style: normal; background: var(--cream); border: 3px solid var(--ink);
+  border-radius: 10px; padding: 0 8px; box-shadow: 0 3px 0 var(--ink); }
+.signals { display: flex; gap: 8px; margin-top: 26px; }
+.sig { display: flex; align-items: center; gap: 6px; background: var(--cream);
+  border: 2.5px solid var(--ink); border-radius: 12px; padding: 6px 10px 6px 8px;
+  font-weight: 700; font-size: 14px; box-shadow: 0 3px 0 var(--ink); }
+.sig svg { width: 18px; height: 18px; flex: none; }
+
+/* ---------- right: the scoreboard ---------- */
+.board-wrap { position: absolute; left: 604px; top: 34px; width: 284px; transform: rotate(3deg); }
+.board { background: var(--tomato); border: 4px solid var(--ink); border-radius: 30px;
+  padding: 13px 16px 14px; display: flex; flex-direction: column; align-items: center;
+  box-shadow: 0 9px 0 var(--ink); }
+.bulbs { display: flex; justify-content: space-between; width: 100%; }
+.bulbs span { width: 14px; height: 14px; border-radius: 50%; background: var(--bulb);
+  border: 2.5px solid var(--ink); box-shadow: 0 0 10px 2px rgba(255,233,168,0.75); }
+.says { margin-top: 10px; background: var(--cream); border-radius: 12px; padding: 4px 13px;
+  font-weight: 700; font-size: 13px; letter-spacing: 0.08em; }
+.score { font-family: "Bowlby One SC", sans-serif; font-size: 98px; line-height: 1;
+  color: var(--cream); margin-top: 4px; text-shadow: 0 5px 0 var(--ink); }
+.word { font-family: "Bowlby One SC", sans-serif; font-size: 40px; line-height: 1;
+  color: var(--cream); margin: 2px 0 10px; text-shadow: 0 4px 0 var(--ink); }
+
+.meter { position: absolute; left: 600px; top: 326px; width: 296px; }
+.blocks { display: flex; gap: 5px; }
+.blocks span { flex: 1; height: 26px; border-radius: 6px; border: 2.5px solid var(--ink); }
+.ends { display: flex; justify-content: space-between; font-weight: 700; font-size: 12.5px;
+  margin-top: 5px; }
+
+/* ---------- pulse trace along the bottom ---------- */
+.trace { position: absolute; left: 0; top: 0; }
+</style>
+</head>
+<body>
+<div class="stage">
+
+  <svg class="trace" width="1000" height="420" viewBox="0 0 1000 420" aria-hidden="true">
+    <path id="pulse" fill="none" stroke="#2A160C" stroke-width="4" stroke-linejoin="round"
+          stroke-linecap="round"/>
+  </svg>
+
+  <div class="left">
+    <span class="pill">PRESAGE SMARTSPECTRA SDK CHALLENGE</span>
+    <h1 class="title">Sus-o-meter</h1>
+    <p class="tag">A game show that reads<br>your <em>pulse</em>, not your mind.</p>
+    <div class="signals">
+      <span class="sig">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#D9412B" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12h4l2.5-6 4 13 3-9 1.5 2H22"/></svg>
+        Pulse</span>
+      <span class="sig">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#2A160C" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.6-6 10-6 10 6 10 6-3.6 6-10 6S2 12 2 12z"/><circle cx="12" cy="12" r="2.6"/></svg>
+        Blinks</span>
+      <span class="sig">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#2A160C" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9.5"/><circle cx="9" cy="10" r="0.9" fill="#2A160C"/><circle cx="15" cy="10" r="0.9" fill="#2A160C"/><ellipse cx="12" cy="16" rx="2.2" ry="2.6"/></svg>
+        Expressions</span>
+      <span class="sig">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#2A160C" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="13" r="8.5"/><path d="M12 8.5V13l3 2M9.5 2.5h5"/></svg>
+        Pause</span>
+    </div>
+  </div>
+
+  <div class="board-wrap">
+    <div class="board">
+      <div class="bulbs" id="bulbsTop"></div>
+      <span class="says">THE SUS-O-METER SAYS</span>
+      <span class="score">82</span>
+      <span class="word">Sus!</span>
+      <div class="bulbs" id="bulbsBottom"></div>
+    </div>
+  </div>
+
+  <div class="meter">
+    <div class="blocks" id="blocks"></div>
+    <div class="ends"><span>Cool as ice</span><span>Caught red-handed</span></div>
+  </div>
+</div>
+
+<script>
+  // Bulbs and the applause meter, as on the Verdict screen.
+  for (const id of ["bulbsTop", "bulbsBottom"]) {
+    const row = document.getElementById(id);
+    for (let i = 0; i < 10; i++) row.appendChild(document.createElement("span"));
+  }
+  const ramp = ["#1F6F78", "#1F6F78", "#3E8C7A", "#8FAE5B", "#E7C64A", "#FFE9A8",
+                "#F08A4B", "#E5683A", "#D9412B", "#B8301D"];
+  const lit = 8, blocks = document.getElementById("blocks");
+  ramp.forEach((c, i) => {
+    const s = document.createElement("span");
+    s.style.background = i < lit ? c : "#E8D9BC";
+    blocks.appendChild(s);
+  });
+
+  // A heartbeat trace along the bottom: calm beats on the left, then one big spike.
+  const base = 396, beats = [
+    [30, 12], [120, 12], [210, 13], [300, 13], [390, 16], [478, 34]];
+  let d = `M -10 ${base}`;
+  for (const [x, h] of beats) {
+    d += ` L ${x} ${base} L ${x + 8} ${base - h * 0.35} L ${x + 14} ${base}` +
+         ` L ${x + 20} ${base + h * 0.3} L ${x + 27} ${base - h} L ${x + 34} ${base + h * 0.45}` +
+         ` L ${x + 40} ${base} L ${x + 52} ${base - h * 0.3} L ${x + 60} ${base}`;
+  }
+  d += ` L 1010 ${base}`;
+  document.getElementById("pulse").setAttribute("d", d);
+</script>
+</body>
+</html>
