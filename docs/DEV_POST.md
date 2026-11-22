@@ -68,7 +68,7 @@ To run it (full steps in the README):
 There's no account or login. The only credential is your own Presage key.
 
 Stack: Flutter for the UI, and a thin Swift bridge around the **SmartSpectra Swift SDK 3.4.0**.
-`flutter test` runs 542 tests without a phone.
+`flutter test` runs about 600 tests without a phone.
 
 **For judges:** long-press the lobby logo to turn on the **Proof Panel**, which overlays the raw
 SmartSpectra stream on every measuring screen.
