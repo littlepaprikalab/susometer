@@ -20,6 +20,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:susometer/game/decks.dart';
 import 'package:susometer/game/game_controller.dart';
 import 'package:susometer/game/models.dart';
+import 'package:susometer/settings/app_settings.dart';
 import 'package:susometer/screens/question_screens.dart';
 
 import 'film/film.dart';
@@ -207,10 +208,11 @@ extension on Film {
 /// Only when asked for (see the top of this file).
 final _skip = Film.outDir == null && Platform.environment['FILM_DRY'] == null;
 
-/// A real recording opens the film (make.sh --real): the order is real,
-/// party, solo, so the opening title is the real part's, the party is part
-/// 2, the solo part 3, and the closing card ends the solo game. Without one:
-/// solo (part 1), then party (part 2).
+/// A real recording opens the film (make.sh --real): the real party game is
+/// part 1 and the solo animatic part 2 (the party animatic isn't used: the
+/// real game shows a party), so the opening title is the real part's and the
+/// closing card ends the solo game. Without one: solo (part 1), then party
+/// (part 2).
 final _withReal = Platform.environment['FILM_WITH_REAL'] == '1';
 
 const _closingCard = TitleCard('Sus-o-meter', [
@@ -227,7 +229,7 @@ void main() {
     const normal = 68.0;
     film
       ..cast = [maya]
-      ..presage.storedKey = 'pk_demo_film';
+      ..presage.storedKey = 'pk_demo_film_1a2b';
     film.presage.settle(normal);
     game
       ..setDecks(_decks)
@@ -245,9 +247,32 @@ void main() {
     await film.showCard(
       TitleCard('Solo', const [
         'One player. The host asks the questions.',
-      ], kicker: _withReal ? 'PART 3' : 'PART 1'),
+      ], kicker: _withReal ? 'PART 2' : 'PART 1'),
       1800,
     );
+
+    // Settings: the Presage key and the SDK's switches.
+    await film.services.apiKey.refresh();
+    film
+      ..chapter = 'SOLO GAME'
+      ..step = 'Settings · Presage'
+      ..note =
+          'The Presage API key is kept in this iPhone’s Keychain: Settings '
+          'shows only its last four characters. Test connection signs in.'
+      ..cut('00', 'Maya opens Settings to check the Presage key');
+    await film.run(900);
+    await film.tap(find.byTooltip('Settings'), after: 900);
+    await film.tap('Test connection', after: 200);
+    await film.until(() => film.services.apiKey.state == ApiKeyState.connected);
+    await film.run(2200);
+    film.note =
+        'SDK telemetry is off by default. The Proof panel shows the raw '
+        'SmartSpectra values on the measuring screens.';
+    await film.scroll(find.byType(Scrollable), -260);
+    await film.run(1200);
+    await film.tap('Proof panel', after: 2200);
+    await film.scroll(find.byType(Scrollable), 260, ms: 700);
+    await film.tap(find.byTooltip('Back to lobby'), after: 600);
 
     // Lobby.
     film
@@ -345,6 +370,7 @@ void main() {
           'expressions.';
       film.services.settings.proofPanel = true;
       await film.run(4500);
+      // Turned on in Settings at the start; off again for the rest.
       film.services.settings.proofPanel = false;
     } else {
       await film.run(1500);

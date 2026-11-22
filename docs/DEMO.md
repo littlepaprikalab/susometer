@@ -78,8 +78,9 @@ tool/demo_video/make.sh --real my_game.mp4
 ```
 
 `tool/demo_video/real.py` puts it in the same phone frame, uncut, with a panel beside it saying
-what each step is, after the title and a "Part 1 · Played for real" card. The animatic follows as
-part 2 (party) and part 3 (solo), and the closing card moves to the end. The steps in `real.py`
+what each step is, after the title and a "Part 1 · Played for real" card. The solo animatic
+follows as part 2 (the real game takes the party animatic's place), and the closing card moves to
+the end. The steps in `real.py`
 describe the owner's recording of 2026-11-21 (a two-player party, Sam and Masa, one question
 each); another recording needs its own, as JSON:
 
@@ -110,6 +111,26 @@ by 0.19 s, then 0.49 s from Masa's turn, then 0.62 s at the winners. `real.py` m
 (`SCREEN_AUDIO_LEADS`, measured from when each warm-up card or Call it! appears against when the
 host starts speaking) so the host and the buzzer land on their screens. Another recording passes
 its own with `real.py --audio-leads`, or `[]`.
+
+The voice recording also hears the phone's speaker, so the host and the game's sounds would play
+twice. It's muted whenever the screen recording makes a sound (from 0.08 s before to 0.3 s
+after), so those come only from the screen recording and the voice recording adds only the
+players.
+
+**Text the app got wrong.** In the owner's recording Masa answered before Sam tapped *Done
+asking*, so the app took "No, never" for the question: it showed as "Heard: No, never" on the
+asking card, "Q: “No, never”" on the answer screen and the verdict, and as the biggest spike's
+question on the winners screen. `real.py` paints over those four spots, frame-exact, with what the
+app shows when it hears no question ("Read it out, or ask your own.", "Q: (asked out loud)",
+"Q: “Question 1”"), in the app's own font, size and colours measured from the recording
+(`PATCHES`). The scoring isn't touched: "Took 0.0s to start answering" stays, since that is what
+the app measured. Another recording passes `real.py --no-patches`.
+
+**Settings.** The solo game opens on the Settings screen: the Presage API key (shown only as its
+last four characters, kept in the Keychain), *Test connection* signing in, SDK telemetry off by
+default, and the Proof panel switched on, so the raw SmartSpectra values show on the measuring
+screens after it. These are the real screens; the key is a placeholder and the fake SDK answers
+the sign-in.
 
 **Changing the script.** The two games are scripted in `test/demo_film_test.dart`: who says what,
 which button is tapped, how each stand-in reacts (`Take.calm`, `Take.uneasy`, `Take.rattled`), and

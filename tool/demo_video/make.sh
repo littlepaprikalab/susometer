@@ -14,8 +14,8 @@
 # (and Pillow for --real).
 #
 # --real puts a real iPhone screen recording first (real.py lays it in the
-# film's phone frame, with a panel saying what each step is), then the party
-# animatic, then solo. Its steps are described in real.py; a different
+# film's phone frame, with a panel saying what each step is), then the solo
+# animatic as part 2 (the real game takes the party animatic's place). Its steps are described in real.py; a different
 # recording needs --steps steps.json.
 #
 # The host's voice is piper (https://github.com/OHF-Voice/piper1-gpl) with a
@@ -63,7 +63,11 @@ if [ "$RENDER" = 1 ]; then
     fi
   fi
   export FILM_PIPER
-  FILM_OUT="$OUT" flutter test test/demo_film_test.dart
+  if [ "${FILM_WITH_REAL:-}" = 1 ]; then
+    FILM_OUT="$OUT" flutter test test/demo_film_test.dart --plain-name "a solo game"
+  else
+    FILM_OUT="$OUT" flutter test test/demo_film_test.dart
+  fi
 fi
 
 python3 tool/demo_video/mix.py "$OUT" "${MIX_ARGS[@]}"

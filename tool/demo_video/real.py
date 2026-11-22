@@ -115,6 +115,49 @@ VOICE_FILTER = (
 )
 
 
+# Text the app got wrong in the owner's recording, painted over in its own
+# font and colours, frame-exact. Masa answered "No, never" before Sam tapped
+# Done asking, so the app took the answer for the question. Each patch: the
+# seconds it's on screen (halfway between frames, from the frames' own
+# timestamps: the recording's frame rate varies), the wrong text's ink box,
+# and what the app shows
+# when it hears nothing (question_screens.dart, result_screens.dart). Sizes,
+# colours and origins measured from the recording (3 px a point).
+APP_CREAM = (253, 240, 216)
+APP_BROWN = (0x8A, 0x4B, 0x1C)
+PATCHES = [
+    # Sam's asking card: "Heard: No" / "Heard: No, never".
+    dict(t0=152.2255, t1=153.205, old=(114, 943, 441, 977), origin=(114, 935),
+         text="Read it out, or ask your own.", font="WorkSans-SemiBold.ttf", size=40.0,
+         color=APP_BROWN),
+    # Masa's answer screen: Q: "No, never".
+    dict(t0=153.205, t1=165.225, old=(113, 499, 414, 537), origin=(113, 490),
+         text="Q: (asked out loud)", font="WorkSans-SemiBold.ttf", size=43.0,
+         color=APP_BROWN),
+    # The verdict.
+    dict(t0=170.71, t1=174.6285, old=(107, 417, 453, 460), origin=(107, 406),
+         text="Q: “Question 1”", font="WorkSans-Bold.ttf", size=49.0, color=APP_INK),
+    # The winners: Biggest spike.
+    dict(t0=174.6285, t1=10_000, old=(414, 1018, 676, 1056), origin=(414, 1006),
+         text="“Question 1”", font="WorkSans-Bold.ttf", size=45.7, color=APP_INK),
+]
+
+
+def patch_png(path, patch, size):
+    """One patch at the recording's size: the old text covered, the new drawn."""
+    img = Image.new("RGBA", size, (0, 0, 0, 0))
+    d = ImageDraw.Draw(img)
+    f = font(patch["font"], patch["size"])
+    ox, oy = patch["origin"]
+    nb = f.getbbox(patch["text"])
+    x0, y0, x1, y1 = patch["old"]
+    cover = (min(x0, ox + nb[0]) - 6, min(y0, oy + nb[1]) - 6,
+             max(x1, ox + nb[2]) + 6, max(y1, oy + nb[3]) + 6)
+    d.rectangle(cover, fill=APP_CREAM + (255,))
+    d.text((ox, oy), patch["text"], font=f, fill=patch["color"] + (255,))
+    img.save(path)
+
+
 def decode(path, channels, af=None):
     """A sound file as float samples at RATE, shape (n, channels)."""
     cmd = ["ffmpeg", "-loglevel", "error", "-i", str(path), "-vn"]
@@ -145,7 +188,12 @@ def soundtrack(recording, length, path, leads, voice=None, voice_at=0.0):
         v = v[skip:]
         stop = min(n, at + len(v))
         if stop > at:
-            track[at:stop] += v[: stop - at, None]
+            placed = np.zeros(n, dtype=np.float32)
+            placed[at:stop] = v[: stop - at]
+            # The voice recording hears the phone's speaker too: muted while
+            # the game makes a sound, so the host and the sounds come only
+            # from the screen recording and don't echo.
+            track += (placed * game_quiet(track))[:, None]
     fade = int(0.4 * RATE)
     track[-fade:] *= np.linspace(1, 0, fade, dtype=np.float32)[:, None]
     peak = float(np.abs(track).max()) or 1.0
@@ -156,6 +204,25 @@ def soundtrack(recording, length, path, leads, voice=None, voice_at=0.0):
         f.setsampwidth(2)
         f.setframerate(RATE)
         f.writeframes((track * 32767).astype("<i2").tobytes())
+
+
+def game_quiet(track, before=0.08, after=0.3, ramp=0.03):
+    """Per sample, 1 where the game is silent and 0 around its sounds."""
+    hop = RATE // 100
+    m = np.abs(track).max(1)
+    frames = len(m) // hop
+    env = m[: frames * hop].reshape(frames, hop).max(1)
+    loud = env > 10 ** (-50 / 20)
+    pre, post = int(before * 100), int(after * 100)
+    idx = np.flatnonzero(loud)
+    busy = np.zeros(frames, dtype=bool)
+    for i in idx:
+        busy[max(0, i - pre):i + post + 1] = True
+    gain = np.where(busy, 0.0, 1.0).astype(np.float32)
+    k = max(1, int(ramp * 100))
+    gain = np.convolve(gain, np.ones(k) / k, mode="same").astype(np.float32)
+    out = np.repeat(gain, hop)
+    return np.pad(out, (0, len(m) - len(out)), constant_values=out[-1] if len(out) else 1.0)
 
 
 def font(name, size):
@@ -169,6 +236,16 @@ BOLD = "WorkSans-Bold.ttf"
 
 def run(*args):
     subprocess.run(["ffmpeg", "-y", "-loglevel", "error", *map(str, args)], check=True)
+
+
+def video_size(path):
+    out = subprocess.run(
+        ["ffprobe", "-v", "error", "-select_streams", "v", "-show_entries", "stream=width,height",
+         "-of", "csv=p=0", str(path)],
+        capture_output=True, text=True, check=True,
+    )
+    w, h = out.stdout.strip().split(",")[:2]
+    return int(w), int(h)
 
 
 def duration(path):
@@ -292,7 +369,8 @@ def step_panel(path, step, note):
     img.save(path)
 
 
-def build(recording, out, steps, leads=SCREEN_AUDIO_LEADS, voice=None, voice_at=DEFAULT_VOICE_AT):
+def build(recording, out, steps, leads=SCREEN_AUDIO_LEADS, voice=None, voice_at=DEFAULT_VOICE_AT,
+          patches=PATCHES):
     work = out / "real"
     work.mkdir(parents=True, exist_ok=True)
     length = min(duration(recording), max(end for _, end, _, _ in steps))
@@ -320,15 +398,28 @@ def build(recording, out, steps, leads=SCREEN_AUDIO_LEADS, voice=None, voice_at=
 
     x, y, w, h = PHONE
     sw, sh = w - 2 * BEZEL_W, h - 2 * BEZEL_W
+    rec_size = video_size(recording)
+    # In RGB first: the recording is full-range video, and patches blended
+    # straight onto it come out a shade darker than the card around them.
+    patch_inputs, patch_graph, cur = [], "[0:v]format=rgba[src];", "[src]"
+    for i, p in enumerate(patches):
+        png = work / f"patch-{i}.png"
+        patch_png(png, p, rec_size)
+        patch_inputs += ["-loop", "1", "-i", png]
+        patch_graph += (f"{cur}[{4 + i}:v]overlay=0:0:shortest=1:"
+                        f"enable='between(t,{p['t0']:.3f},{min(p['t1'], length + 1):.3f})'[p{i}];")
+        cur = f"[p{i}]"
     body = work / "body.mp4"
     run(
         "-i", recording,
         "-f", "concat", "-safe", "0", "-i", work / "steps.txt",
         "-loop", "1", "-i", work / "frame.png",
         "-i", sound,
+        *patch_inputs,
         "-filter_complex",
         f"color=c=0x{INK[0]:02x}{INK[1]:02x}{INK[2]:02x}:s={W}x{H}:r={FPS}:d={length:.3f}[bg];"
-        f"[0:v]fps={FPS},scale={sw}:-2,crop={sw}:{sh}:0:(ih-{sh})/2,setsar=1[rec];"
+        + patch_graph +
+        f"{cur}fps={FPS},scale={sw}:-2,crop={sw}:{sh}:0:(ih-{sh})/2,setsar=1[rec];"
         f"[bg][rec]overlay={x + BEZEL_W}:{y + BEZEL_W}:shortest=1[a];"
         f"[2:v]format=rgba[frame];[a][frame]overlay=0:0:shortest=1[b];"
         f"[1:v]fps={FPS},format=rgba[steps];"
@@ -368,6 +459,8 @@ def main():
                     help="where the voice recording starts in the picture, in seconds")
     ap.add_argument("--audio-leads", type=Path,
                     help="JSON [[from_s, lead_s], ...] for the screen recording's sound; [] for none")
+    ap.add_argument("--no-patches", action="store_true",
+                    help="leave the owner's recording's text fixes out (another recording)")
     args = ap.parse_args()
     steps = DEFAULT_STEPS
     if args.steps:
@@ -376,7 +469,8 @@ def main():
     leads = SCREEN_AUDIO_LEADS
     if args.audio_leads:
         leads = [tuple(x) for x in json.loads(args.audio_leads.read_text())]
-    final = build(args.recording, args.out, steps, leads, args.voice, args.voice_at)
+    final = build(args.recording, args.out, steps, leads, args.voice, args.voice_at,
+                  [] if args.no_patches else PATCHES)
     print(f"{final}  ({duration(final):.1f} s)")
 
 

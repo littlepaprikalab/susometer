@@ -454,7 +454,15 @@ class Film {
     }
     expect(all, findsWidgets, reason: 'Film: nothing to tap for $target');
     final finder = all.at(at);
-    await tester.ensureVisible(finder);
+    // Scroll only when it's out of view: ensureVisible would otherwise bring
+    // it to the top of the list, moving the page for no reason.
+    final view = find.ancestor(of: finder, matching: find.byType(Scrollable));
+    final r = tester.getRect(finder);
+    final shown =
+        view.evaluate().isEmpty ||
+        tester.getRect(view.first).inflate(1).contains(r.topLeft) &&
+            tester.getRect(view.first).inflate(1).contains(r.bottomRight);
+    if (!shown) await tester.ensureVisible(finder);
     await run(50);
     final p = tester.getCenter(finder);
     taps.add((p, now));
@@ -464,6 +472,19 @@ class Film {
     // Negative: the caller takes over right at the tap (to skip ahead
     // before whatever it started is heard).
     if (after >= 0) await run(after);
+  }
+
+  /// A finger drags the scrollable under [on] by [dy] over [ms], filmed.
+  Future<void> scroll(Finder on, double dy, {int ms = 900}) async {
+    final p = tester.getCenter(on.first);
+    final gesture = await tester.startGesture(p);
+    const steps = 18;
+    for (var i = 0; i < steps; i++) {
+      await gesture.moveBy(Offset(0, dy / steps));
+      await run(ms ~/ steps);
+    }
+    await gesture.up();
+    await run(400);
   }
 
   /// Types [text] into the lobby's name field, letter by letter.
@@ -673,6 +694,13 @@ class FilmPresage extends FakePresage {
   Future<void> reset() async {
     await super.reset();
     running = false;
+  }
+
+  /// Signing in takes a moment, as on a phone.
+  @override
+  Future<ConnectionTestResult> testConnection({required bool telemetry}) async {
+    await Future<void>.delayed(const Duration(milliseconds: 1400));
+    return super.testConnection(telemetry: telemetry);
   }
 }
 

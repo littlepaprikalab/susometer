@@ -13,7 +13,8 @@ how long). It's scaled to fill the 16:9 slot and cut to the shot's length; a
 shorter clip holds its last frame. Its sound is mixed in unless --mute-clips.
 
 With --real RECORDING (a real iPhone screen recording, see real.py), the film
-opens with it as part 1, then the party game, then solo. The animatic must
+opens with it as part 1, then the solo animatic as part 2; the real game takes
+the party animatic's place. The animatic must
 have been rendered for that order (make.sh --real does both).
 
 Needs ffmpeg and numpy.
@@ -179,7 +180,8 @@ def main():
             real.build(args.real, out, steps, voice=args.voice, voice_at=voice_at)
         elif not real_mp4.exists():
             sys.exit("The animatic was rendered to follow a real recording: pass --real.")
-        parts = [p for p in ["party", "solo"] if p in parts]
+        # The real game is the party; the solo animatic follows it.
+        parts = [p for p in ["solo"] if p in parts]
     elif args.real:
         sys.exit("Render the animatic for a real recording first: make.sh --real.")
 
